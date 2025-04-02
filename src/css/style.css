@@ -1,0 +1,117 @@
+:root {
+  --sidebar-color: #0008;
+  --sidebar-width: 250px;
+  --text-color: #fff;
+  --text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000,
+    -1px 1px 0 #000;
+  --border-color: 1px solid #999;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eee;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+::placeholder {
+  color: var(--text-color);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+}
+
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: var(--sidebar-width);
+  padding: 10px;
+  background: var(--sidebar-color);
+}
+
+#sidebar.hide {
+  display: none;
+}
+
+select {
+  border-radius: 6px;
+  width: 100%;
+  padding: 4px;
+  outline: none;
+  border: var(--border-color);
+  background-color: var(--sidebar-color);
+  color: var(--text-color);
+  text-shadow: var(--text-shadow);
+}
+
+select + select {
+  border-top: 0;
+}
+
+option {
+  color: var(--text-color);
+}
+
+#filterBox {
+  text-indent: 6px;
+  border-radius: 6px;
+  height: 30px;
+  width: 97%;
+  outline: none;
+  color: var(--text-color);
+  border: var(--border-color);
+  font-size: 15px;
+  background-color: var(--sidebar-color);
+}
+
+#setting {
+  overflow-y: auto;
+  height: calc(100% - 181px);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  color: var(--text-color);
+  text-shadow: var(--text-shadow);
+}
+
+.item label {
+  display: flex;
+  overflow: hidden;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.item input[type="range"] {
+  width: 80px;
+}
+
+input[type="checkbox"] {
+  order: -1;
+  margin-right: 8px;
+}
+
+canvas {
+  display: none;
+  vertical-align: top;
+}

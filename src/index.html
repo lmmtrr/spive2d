@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spive2D</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="sidebar">
+      <select id="dirSelector"></select>
+      <select id="sceneSelector"></select>
+      <select id="animationSelector"></select>
+      <select id="settingSelector">
+        <option id="parameters" value="parameters">Parameters</option>
+        <option id="parts" value="parts">Parts</option>
+        <option id="drawables" value="drawables">Drawables</option>
+        <option id="attachments" value="attachments">Attachments</option>
+        <option id="skins" value="skins">Skins</option>
+      </select>
+      <div class="item" id="checkbox">
+        <label title="premultipliedAlpha"
+          >premultipliedAlpha<input type="checkbox" id="pmaCheckbox"
+        /></label>
+      </div>
+      <input
+        type="text"
+        id="filterBox"
+        placeholder="Filter..."
+        autocomplete="off"
+      />
+      <div id="setting">
+        <div id="parameter"></div>
+        <div id="part"></div>
+        <div id="drawable"></div>
+        <div id="attachment"></div>
+        <div id="skin"></div>
+      </div>
+    </div>
+    <canvas id="live2dCanvas"></canvas>
+    <canvas id="spineCanvas"></canvas>
+    <script src="lib/live2dcubismcore.min.js"></script>
+    <script src="lib/live2d.min.js"></script>
+    <script src="lib/pixi.min.js"></script>
+    <script src="lib/index.min.js"></script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
