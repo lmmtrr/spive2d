@@ -1,6 +1,6 @@
 # Spive2D
 
-![](demo.mp4)
+https://github.com/user-attachments/assets/2d333ede-a796-4f9f-a928-037dc6d1994b
 
 A desktop application built with Tauri for viewing and interacting with Spine skeletal animations and Live2D models.
 
