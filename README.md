@@ -15,15 +15,15 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 ## ⌨️ Keyboard Shortcuts
 
-| Action                | Shortcuts |
-| --------------------- | --------- |
-| 📂 Previous Directory | `Q`       |
-| 📁 Next Directory     | `W`       |
-| 💾 Export             | `E`       |
-| ⏮️ Previous Scene     | `A`       |
-| ⏭️ Next Scene         | `S`       |
-| ◀️ Previous Animation | `Z`       |
-| ▶️ Next Animation     | `X`       |
+| Action                 | Shortcuts |
+| ---------------------- | --------- |
+| 📂 Previous Directory  | `Q`       |
+| 📁 Next Directory      | `W`       |
+| 💾 Export (Spine only) | `E`       |
+| ⏮️ Previous Scene      | `A`       |
+| ⏭️ Next Scene          | `S`       |
+| ◀️ Previous Animation  | `Z`       |
+| ▶️ Next Animation      | `X`       |
 
 ## 🚀 Development
 
