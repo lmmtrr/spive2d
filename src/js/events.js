@@ -1,6 +1,13 @@
 import { startRecording } from "./export.js";
 import { animationState, skeletons, spine } from "./spine-loader.js";
-import { dispose, dirFiles, init, isInit, modelType } from "./main.js";
+import {
+  dispose,
+  dirFiles,
+  init,
+  isInit,
+  modelType,
+  splitExt,
+} from "./main.js";
 import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
 
@@ -79,6 +86,7 @@ export function resetValues() {
 }
 
 function setupEventListeners() {
+  window.addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("resize", handleResize);
   document.addEventListener("keydown", handleKeyboardInput);
   document.addEventListener("mouseout", handleMouseOut);
@@ -145,7 +153,35 @@ function nextAnimation() {
   } else handleSpineAnimationChange(animationIndex);
 }
 
-function _export() {
+function exportImage() {
+  const activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
+  const screenshotCanvas = document.getElementById("screenshotCanvas");
+  const ctx = screenshotCanvas.getContext("2d", { willReadFrequently: true });
+  const { width, height } = activeCanvas;
+  screenshotCanvas.width = width;
+  screenshotCanvas.height = height;
+  let previousImageData = null;
+  copyCanvasContent();
+
+  function copyCanvasContent() {
+    ctx.drawImage(activeCanvas, 0, 0);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    if (previousImageData === null) {
+      previousImageData = imageData;
+    } else {
+      const link = document.createElement("a");
+      const selectedSceneText =
+        sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      link.download = `${splitExt(selectedSceneText)[0]}.png`;
+      link.href = screenshotCanvas.toDataURL();
+      link.click();
+      return;
+    }
+    requestAnimationFrame(copyCanvasContent);
+  }
+}
+
+function exportAnimation() {
   if (isRecording) return;
   if (modelType === "spine") {
     isRecording = true;
@@ -172,9 +208,6 @@ function handleKeyboardInput(e) {
     case "w":
       nextDir();
       break;
-    case "e":
-      _export();
-      break;
     case "a":
       previousScene();
       break;
@@ -186,6 +219,12 @@ function handleKeyboardInput(e) {
       break;
     case "x":
       nextAnimation();
+      break;
+    case "d":
+      exportImage();
+      break;
+    case "c":
+      exportAnimation();
       break;
   }
   focusBody();

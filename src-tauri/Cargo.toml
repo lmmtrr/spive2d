@@ -1,6 +1,6 @@
 [package]
 name = "spive2d"
-version = "0.0.0"
+version = "0.0.1"
 description = ""
 authors = ["lmmtrr"]
 edition = "2021"
@@ -22,4 +22,6 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
+tempfile = "3"
+zip = "2"
+sevenz-rust2 = "0"

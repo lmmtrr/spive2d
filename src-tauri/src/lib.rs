@@ -1,10 +1,16 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
+use std::thread;
+use tauri::AppHandle;
+use tauri::Emitter;
+use tempfile;
+use zip;
+use sevenz_rust2;
 
 #[tauri::command]
-fn get_subdir_files(folder_path: String) -> Result<HashMap<String, Vec<String>>, String> {
+fn get_subdir_files(folder_path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
     let path = Path::new(&folder_path);
     let mut dir_files: HashMap<String, Vec<String>> = HashMap::new();
     if !path.exists() || !path.is_dir() {
@@ -32,6 +38,7 @@ fn get_subdir_files(folder_path: String) -> Result<HashMap<String, Vec<String>>,
             }
         }
     }
+    app_handle.emit("progress", false).unwrap();
     Ok(dir_files)
 }
 
@@ -48,20 +55,17 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, Strin
                     if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
                         match ext.to_lowercase().as_str() {
                             "atlas" => {
-                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str())
-                                {
+                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
                                     atlas_base_names.push(stem.to_string());
                                 }
                             }
                             "moc" => {
-                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str())
-                                {
+                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
                                     moc_base_names.push(stem.to_string());
                                 }
                             }
                             "moc3" => {
-                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str())
-                                {
+                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
                                     moc3_base_names.push(stem.to_string());
                                 }
                             }
@@ -82,21 +86,13 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, Strin
         if json_exists {
             let relative_path = json_path
                 .strip_prefix(base_path)
-                .map(|p| {
-                    p.to_string_lossy()
-                        .into_owned()
-                        .replace(std::path::MAIN_SEPARATOR, "/")
-                })
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
                 .unwrap_or(json_file.clone());
             files_in_dir.push(relative_path);
         } else if skel_exists {
             let relative_path = skel_path
                 .strip_prefix(base_path)
-                .map(|p| {
-                    p.to_string_lossy()
-                        .into_owned()
-                        .replace(std::path::MAIN_SEPARATOR, "/")
-                })
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
                 .unwrap_or(skel_file.clone());
             files_in_dir.push(relative_path);
         }
@@ -107,11 +103,7 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, Strin
         if fs::metadata(&moc_path).is_ok() {
             let relative_path = moc_path
                 .strip_prefix(base_path)
-                .map(|p| {
-                    p.to_string_lossy()
-                        .into_owned()
-                        .replace(std::path::MAIN_SEPARATOR, "/")
-                })
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
                 .unwrap_or(moc_file.clone());
             files_in_dir.push(relative_path);
         }
@@ -122,11 +114,7 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, Strin
         if fs::metadata(&moc3_path).is_ok() {
             let relative_path = moc3_path
                 .strip_prefix(base_path)
-                .map(|p| {
-                    p.to_string_lossy()
-                        .into_owned()
-                        .replace(std::path::MAIN_SEPARATOR, "/")
-                })
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
                 .unwrap_or(moc3_file.clone());
             files_in_dir.push(relative_path);
         }
@@ -152,11 +140,57 @@ fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, S
     Ok(result)
 }
 
+#[tauri::command]
+async fn handle_dropped_path(path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
+    app_handle.emit("progress", true).unwrap();
+    let path_obj = Path::new(&path);
+    if path_obj.is_dir() {
+        get_subdir_files(path, app_handle)
+    } else if path_obj.is_file() {
+        match path_obj.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()) {
+            Some(ext) if ext == "zip" || ext == "7z" => {
+                let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                let temp_dir_arc = Arc::new(temp_dir);
+                let temp_path = temp_dir_arc.path().to_string_lossy().into_owned();
+                let temp_dir_clone = Arc::clone(&temp_dir_arc);
+                thread::spawn(move || {
+                    std::thread::park();
+                    drop(temp_dir_clone);
+                });
+                if ext == "zip" {
+                    let file = fs::File::open(&path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
+                    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP: {}", e))?;
+                    archive.extract(Path::new(&temp_path)).map_err(|e| format!("Failed to extract ZIP: {}", e))?;
+                } else {
+                    sevenz_rust2::decompress_file(&path, Path::new(&temp_path)).map_err(|e| format!("Failed to extract 7Z: {}", e))?;
+                }
+                let mut final_path = temp_path.clone();
+                if let Ok(entries) = fs::read_dir(&temp_path) {
+                    let entries: Vec<_> = entries
+                        .filter_map(|e| e.ok())
+                        .collect();
+                    if entries.len() == 1 && entries[0].file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        final_path = entries[0].path().to_string_lossy().into_owned();
+                    }
+                }
+                get_subdir_files(final_path, app_handle)
+            }
+            _ => {
+                app_handle.emit("progress", false).unwrap();
+                Err("Unsupported file type".to_string())
+            },
+        }
+    } else {
+        app_handle.emit("progress", false).unwrap();
+        Err("Invalid path".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_subdir_files])
+        .invoke_handler(tauri::generate_handler![get_subdir_files, handle_dropped_path])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

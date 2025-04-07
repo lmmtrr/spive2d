@@ -12,10 +12,13 @@ const { listen } = window.__TAURI__.event;
 
 export let dirFiles;
 export let isInit = false;
+let isProcessing = false;
 export const spines = {};
 export let modelType = "live2d";
 const versions = ["3.6", "3.7", "3.8", "4.0", "4.1", "4.2"];
 preloadSpines(versions);
+
+const spinner = document.getElementById("spinner");
 
 function preloadSpines(versions) {
   for (const version of versions) {
@@ -31,7 +34,7 @@ function preloadSpines(versions) {
   }
 }
 
-function splitExt(fileName) {
+export function splitExt(fileName) {
   const lastDotIndex = fileName.lastIndexOf(".");
   if (lastDotIndex === -1 || lastDotIndex === 0) {
     return [fileName, ""];
@@ -64,24 +67,40 @@ export function dispose() {
   else disposeSpine();
 }
 
+listen("progress", (event) => {
+  isProcessing = event.payload;
+  if (isProcessing) {
+    spinner.style.display = "block";
+  } else {
+    spinner.style.display = "none";
+  }
+});
+
 listen("tauri://drag-drop", async (event) => {
+  if (isProcessing) return;
+  isInit = false;
   const droppedPaths = event.payload.paths;
-  if (droppedPaths.length > 0) {
-    const folderPath = droppedPaths[0];
-    const _dirFiles = await invoke("get_subdir_files", {
-      folderPath,
-    });
-    const dirs = Object.keys(_dirFiles);
-    dirs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    dirFiles = _dirFiles;
-    const sceneIds = _dirFiles[dirs[0]];
-    if (dirs.length > 0) {
-      createDirSelector(dirs);
-      createSceneSelector(sceneIds);
-      resetAttachmentsCache();
-      dispose();
-      init();
-      isInit = true;
+  if (droppedPaths.length === 1) {
+    const droppedPath = droppedPaths[0];
+    try {
+      const _dirFiles = await invoke("handle_dropped_path", {
+        path: droppedPath,
+      });
+      const dirs = Object.keys(_dirFiles);
+      dirs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      dirFiles = _dirFiles;
+      const sceneIds = _dirFiles[dirs[0]];
+      if (dirs.length > 0) {
+        createDirSelector(dirs);
+        createSceneSelector(sceneIds);
+        resetAttachmentsCache();
+        dispose();
+        init();
+        isInit = true;
+      }
+    } catch (error) {
+      console.error("Error handling dropped path:", error);
+      spinner.style.display = "none";
     }
   }
 });

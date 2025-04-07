@@ -3,6 +3,7 @@ import {
   sceneSelector,
   setRecordingFlag,
 } from "./events.js";
+import { splitExt } from "./main.js";
 import { animationState } from "./spine-loader.js";
 
 // ref. https://github.com/Nikke-db/nikke-db-vue/blob/main/src/components/common/Spine/Loader.vue
@@ -34,7 +35,11 @@ export function startRecording() {
     const blob = new Blob(chunks, { type: "video/webm" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.download = `${sceneSelector.value}_${animationSelector.value}.webm`;
+    const selectedSceneText =
+      sceneSelector.options[sceneSelector.selectedIndex].textContent;
+    link.download = `${splitExt(selectedSceneText)[0]}_${
+      animationSelector.value
+    }.webm`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);

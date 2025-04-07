@@ -6,24 +6,25 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 **Key Features**:
 
+- 📂 Drag-and-drop model loading (single folder or single compressed file: zip or 7z only)
 - 🎭 Dual support for Spine & Live2D models
 - 🕹️ Real-time parameter controls
 - 🎨 Animation/Skin switching UI
-- 📂 Drag-and-drop model loading
 - 🖱️ Mouse interaction support
 - 🖥️ Cross-platform (Windows/macOS/Linux)
 
 ## ⌨️ Keyboard Shortcuts
 
-| Action                 | Shortcuts |
-| ---------------------- | --------- |
-| 📂 Previous Directory  | `Q`       |
-| 📁 Next Directory      | `W`       |
-| 💾 Export (Spine only) | `E`       |
-| ⏮️ Previous Scene      | `A`       |
-| ⏭️ Next Scene          | `S`       |
-| ◀️ Previous Animation  | `Z`       |
-| ▶️ Next Animation      | `X`       |
+| Action                           | Shortcuts |
+| -------------------------------- | --------- |
+| 📂 Previous Directory            | `Q`       |
+| 📁 Next Directory                | `W`       |
+| ⏮️ Previous Scene                | `A`       |
+| ⏭️ Next Scene                    | `S`       |
+| ◀️ Previous Animation            | `Z`       |
+| ▶️ Next Animation                | `X`       |
+| 📷 Screenshots                   | `D`       |
+| 💾 Export Animation (Spine only) | `C`       |
 
 ## 🚀 Development
 
