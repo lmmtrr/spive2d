@@ -1,13 +1,72 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
-use std::thread;
-use tauri::AppHandle;
-use tauri::Emitter;
-use tempfile;
-use zip;
-use sevenz_rust2;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
+
+#[derive(Default)]
+struct AppState {
+    temp_dirs: Mutex<Vec<tempfile::TempDir>>,
+}
+
+impl AppState {
+    fn new() -> Self {
+        Self {
+            temp_dirs: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String> {
+    match ext {
+        "zip" => {
+            let file = fs::File::open(path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP: {}", e))?;
+            archive.extract(temp_dir).map_err(|e| format!("Failed to extract ZIP: {}", e))?;
+        }
+        "7z" => {
+            sevenz_rust2::decompress_file(path, temp_dir).map_err(|e| format!("Failed to extract 7Z: {}", e))?;
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn handle_dropped_path(path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
+    app_handle.emit("progress", true).unwrap();
+    let path_obj = Path::new(&path);
+    if path_obj.is_dir() {
+        get_subdir_files(path, app_handle)
+    } else if path_obj.is_file() {
+        match path_obj.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()) {
+            Some(ext) if ext == "zip" || ext == "7z" => {
+                let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                let temp_path = temp_dir.path().to_string_lossy().into_owned();
+                extract_archive(&path, temp_dir.path(), &ext)?;
+                let mut final_path = temp_path.clone();
+                if let Ok(entries) = fs::read_dir(&temp_path) {
+                    let entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+                    if entries.len() == 1 && entries[0].file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        final_path = entries[0].path().to_string_lossy().into_owned();
+                    }
+                }
+                let result = get_subdir_files(final_path, app_handle.clone());
+                let state = app_handle.state::<AppState>();
+                let mut temp_dirs = state.temp_dirs.lock().unwrap();
+                temp_dirs.push(temp_dir);
+                result
+            }
+            _ => {
+                app_handle.emit("progress", false).unwrap();
+                Err("Unsupported file type".to_string())
+            }
+        }
+    } else {
+        app_handle.emit("progress", false).unwrap();
+        Err("Invalid path".to_string())
+    }
+}
 
 #[tauri::command]
 fn get_subdir_files(folder_path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
@@ -140,56 +199,18 @@ fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, S
     Ok(result)
 }
 
-#[tauri::command]
-async fn handle_dropped_path(path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
-    app_handle.emit("progress", true).unwrap();
-    let path_obj = Path::new(&path);
-    if path_obj.is_dir() {
-        get_subdir_files(path, app_handle)
-    } else if path_obj.is_file() {
-        match path_obj.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()) {
-            Some(ext) if ext == "zip" || ext == "7z" => {
-                let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-                let temp_dir_arc = Arc::new(temp_dir);
-                let temp_path = temp_dir_arc.path().to_string_lossy().into_owned();
-                let temp_dir_clone = Arc::clone(&temp_dir_arc);
-                thread::spawn(move || {
-                    std::thread::park();
-                    drop(temp_dir_clone);
-                });
-                if ext == "zip" {
-                    let file = fs::File::open(&path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
-                    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP: {}", e))?;
-                    archive.extract(Path::new(&temp_path)).map_err(|e| format!("Failed to extract ZIP: {}", e))?;
-                } else {
-                    sevenz_rust2::decompress_file(&path, Path::new(&temp_path)).map_err(|e| format!("Failed to extract 7Z: {}", e))?;
-                }
-                let mut final_path = temp_path.clone();
-                if let Ok(entries) = fs::read_dir(&temp_path) {
-                    let entries: Vec<_> = entries
-                        .filter_map(|e| e.ok())
-                        .collect();
-                    if entries.len() == 1 && entries[0].file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                        final_path = entries[0].path().to_string_lossy().into_owned();
-                    }
-                }
-                get_subdir_files(final_path, app_handle)
-            }
-            _ => {
-                app_handle.emit("progress", false).unwrap();
-                Err("Unsupported file type".to_string())
-            },
-        }
-    } else {
-        app_handle.emit("progress", false).unwrap();
-        Err("Invalid path".to_string())
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+        .manage(AppState::new())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                let app_handle = window.app_handle();
+                let state = app_handle.state::<AppState>();
+                let mut temp_dirs = state.temp_dirs.lock().unwrap();
+                temp_dirs.clear();
+            }
+        })
         .invoke_handler(tauri::generate_handler![get_subdir_files, handle_dropped_path])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
