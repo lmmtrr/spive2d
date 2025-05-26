@@ -7,6 +7,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 **Key Features**:
 
 - 📂 Drag-and-drop model loading (single folder or single compressed file: zip or 7z only)
+  - **Note: Loading from compressed files is slow and not recommended.**
 - 🎭 Dual support for Spine & Live2D models
 - 🕹️ Real-time parameter controls
 - 🎨 Animation/Skin switching UI
@@ -57,26 +58,12 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 **🦴 Spine Runtimes:**
 
-✅ Supported Formats:
-
-- Spine 3.6-3.7 (.json only)
-
-- Spine 3.8.xx (excludes 3.8.75)
-
-- Spine 4.0-4.2 (.json & .skel)
-
-🚫 Unsupported:
-
-- Versions below 3.6
-
-- Spine 3.6-3.7 binary (.skel)
-
-- Spine 3.8.75 specifically
+- Spine 3.6-4.2
 
 **🎭 Live2D Cubism:**
 
-- Cubism 2.1 models (.model.json)
-- Cubism 4.x models (.model3.json)
+- Cubism 2.1
+- Cubism 4.x
 
 ## 📦 Dependencies
 
