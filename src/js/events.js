@@ -105,19 +105,23 @@ function setupEventListeners() {
 
 function previousDir() {
   const optionsLength = dirSelector.options.length;
+  if (optionsLength === 1) return;
   dirIndex = (dirSelector.selectedIndex - 1 + optionsLength) % optionsLength;
   dirSelector.selectedIndex = dirIndex;
   handleDirChange();
 }
 
 function nextDir() {
-  dirIndex = (dirSelector.selectedIndex + 1) % dirSelector.options.length;
+  const optionsLength = dirSelector.options.length;
+  if (optionsLength === 1) return;
+  dirIndex = (dirSelector.selectedIndex + 1) % optionsLength;
   dirSelector.selectedIndex = dirIndex;
   handleDirChange();
 }
 
 function previousScene() {
   const optionsLength = sceneSelector.options.length;
+  if (optionsLength === 1) return;
   sceneIndex =
     (sceneSelector.selectedIndex - 1 + optionsLength) % optionsLength;
   sceneSelector.selectedIndex = sceneIndex;
@@ -125,13 +129,16 @@ function previousScene() {
 }
 
 function nextScene() {
-  sceneIndex = (sceneSelector.selectedIndex + 1) % sceneSelector.options.length;
+  const optionsLength = sceneSelector.options.length;
+  if (optionsLength === 1) return;
+  sceneIndex = (sceneSelector.selectedIndex + 1) % optionsLength;
   sceneSelector.selectedIndex = sceneIndex;
   _handleSceneChange();
 }
 
 function previousAnimation() {
   const optionsLength = animationSelector.options.length;
+  if (optionsLength === 1) return;
   let animationIndex =
     (animationSelector.selectedIndex - 1 + optionsLength) % optionsLength;
   animationSelector.selectedIndex = animationIndex;
@@ -144,8 +151,10 @@ function previousAnimation() {
 }
 
 function nextAnimation() {
+  const optionsLength = animationSelector.options.length;
+  if (optionsLength === 1) return;
   let animationIndex =
-    (animationSelector.selectedIndex + 1) % animationSelector.options.length;
+    (animationSelector.selectedIndex + 1) % optionsLength;
   animationSelector.selectedIndex = animationIndex;
   if (modelType === "live2d") {
     const [motion, index] = animationSelector.value.split(",");
