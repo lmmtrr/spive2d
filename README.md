@@ -58,12 +58,12 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 **🦴 Spine Runtimes:**
 
-- Spine 3.6-4.2
+- Spine 3.6-4.2 (.json & .skel)
 
 **🎭 Live2D Cubism:**
 
-- Cubism 2.1
-- Cubism 4.x
+- Cubism 2.1 (.model.json)
+- Cubism 4.x (.model3.json)
 
 ## 📦 Dependencies
 
