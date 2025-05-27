@@ -104,112 +104,78 @@ fn get_subdir_files(folder_path: String, app_handle: AppHandle) -> Result<HashMa
 fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, String> {
     let mut files_in_dir = Vec::new();
     let mut atlas_base_names = Vec::new();
-    let mut moc_base_names = Vec::new();
     let mut moc3_base_names = Vec::new();
+    let mut moc_base_names = Vec::new();
     if let Ok(entries) = fs::read_dir(dir_path) {
         for entry in entries {
             if let Ok(entry) = entry {
                 let entry_path = entry.path();
                 if entry_path.is_file() {
-                    if let Some(filename) = entry_path.file_name().and_then(|f| f.to_str()) {
-                        let filename_lower = filename.to_lowercase();                        
-                        if filename_lower.contains(".atlas") {
-                            if let Some(atlas_pos) = filename_lower.find(".atlas") {
-                                let base_name = &filename[..atlas_pos];
-                                atlas_base_names.push(base_name.to_string());
+                    if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
+                        match ext.to_lowercase().as_str() {
+                            "atlas" => {
+                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
+                                    atlas_base_names.push(stem.to_string());
+                                }
                             }
-                        }                        
-                        if filename_lower.contains(".moc3") {
-                            if let Some(moc3_pos) = filename_lower.find(".moc3") {
-                                let base_name = &filename[..moc3_pos];
-                                moc3_base_names.push(base_name.to_string());
+                            "moc3" => {
+                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
+                                    moc3_base_names.push(stem.to_string());
+                                }
                             }
-                        } else if filename_lower.contains(".moc") {
-                            if let Some(moc_pos) = filename_lower.find(".moc") {
-                                let base_name = &filename[..moc_pos];
-                                moc_base_names.push(base_name.to_string());
+                            "moc" => {
+                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
+                                    moc_base_names.push(stem.to_string());
+                                }
                             }
+                            _ => {}
                         }
                     }
                 }
             }
         }
-    }    
+    }
     for base_name in atlas_base_names {
-        let mut json_found = false;
-        let mut skel_found = false;
-        if let Ok(entries) = fs::read_dir(dir_path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let entry_path = entry.path();
-                    if entry_path.is_file() {
-                        if let Some(filename) = entry_path.file_name().and_then(|f| f.to_str()) {
-                            let filename_lower = filename.to_lowercase();                            
-                            if !skel_found && filename_lower.contains(&format!("{}.skel", base_name.to_lowercase())) {
-                                let relative_path = entry_path
-                                    .strip_prefix(base_path)
-                                    .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                                    .unwrap_or(filename.to_string());
-                                files_in_dir.push(relative_path);
-                                skel_found = true;
-                            }
-                            else if !skel_found && !json_found && filename_lower.contains(&format!("{}.json", base_name.to_lowercase())) {
-                                let relative_path = entry_path
-                                    .strip_prefix(base_path)
-                                    .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                                    .unwrap_or(filename.to_string());
-                                files_in_dir.push(relative_path);
-                                json_found = true;
-                            }
-                        }
-                    }
-                }
-            }
+        let skel_file = format!("{}.skel", base_name);
+        let json_file = format!("{}.json", base_name);
+        let skel_path = dir_path.join(&skel_file);
+        let json_path = dir_path.join(&json_file);
+        let skel_exists = fs::metadata(&skel_path).is_ok();
+        let json_exists = fs::metadata(&json_path).is_ok();
+        if skel_exists {
+            let relative_path = skel_path
+                .strip_prefix(base_path)
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
+                .unwrap_or(skel_file.clone());
+            files_in_dir.push(relative_path);
+        } else if json_exists {
+            let relative_path = json_path
+                .strip_prefix(base_path)
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
+                .unwrap_or(json_file.clone());
+            files_in_dir.push(relative_path);
         }
-    }    
-    for base_name in moc_base_names {
-        if let Ok(entries) = fs::read_dir(dir_path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let entry_path = entry.path();
-                    if entry_path.is_file() {
-                        if let Some(filename) = entry_path.file_name().and_then(|f| f.to_str()) {
-                            let filename_lower = filename.to_lowercase();                            
-                            if filename_lower.contains(&format!("{}.moc", base_name.to_lowercase())) 
-                                && !filename_lower.contains(".moc3") {
-                                let relative_path = entry_path
-                                    .strip_prefix(base_path)
-                                    .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                                    .unwrap_or(filename.to_string());
-                                files_in_dir.push(relative_path);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }    
+    }
     for base_name in moc3_base_names {
-        if let Ok(entries) = fs::read_dir(dir_path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let entry_path = entry.path();
-                    if entry_path.is_file() {
-                        if let Some(filename) = entry_path.file_name().and_then(|f| f.to_str()) {
-                            let filename_lower = filename.to_lowercase();                            
-                            if filename_lower.contains(&format!("{}.moc3", base_name.to_lowercase())) {
-                                let relative_path = entry_path
-                                    .strip_prefix(base_path)
-                                    .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                                    .unwrap_or(filename.to_string());
-                                files_in_dir.push(relative_path);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+        let moc3_file = format!("{}.moc3", base_name);
+        let moc3_path = dir_path.join(&moc3_file);
+        if fs::metadata(&moc3_path).is_ok() {
+            let relative_path = moc3_path
+                .strip_prefix(base_path)
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
+                .unwrap_or(moc3_file.clone());
+            files_in_dir.push(relative_path);
+        }
+    }
+    for base_name in moc_base_names {
+        let moc_file = format!("{}.moc", base_name);
+        let moc_path = dir_path.join(&moc_file);
+        if fs::metadata(&moc_path).is_ok() {
+            let relative_path = moc_path
+                .strip_prefix(base_path)
+                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
+                .unwrap_or(moc_file.clone());
+            files_in_dir.push(relative_path);
         }
     }
     files_in_dir.sort();

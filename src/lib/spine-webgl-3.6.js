@@ -7098,6 +7098,7 @@ var spine;
 		AttachmentType[AttachmentType["LinkedMesh"] = 3] = "LinkedMesh";
 		AttachmentType[AttachmentType["Path"] = 4] = "Path";
 		AttachmentType[AttachmentType["Point"] = 5] = "Point";
+		AttachmentType[AttachmentType["Clipping"] = 6] = "Clipping";
 	})(AttachmentType = spine.AttachmentType || (spine.AttachmentType = {}));
 })(spine || (spine = {}));
 var spine;
