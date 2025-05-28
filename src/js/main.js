@@ -6,7 +6,7 @@ import {
 } from "./events.js";
 import { disposeLive2D, loadLive2DModel } from "./live2d-loader.js";
 import { disposeSpine, loadSpineModel } from "./spine-loader.js";
-import { createDirSelector, createSceneSelector } from "./ui.js";
+import { createDirSelector, createSceneSelector, getSortableKey } from "./ui.js";
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -46,9 +46,8 @@ export function splitExt(fileName) {
 
 export function init() {
   const dirName = dirSelector[dirSelector.selectedIndex].value;
-  const _fileName = `${dirName}/${
-    dirFiles[dirName][sceneSelector.selectedIndex]
-  }`;
+  const _fileName = `${dirName}/${dirFiles[dirName][sceneSelector.selectedIndex]
+    }`;
   const splitFileName = splitExt(_fileName);
   const fileName = splitFileName[0];
   const ext = splitFileName[1];
@@ -87,8 +86,15 @@ listen("tauri://drag-drop", async (event) => {
         path: droppedPath,
       });
       const dirs = Object.keys(_dirFiles);
-      dirs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      dirs.sort((a, b) => {
+        const keyA = getSortableKey(a);
+        const keyB = getSortableKey(b);
+        if (keyA < keyB) return -1;
+        if (keyA > keyB) return 1;
+        return 0;
+      });
       dirFiles = _dirFiles;
+      console.log(dirFiles);
       const sceneIds = _dirFiles[dirs[0]];
       if (dirs.length > 0) {
         createDirSelector(dirs);

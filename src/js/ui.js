@@ -25,6 +25,11 @@ drawable.style.display = "none";
 attachment.style.display = "none";
 skin.style.display = "none";
 
+export function getSortableKey(str, padLength = 16) {
+  const s = String(str || "");
+  return s.replace(/\d+/g, (match) => match.padStart(padLength, '0'));
+}
+
 export function createDirSelector(dirs) {
   const options = dirs
     .map((dir) => {
@@ -65,6 +70,14 @@ export function createAnimationSelector(animations) {
 function createParameterUI() {
   const parameterIds = currentModel.internalModel.coreModel._parameterIds;
   if (!parameterIds) return;
+  const a = parameterIds.map((value, index) => [value, index]);
+  a.sort((aItem, bItem) => {
+    const keyA = getSortableKey(aItem[0]);
+    const keyB = getSortableKey(bItem[0]);
+    if (keyA < keyB) return -1;
+    if (keyA > keyB) return 1;
+    return 0;
+  });
   const parameterMaximumValues =
     currentModel.internalModel.coreModel._parameterMaximumValues;
   const parameterMinimumValues =
@@ -72,7 +85,9 @@ function createParameterUI() {
   const parameterValues = currentModel.internalModel.coreModel._parameterValues;
   const parameter = document.getElementById("parameter");
   parameter.style.display = "block";
-  parameterIds.forEach((value, index) => {
+  a.forEach((item) => {
+    const value = item[0];
+    const index = item[1];
     const div = document.createElement("div");
     div.className = "item";
     const label = document.createElement("label");
@@ -96,12 +111,11 @@ function createPartUI() {
   if (!partIds) return;
   const a = partIds.map((value, index) => [value, index]);
   a.sort((aItem, bItem) => {
-    const aStr = aItem[0] || "";
-    const bStr = bItem[0] || "";
-    return aStr.localeCompare(bStr, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
+    const keyA = getSortableKey(aItem[0]);
+    const keyB = getSortableKey(bItem[0]);
+    if (keyA < keyB) return -1;
+    if (keyA > keyB) return 1;
+    return 0;
   });
   const part = document.getElementById("part");
   part.style.display = "none";
@@ -131,12 +145,11 @@ function createDrawableUI() {
   setOpacities(opacities);
   const a = drawableIds.map((value, index) => [value, index]);
   a.sort((aItem, bItem) => {
-    const aStr = aItem[0] || "";
-    const bStr = bItem[0] || "";
-    return aStr.localeCompare(bStr, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
+    const keyA = getSortableKey(aItem[0]);
+    const keyB = getSortableKey(bItem[0]);
+    if (keyA < keyB) return -1;
+    if (keyA > keyB) return 1;
+    return 0;
   });
   const drawable = document.getElementById("drawable");
   drawable.style.display = "none";
@@ -162,12 +175,11 @@ function createAttachmentUI() {
   const slots = skeletons["0"].skeleton.slots;
   const a = slots.map((value, index) => [value.attachment?.name, index]);
   a.sort((aItem, bItem) => {
-    const aStr = aItem[0] || "";
-    const bStr = bItem[0] || "";
-    return aStr.localeCompare(bStr, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
+    const keyA = getSortableKey(aItem[0]);
+    const keyB = getSortableKey(bItem[0]);
+    if (keyA < keyB) return -1;
+    if (keyA > keyB) return 1;
+    return 0;
   });
   const f = a.filter((v) => v[0]);
   const attachment = document.getElementById("attachment");
