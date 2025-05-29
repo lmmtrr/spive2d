@@ -94,7 +94,6 @@ listen("tauri://drag-drop", async (event) => {
         return 0;
       });
       dirFiles = _dirFiles;
-      console.log(dirFiles);
       const sceneIds = _dirFiles[dirs[0]];
       if (dirs.length > 0) {
         createDirSelector(dirs);

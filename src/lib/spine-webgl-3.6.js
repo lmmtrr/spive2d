@@ -5775,6 +5775,15 @@ var spine;
 })(spine || (spine = {}));
 var spine;
 (function (spine) {
+	var SkinEntry = (function () {
+		function SkinEntry(slotIndex, name, attachment) {
+			this.slotIndex = slotIndex;
+			this.name = name;
+			this.attachment = attachment;
+		}
+		return SkinEntry;
+	}());
+	spine.SkinEntry = SkinEntry;
 	var Skin = (function () {
 		function Skin(name) {
 			this.attachments = new Array();
@@ -5802,6 +5811,13 @@ var spine;
 				attachments[slotIndex] = {};
 			attachments[slotIndex][name] = attachment;
 		};
+		Skin.prototype.addSkin = function (skin) {
+			var attachments = skin.getAttachments();
+			for (var i = 0; i < attachments.length; i++) {
+				var attachment = attachments[i];
+				this.setAttachment(attachment.slotIndex, attachment.name, attachment.attachment);
+			}
+		};
 		Skin.prototype.getAttachment = function (slotIndex, name) {
 			var dictionary = this.attachments[slotIndex];
 			return dictionary ? dictionary[name] : null;
@@ -5810,6 +5826,20 @@ var spine;
 			var dictionary = this.attachments[slotIndex];
 			if (dictionary)
 				dictionary[name] = null;
+		};
+		Skin.prototype.getAttachments = function () {
+			var entries = new Array();
+			for (var i = 0; i < this.attachments.length; i++) {
+				var slotAttachments = this.attachments[i];
+				if (slotAttachments) {
+					for (var name_4 in slotAttachments) {
+						var attachment = slotAttachments[name_4];
+						if (attachment)
+							entries.push(new SkinEntry(i, name_4, attachment));
+					}
+				}
+			}
+			return entries;
 		};
 		Skin.prototype.attachAll = function (skeleton, oldSkin) {
 			var slotIndex = 0;
