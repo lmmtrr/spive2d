@@ -1,10 +1,10 @@
 """
 File Extension Cleanup Tool
 Description:
-- Removes extra extensions from files like .skel.bytes, .atlas.asset, .json.txt
+- Removes extra extensions from files like .skel.bytes, .atlas.asset, .json.txt, .moc3.asset, .moc.asset
 - Preserves directory structure
 - Processes all subdirectories recursively
-- Renames files to their proper extensions (.skel, .atlas, .json)
+- Renames files to their proper extensions (.skel, .atlas, .json, .moc3, .moc)
 
 Usage:
 1. Place files with extra extensions in ./input directory
@@ -22,6 +22,8 @@ def should_rename_file(filename):
         (r"(.+\.skel)\..+$", r"\1"),
         (r"(.+\.atlas)\..+$", r"\1"),
         (r"(.+\.json)\..+$", r"\1"),
+        (r"(.+\.moc3)\..+$", r"\1"),
+        (r"(.+\.moc)\..+$", r"\1"),
     ]
     for pattern, replacement in patterns:
         if re.match(pattern, filename):
@@ -34,7 +36,7 @@ def should_rename_file(filename):
 def process_directory(input_base, output_base):
     renamed_count = 0
     copied_count = 0
-    for root, dirs, files in os.walk(input_base):
+    for root, _, files in os.walk(input_base):
         for file in files:
             input_file_path = os.path.join(root, file)
             relative_path = os.path.relpath(root, input_base)

@@ -25,16 +25,17 @@ let assetManager;
 let mvp;
 let lastFrameTime;
 let requestId;
-let _fileName;
-let _ext;
-export let animationState;
+let _dirName;
+let _fileNames;
+export let animationStates = [];
 export let skeletons = {};
 const spineCanvas = document.getElementById("spineCanvas");
 
-async function getSpineVersion(fileName, ext) {
+async function getSpineVersion(dirName, fileNames) {
   let spineVersion = "";
-  const file = await fetch(convertFileSrc(fileName));
-  if (ext === ".skel") {
+  const ext = fileNames[1];
+  const file = await fetch(convertFileSrc(`${dirName}${fileNames[0]}${ext}`));
+  if (ext.includes(".skel")) {
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     let position = -1;
@@ -58,7 +59,7 @@ async function getSpineVersion(fileName, ext) {
     spineVersion = `${String.fromCharCode(
       data[position - 1]
     )}.${String.fromCharCode(data[position + 1])}`;
-  } else if (ext === ".json") {
+  } else if (ext.includes(".json")) {
     const content = await file.text();
     const jsonData = JSON.parse(content);
     if (!jsonData.skeleton || !jsonData.skeleton.spine) {
@@ -69,11 +70,11 @@ async function getSpineVersion(fileName, ext) {
   return spineVersion;
 }
 
-export async function loadSpineModel(fileName, ext) {
+export async function loadSpineModel(dirName, fileNames) {
   spineCanvas.style.display = "block";
-  _fileName = fileName;
-  _ext = ext;
-  const spineVersion = await getSpineVersion(`${_fileName}${_ext}`, _ext);
+  _dirName = dirName;
+  _fileNames = fileNames;
+  const spineVersion = await getSpineVersion(dirName, fileNames);
   spine = spines[spineVersion];
   spineCanvas.width = window.innerWidth;
   spineCanvas.height = window.innerHeight;
@@ -83,16 +84,30 @@ export async function loadSpineModel(fileName, ext) {
   skeletonRenderer = new spine.SkeletonRenderer(ctx);
   assetManager = new spine.AssetManager(ctx.gl);
   mvp = new spine.Matrix4();
-  _ext === ".skel"
-    ? assetManager.loadBinary(`${_fileName}${_ext}`)
-    : assetManager.loadText(`${_fileName}${_ext}`);
-  assetManager.loadTextureAtlas(`${_fileName}.atlas`);
+  const baseName = _fileNames[0];
+  const skelExt = _fileNames[1];
+  const atlasExt = _fileNames[2];
+  skelExt.includes(".skel")
+    ? assetManager.loadBinary(`${_dirName}${baseName}${skelExt}`)
+    : assetManager.loadText(`${_dirName}${baseName}${skelExt}`);
+  assetManager.loadTextureAtlas(`${_dirName}${baseName}${atlasExt}`);
+  for (let i = 3; i < _fileNames.length; i++) {
+    skelExt.includes(".skel")
+      ? assetManager.loadBinary(`${_dirName}${baseName}${fileNames[i]}`)
+      : assetManager.loadText(`${_dirName}${baseName}${fileNames[i]}`);
+    assetManager.loadTextureAtlas(`${_dirName}${baseName}${fileNames[i].split('.')[0]}${atlasExt}`);
+  }
   requestAnimationFrame(load);
 }
 
 function load() {
   if (assetManager.isLoadingComplete()) {
-    skeletons["0"] = loadSkeleton();
+    const baseName = _fileNames[0];
+    skeletons["0"] = loadSkeleton(baseName);
+    for (let i = 3; i < _fileNames.length; i++) {
+      const FileName2 = `${baseName}${_fileNames[i].split('.')[0]}`;
+      skeletons[String(i - 2)] = loadSkeleton(FileName2);
+    }
     lastFrameTime = Date.now() / 1000;
     requestAnimationFrame(render);
   } else requestAnimationFrame(load);
@@ -107,20 +122,23 @@ function calculateSetupPoseBounds(skeleton) {
   return { offset: offset, size: size };
 }
 
-function loadSkeleton() {
-  const atlas = assetManager.get(`${_fileName}.atlas`);
+function loadSkeleton(fileName) {
+  const skelExt = _fileNames[1];
+  const atlasExt = _fileNames[2];
+  const atlas = assetManager.get(`${_dirName}${fileName}${atlasExt}`);
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
   const skeletonLoader =
-    _ext === ".skel"
+    skelExt === ".skel"
       ? new spine.SkeletonBinary(atlasLoader)
       : new spine.SkeletonJson(atlasLoader);
   const skeletonData = skeletonLoader.readSkeletonData(
-    assetManager.get(`${_fileName}${_ext}`)
+    assetManager.get(`${_dirName}${fileName}${skelExt}`)
   );
   const skeleton = new spine.Skeleton(skeletonData);
   const bounds = calculateSetupPoseBounds(skeleton);
   const animationStateData = new spine.AnimationStateData(skeleton.data);
-  animationState = new spine.AnimationState(animationStateData);
+  const animationState = new spine.AnimationState(animationStateData);
+  animationStates.push(animationState);
   const animations = skeleton.data.animations;
   animationState.setAnimation(0, animations[0].name, true);
   return {
@@ -137,25 +155,27 @@ function render() {
   lastFrameTime = now;
   resize();
   gl.clear(gl.COLOR_BUFFER_BIT);
-  const skeleton = skeletons["0"].skeleton;
-  const state = skeletons["0"].state;
-  state.update(delta);
-  state.apply(skeleton);
-  skeleton.updateWorldTransform(2);
-  shader.bind();
-  shader.setUniformi(spine.Shader.SAMPLER, 0);
-  shader.setUniform4x4f(spine.Shader.MVP_MATRIX, mvp.values);
-  batcher.begin(shader);
-  skeletonRenderer.vertexEffect = null;
-  skeletonRenderer.premultipliedAlpha = premultipliedAlpha;
-  skeletonRenderer.draw(batcher, skeleton);
-  batcher.end();
-  shader.unbind();
+  for (const fileName of Object.keys(skeletons).reverse()) {
+    const skeleton = skeletons[fileName].skeleton;
+    const state = skeletons[fileName].state;
+    state.update(delta);
+    state.apply(skeleton);
+    skeleton.updateWorldTransform(2);
+    shader.bind();
+    shader.setUniformi(spine.Shader.SAMPLER, 0);
+    shader.setUniform4x4f(spine.Shader.MVP_MATRIX, mvp.values);
+    batcher.begin(shader);
+    skeletonRenderer.vertexEffect = null;
+    skeletonRenderer.premultipliedAlpha = premultipliedAlpha;
+    skeletonRenderer.draw(batcher, skeleton);
+    batcher.end();
+    shader.unbind();
+  }
   if (isFirstRender) {
     const animationName = document.getElementById("animationSelector").value;
     const skinFlags = saveSkins();
     resetUI();
-    createAnimationSelector(skeleton.data.animations);
+    createAnimationSelector(skeletons["0"].skeleton.data.animations);
     restoreAnimation(animationName);
     restoreSkins(skinFlags);
     removeAttachments();
@@ -189,5 +209,6 @@ export function disposeSpine() {
   if (requestId) window.cancelAnimationFrame(requestId);
   requestId = undefined;
   if (assetManager) assetManager.dispose();
+  animationStates = [];
   skeletons = {};
 }

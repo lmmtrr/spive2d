@@ -3,8 +3,7 @@ import {
   sceneSelector,
   setRecordingFlag,
 } from "./events.js";
-import { splitExt } from "./main.js";
-import { animationState } from "./spine-loader.js";
+import { animationStates } from "./spine-loader.js";
 
 // ref. https://github.com/Nikke-db/nikke-db-vue/blob/main/src/components/common/Spine/Loader.vue
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
@@ -37,9 +36,8 @@ export function startRecording() {
     const link = document.createElement("a");
     const selectedSceneText =
       sceneSelector.options[sceneSelector.selectedIndex].textContent;
-    link.download = `${splitExt(selectedSceneText)[0]}_${
-      animationSelector.value
-    }.webm`;
+    link.download = `${selectedSceneText}_${animationSelector.value
+      }.webm`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
@@ -48,11 +46,11 @@ export function startRecording() {
 
   function checkCondition() {
     if (
-      animationState.tracks &&
-      animationState.tracks[0] &&
-      animationState.tracks[0].animationLast !== -1 &&
-      animationState.tracks[0].animationLast + ANIMATION_TIME_EPSILON >
-        animationState.tracks[0].animationEnd
+      animationStates[0].tracks &&
+      animationStates[0].tracks[0] &&
+      animationStates[0].tracks[0].animationLast !== -1 &&
+      animationStates[0].tracks[0].animationLast + ANIMATION_TIME_EPSILON >
+      animationStates[0].tracks[0].animationEnd
     ) {
       rec.stop();
     } else {

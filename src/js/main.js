@@ -34,29 +34,16 @@ function preloadSpines(versions) {
   }
 }
 
-export function splitExt(fileName) {
-  const lastDotIndex = fileName.lastIndexOf(".");
-  if (lastDotIndex === -1 || lastDotIndex === 0) {
-    return [fileName, ""];
-  }
-  const name = fileName.slice(0, lastDotIndex);
-  const ext = fileName.slice(lastDotIndex);
-  return [name, ext];
-}
-
 export function init() {
   const dirName = dirSelector[dirSelector.selectedIndex].value;
-  const _fileName = `${dirName}/${dirFiles[dirName][sceneSelector.selectedIndex]
-    }`;
-  const splitFileName = splitExt(_fileName);
-  const fileName = splitFileName[0];
-  const ext = splitFileName[1];
-  if (ext.includes("moc")) {
+  const fileNames = dirFiles[dirName][sceneSelector.selectedIndex];
+  const ext = fileNames[1];
+  if (ext.includes(".moc")) {
     modelType = "live2d";
-    loadLive2DModel(fileName, ext);
+    loadLive2DModel(dirName, fileNames);
   } else {
     modelType = "spine";
-    loadSpineModel(fileName, ext);
+    loadSpineModel(dirName, fileNames);
   }
   resetValues();
 }

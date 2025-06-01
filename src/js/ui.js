@@ -43,8 +43,8 @@ export function createDirSelector(dirs) {
 export function createSceneSelector(sceneIds) {
   const options = sceneIds
     .map((scenePath) => {
-      const textContent = scenePath.split("/").filter(Boolean).pop();
-      return `<option value="${scenePath}">${textContent}</option>`;
+      const textContent = scenePath[0].split("/").filter(Boolean).pop();
+      return `<option value="${scenePath[0]}">${textContent}</option>`;
     })
     .join("");
   document.getElementById("sceneSelector").innerHTML = options;

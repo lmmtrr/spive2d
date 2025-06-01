@@ -12,12 +12,10 @@ const {
   live2d: { Live2DModel },
 } = PIXI;
 
-export async function loadLive2DModel(fileName, ext) {
+export async function loadLive2DModel(dirName, fileNames) {
   live2dCanvas.style.display = "block";
-  let _ext;
-  if (ext === ".moc3") _ext = ".model3.json";
-  else _ext = ".json";
-  currentModel = await Live2DModel.from(convertFileSrc(`${fileName}${_ext}`), {
+  let ext = fileNames[1].includes(".moc3") ? ".model3.json" : ".json";
+  currentModel = await Live2DModel.from(convertFileSrc(`${dirName}${fileNames[0]}${ext}`), {
     autoInteract: false,
   });
   const scale = Math.min(

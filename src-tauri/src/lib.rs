@@ -33,7 +33,7 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
 }
 
 #[tauri::command]
-async fn handle_dropped_path(path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
+async fn handle_dropped_path(path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
     app_handle.emit("progress", true).unwrap();
     let path_obj = Path::new(&path);
     if path_obj.is_dir() {
@@ -69,134 +69,196 @@ async fn handle_dropped_path(path: String, app_handle: AppHandle) -> Result<Hash
 }
 
 #[tauri::command]
-fn get_subdir_files(folder_path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<String>>, String> {
-    let path = Path::new(&folder_path);
-    let mut dir_files: HashMap<String, Vec<String>> = HashMap::new();
-    if !path.exists() || !path.is_dir() {
-        return Ok(dir_files);
-    }
-    let root_files = process_files(path, path)?;
-    if !root_files.is_empty() {
-        let normalized_folder_path = folder_path.replace(std::path::MAIN_SEPARATOR, "/");
-        dir_files.insert(normalized_folder_path, root_files);
-    }
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if entry_path.is_dir() {
-                    let subdir_name = entry_path
-                        .to_string_lossy()
-                        .into_owned()
-                        .replace(std::path::MAIN_SEPARATOR, "/");
-                    let subdir_files = process_directory(&entry_path, &entry_path)?;
-                    if !subdir_files.is_empty() {
-                        dir_files.insert(subdir_name, subdir_files);
-                    }
-                }
-            }
+fn get_subdir_files(folder_path: String, app_handle: AppHandle) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
+    let root_path = Path::new(&folder_path);
+    let mut dir_files_map: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    if !root_path.exists() || !root_path.is_dir() {
+        app_handle.emit("progress", false).unwrap();
+        return Ok(dir_files_map);
+    }    
+    match process_directory_with_subdirs(root_path, root_path) {
+        Ok(subdir_map) => {
+            dir_files_map.extend(subdir_map);
+        }
+        Err(e) => {
+            app_handle.emit("progress", false).unwrap();
+            return Err(e);
         }
     }
     app_handle.emit("progress", false).unwrap();
-    Ok(dir_files)
+    Ok(dir_files_map)
 }
 
-fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, String> {
-    let mut files_in_dir = Vec::new();
-    let mut atlas_base_names = Vec::new();
-    let mut moc3_base_names = Vec::new();
-    let mut moc_base_names = Vec::new();
-    if let Ok(entries) = fs::read_dir(dir_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if entry_path.is_file() {
-                    if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
-                        match ext.to_lowercase().as_str() {
-                            "atlas" => {
-                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
-                                    atlas_base_names.push(stem.to_string());
-                                }
-                            }
-                            "moc3" => {
-                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
-                                    moc3_base_names.push(stem.to_string());
-                                }
-                            }
-                            "moc" => {
-                                if let Some(stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
-                                    moc_base_names.push(stem.to_string());
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
+fn process_directory_with_subdirs(dir_path: &Path, base_path: &Path) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
+    let mut dir_files_map = HashMap::new();    
+    let current_file_groups = process_files(dir_path, base_path)?;
+    if !current_file_groups.is_empty() {
+        let mut normalized_path = dir_path.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+        if !normalized_path.ends_with('/') {
+            normalized_path.push('/');
         }
-    }
-    for base_name in atlas_base_names {
-        let skel_file = format!("{}.skel", base_name);
-        let json_file = format!("{}.json", base_name);
-        let skel_path = dir_path.join(&skel_file);
-        let json_path = dir_path.join(&json_file);
-        let skel_exists = fs::metadata(&skel_path).is_ok();
-        let json_exists = fs::metadata(&json_path).is_ok();
-        if skel_exists {
-            let relative_path = skel_path
-                .strip_prefix(base_path)
-                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                .unwrap_or(skel_file.clone());
-            files_in_dir.push(relative_path);
-        } else if json_exists {
-            let relative_path = json_path
-                .strip_prefix(base_path)
-                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                .unwrap_or(json_file.clone());
-            files_in_dir.push(relative_path);
-        }
-    }
-    for base_name in moc3_base_names {
-        let moc3_file = format!("{}.moc3", base_name);
-        let moc3_path = dir_path.join(&moc3_file);
-        if fs::metadata(&moc3_path).is_ok() {
-            let relative_path = moc3_path
-                .strip_prefix(base_path)
-                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                .unwrap_or(moc3_file.clone());
-            files_in_dir.push(relative_path);
-        }
-    }
-    for base_name in moc_base_names {
-        let moc_file = format!("{}.moc", base_name);
-        let moc_path = dir_path.join(&moc_file);
-        if fs::metadata(&moc_path).is_ok() {
-            let relative_path = moc_path
-                .strip_prefix(base_path)
-                .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
-                .unwrap_or(moc_file.clone());
-            files_in_dir.push(relative_path);
-        }
-    }
-    files_in_dir.sort();
-    Ok(files_in_dir)
-}
-
-fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<String>, String> {
-    let mut files_in_dir = HashSet::new();
-    let current_files = process_files(dir_path, base_path)?;
-    files_in_dir.extend(current_files);
+        dir_files_map.insert(normalized_path, current_file_groups);
+    }    
     for entry in fs::read_dir(dir_path).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
         if entry_path.is_dir() {
-            let subdir_files = process_directory(&entry_path, base_path)?;
-            files_in_dir.extend(subdir_files);
+            let subdir_file_groups = process_directory(&entry_path, base_path)?;
+            if !subdir_file_groups.is_empty() {
+                let mut normalized_subdir_path = entry_path.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+                if !normalized_subdir_path.ends_with('/') {
+                    normalized_subdir_path.push('/');
+                }
+                dir_files_map.insert(normalized_subdir_path, subdir_file_groups);
+            }
         }
     }
-    let mut result: Vec<String> = files_in_dir.into_iter().collect();
-    result.sort();
-    Ok(result)
+    Ok(dir_files_map)
+}
+
+fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, String> {
+    let mut file_groups = Vec::new();
+    let mut atlas_bases = HashSet::with_capacity(64);
+    let mut atlas_original_extensions: HashMap<String, String> = HashMap::with_capacity(64);
+    let mut file_paths = HashMap::with_capacity(256);
+    let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_path = entry.path();
+        if !entry_path.is_file() {
+            continue;
+        }
+        let filename = match entry_path.file_name().and_then(|f| f.to_str()) {
+            Some(name) => name,
+            None => continue,
+        };
+        let relative_path = entry_path
+            .strip_prefix(base_path)
+            .map(|p| p.to_string_lossy().into_owned().replace(std::path::MAIN_SEPARATOR, "/"))
+            .unwrap_or_else(|_| filename.to_string());
+        let filename_lower = filename.to_lowercase();
+        file_paths.insert(filename_lower.clone(), relative_path.clone());
+        if filename_lower.contains(".atlas") {
+            if let Some(idx) = filename_lower.find(".atlas") {
+                let base_name_part = &filename[..idx];
+                let extension_part = &filename[idx..];
+                if !base_name_part.to_lowercase().contains("_bg") {
+                    atlas_bases.insert(base_name_part.to_string());
+                    atlas_original_extensions.insert(base_name_part.to_string(), extension_part.to_string());
+                }
+            }
+        } else if filename_lower.contains(".moc3") {
+            let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
+                &relative_path[slash_pos + 1..]
+            } else {
+                &relative_path
+            };
+            if let Some(moc3_pos) = filename_lower.find(".moc3") {
+                let base_name_part = &adjusted_path[..adjusted_path.len() - (filename.len() - moc3_pos)];
+                let extension_part = &filename[moc3_pos..];
+                file_groups.push(vec![base_name_part.to_string(), extension_part.to_string()]);
+            }
+        } else if filename_lower.contains(".moc") && !filename_lower.contains(".moc3") {
+            let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
+                &relative_path[slash_pos + 1..]
+            } else {
+                &relative_path
+            };
+            if let Some(moc_pos) = filename_lower.find(".moc") {
+                let base_name_part = &adjusted_path[..adjusted_path.len() - (filename.len() - moc_pos)];
+                let extension_part = &filename[moc_pos..];
+                file_groups.push(vec![base_name_part.to_string(), extension_part.to_string()]);
+            }
+        }
+    }
+    for base_name in &atlas_bases {
+        let base_lower = base_name.to_lowercase();
+        let atlas_extension = atlas_original_extensions.get(base_name).cloned().unwrap_or_default();
+        let mut main_file_info: Option<(String, String, &str)> = None;
+        for (_f_lc, rp) in &file_paths {
+            let original_fn = Path::new(rp).file_name().and_then(|f| f.to_str()).unwrap_or("");
+            if original_fn.is_empty() { continue; }
+            let original_fn_lower = original_fn.to_lowercase();
+            let target_pattern = format!("{}.skel", base_lower);
+            if original_fn_lower.contains(&target_pattern) {
+                let ext_part = &original_fn[base_lower.len()..];
+                main_file_info = Some((rp.clone(), ext_part.to_string(), "skel"));
+                break;
+            }
+        }
+        if main_file_info.is_none() {
+            for (_f_lc, rp) in &file_paths {
+                let original_fn = Path::new(rp).file_name().and_then(|f| f.to_str()).unwrap_or("");
+                if original_fn.is_empty() { continue; }
+                let original_fn_lower = original_fn.to_lowercase();
+                let target_pattern = format!("{}.json", base_lower);
+                if original_fn_lower.contains(&target_pattern) {
+                    let ext_part = &original_fn[base_lower.len()..];
+                    main_file_info = Some((rp.clone(), ext_part.to_string(), "json"));
+                    break;
+                }
+            }
+        }
+        if let Some((main_path, main_extension, _file_type)) = main_file_info {
+            let base_name_for_group = main_path.trim_end_matches(&main_extension).to_string();            
+            let adjusted_base_name = if let Some(slash_pos) = base_name_for_group.find('/') {
+                &base_name_for_group[slash_pos + 1..]
+            } else {
+                &base_name_for_group
+            };
+            let mut file_group = vec![
+                adjusted_base_name.to_string(),
+                main_extension.clone(), 
+                atlas_extension,
+            ];
+            let bg_files = find_background_files(&base_lower, &file_paths, &main_extension);
+            file_group.extend(bg_files);
+            file_groups.push(file_group);
+        }
+    }
+    file_groups.sort_unstable_by(|a, b| a[0].cmp(&b[0]));
+    Ok(file_groups)
+}
+
+fn find_background_files(
+    base_name_lower: &str,
+    file_paths: &HashMap<String, String>,
+    main_model_extension: &str
+) -> Vec<String> {
+    let mut bg_files = Vec::new();
+    let bg_prefix_for_match = format!("{}_bg", base_name_lower);
+    let main_model_extension_lower = main_model_extension.to_lowercase();
+    for (filename_lower, path) in file_paths {
+        if filename_lower.starts_with(&bg_prefix_for_match) && filename_lower.ends_with(&main_model_extension_lower) {
+            let stem_part_lower = &filename_lower[..filename_lower.len() - main_model_extension_lower.len()];
+            if stem_part_lower.starts_with(&bg_prefix_for_match) && stem_part_lower.len() >= bg_prefix_for_match.len() {
+                let filename_part_original_case = if let Some(last_slash) = path.rfind('/') {
+                    &path[last_slash + 1..]
+                } else {
+                    path
+                };
+                bg_files.push(filename_part_original_case[base_name_lower.len()..].to_string());
+            }
+        }
+    }
+    bg_files.sort_unstable();
+    bg_files
+}
+
+fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, String> {
+    let mut all_file_groups = Vec::new();
+    let current_file_groups = process_files(dir_path, base_path)?;
+    all_file_groups.extend(current_file_groups);
+    for entry in fs::read_dir(dir_path).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            let subdir_file_groups = process_directory(&entry_path, base_path)?;
+            all_file_groups.extend(subdir_file_groups);
+        }
+    }
+    all_file_groups.sort_unstable_by(|a, b| a[0].cmp(&b[0]));
+    Ok(all_file_groups)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

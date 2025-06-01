@@ -1,12 +1,11 @@
 import { startRecording } from "./export.js";
-import { animationState, skeletons, spine } from "./spine-loader.js";
+import { animationStates, skeletons, spine } from "./spine-loader.js";
 import {
   dispose,
   dirFiles,
   init,
   isInit,
   modelType,
-  splitExt,
 } from "./main.js";
 import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
@@ -181,7 +180,7 @@ function exportImage() {
       const link = document.createElement("a");
       const selectedSceneText =
         sceneSelector.options[sceneSelector.selectedIndex].textContent;
-      link.download = `${splitExt(selectedSceneText)[0]}.png`;
+      link.download = `${selectedSceneText}.png`;
       link.href = screenshotCanvas.toDataURL();
       link.click();
       return;
@@ -194,7 +193,9 @@ function exportAnimation() {
   if (isRecording) return;
   if (modelType === "spine") {
     isRecording = true;
-    animationState.setAnimation(0, animationSelector.value, true);
+    for (const animatinState of animationStates) {
+      animatinState.setAnimation(0, animationSelector.value, true);
+    }
     startRecording();
   }
 }
@@ -361,7 +362,9 @@ function handleLive2DAnimationChange(motion, index) {
 
 function handleSpineAnimationChange(index) {
   const animationName = skeletons["0"].skeleton.data.animations[index].name;
-  animationState.setAnimation(0, animationName, true);
+  for (const animationState of animationStates) {
+    animationState.setAnimation(0, animationName, true);
+  }
   isFirstRender = true;
 }
 
