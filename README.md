@@ -29,6 +29,16 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 ## 🚀 Development
 
+**Requirements for Development**:
+
+- **Node.js & npm**: [https://nodejs.org/en/download](https://nodejs.org/en/download)
+
+  - **Documentation on Downloading and Installing**: [https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)
+
+- **Rust**: [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+
+- **Tauri Prerequisites**: [https://v2.tauri.app/start/prerequisites/](https://v2.tauri.app/start/prerequisites/)
+
 1. Clone the repository:
 
    ```bash
