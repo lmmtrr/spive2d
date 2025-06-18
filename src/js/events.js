@@ -191,13 +191,17 @@ function exportImage() {
 
 function exportAnimation() {
   if (isRecording) return;
+  isRecording = true;
+  let animationName;
   if (modelType === "spine") {
-    isRecording = true;
-    for (const animatinState of animationStates) {
-      animatinState.setAnimation(0, animationSelector.value, true);
+    animationName = animationSelector.value
+    for (const animationState of animationStates) {
+      animationState.setAnimation(0, animationName, true);
     }
-    startRecording();
+  } else if (modelType === "live2d") {
+    animationName = animationSelector.options[animationSelector.selectedIndex].textContent;
   }
+  startRecording(modelType, animationName);
 }
 
 function focusBody() {
@@ -250,6 +254,16 @@ function handleResize() {
   spineCanvas.height = h;
   spineCanvas.style.width = `${w}px`;
   spineCanvas.style.height = `${h}px`;
+  if (modelType === "live2d" && currentModel && currentModel.internalModel) {
+    const newScale = Math.min(
+      w / currentModel.internalModel.originalWidth,
+      h / currentModel.internalModel.originalHeight
+    );
+    currentModel.scale.set(newScale);
+    scale = newScale;
+    setScaleAdjustment(newScale);
+    currentModel.position.set(w * 0.5, h * 0.5);
+  }
 }
 
 function handleMouseOut() {

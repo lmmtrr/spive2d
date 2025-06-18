@@ -3714,7 +3714,6 @@ var spine;
 			if (nonessential) {
 				skeletonData.fps = input.readFloat();
 				skeletonData.imagesPath = input.readString();
-				skeletonData.audioPath = input.readString();
 			}
 			var n = 0;
 			n = input.readInt(true);
@@ -3757,9 +3756,6 @@ var spine;
 				data.target = skeletonData.bones[input.readInt(true)];
 				data.mix = input.readFloat();
 				data.bendDirection = input.readByte();
-				data.compress = input.readBoolean();
-				data.stretch = input.readBoolean();
-				data.uniform = input.readBoolean();
 				skeletonData.ikConstraints.push(data);
 			}
 			n = input.readInt(true);
@@ -3836,11 +3832,6 @@ var spine;
 				data.intValue = input.readInt(false);
 				data.floatValue = input.readFloat();
 				data.stringValue = input.readString();
-				data.audioPath = input.readString();
-				if (data.audioPath != null) {
-					data.volume = input.readFloat();
-					data.balance = input.readFloat();
-				}
 				skeletonData.events.push(data);
 			}
 			n = input.readInt(true);
@@ -4178,7 +4169,7 @@ var spine;
 				var timeline = new spine.IkConstraintTimeline(frameCount);
 				timeline.ikConstraintIndex = index;
 				for (var frameIndex = 0; frameIndex < frameCount; frameIndex++) {
-					timeline.setFrame(frameIndex, input.readFloat(), input.readFloat(), input.readByte(), 0, input.readBoolean(), input.readBoolean());
+					timeline.setFrame(frameIndex, input.readFloat(), input.readFloat(), input.readByte(), 0);
 					if (frameIndex < frameCount - 1)
 						this.readCurve(input, frameIndex, timeline);
 				}
@@ -4327,10 +4318,6 @@ var spine;
 					event_4.intValue = input.readInt(false);
 					event_4.floatValue = input.readFloat();
 					event_4.stringValue = input.readBoolean() ? input.readString() : eventData.stringValue;
-					if (event_4.data.audioPath != null) {
-						event_4.volume = input.readFloat();
-						event_4.balance = input.readFloat();
-					}
 					timeline.setFrame(i, event_4);
 				}
 				timelines.push(timeline);
