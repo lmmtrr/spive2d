@@ -1,4 +1,4 @@
-import { setScaleAdjustment } from "./events.js";
+import { animationSelector, handleLive2DAnimationChange, setScaleAdjustment } from "./events.js";
 import { createAnimationSelector, resetUI } from "./ui.js";
 const { convertFileSrc } = window.__TAURI__.core;
 
@@ -28,6 +28,8 @@ export async function loadLive2DModel(dirName, fileNames) {
   app.stage.addChild(currentModel);
   const motions = currentModel.internalModel.motionManager.definitions;
   if (motions) createAnimationSelector(motions);
+  const [motion, index] = animationSelector.value.split(",");
+  handleLive2DAnimationChange(motion, index);
   setScaleAdjustment(scale);
   resetUI();
 }

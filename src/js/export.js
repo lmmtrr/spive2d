@@ -24,11 +24,16 @@ export async function startRecording(modelType, animationName) {
     canvas = document.getElementById("spineCanvas");
   } else if (modelType === "live2d") {
     canvas = document.getElementById("live2dCanvas");
-    const file = await fetch(convertFileSrc(`${dirSelector[dirSelector.selectedIndex].value}motions/${animationName}`));
-    const content = await file.text();
-    const jsonData = JSON.parse(content);
-    live2dAnimationDuration = jsonData.Meta.Duration;
-    recordingStartTime = performance.now();
+    if (animationName.endsWith(".json")) {
+      const file = await fetch(convertFileSrc(`${dirSelector[dirSelector.selectedIndex].value}motions/${animationName}`));
+      const content = await file.text();
+      const jsonData = JSON.parse(content);
+      live2dAnimationDuration = jsonData.Meta.Duration;
+      recordingStartTime = performance.now();
+    } else {
+      setRecordingFlag(false);
+      return;
+    }
   }
 
   const stream = canvas.captureStream(RECORDING_FRAME_RATE);
@@ -53,7 +58,7 @@ export async function startRecording(modelType, animationName) {
     const link = document.createElement("a");
     const selectedSceneText =
       sceneSelector.options[sceneSelector.selectedIndex].textContent;
-    link.download = `${selectedSceneText}_${animationName.replace(',', '-')}.webm`;
+    link.download = `${selectedSceneText}_${animationName.split(".")[0]}.webm`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);

@@ -13,8 +13,8 @@ import { createSceneSelector, resetSettingUI } from "./ui.js";
 let scaleAdjustment = 1;
 const scaleInit = 1;
 const scaleMax = 8;
-const scaleMin = 1;
-const scaleStep = 0.2;
+const scaleMin = 0.5;
+const scaleStep = 0.1;
 const rotateStep = 0.001;
 export const moveStep = 0.001;
 export let scale = scaleInit;
@@ -262,7 +262,7 @@ function handleResize() {
     currentModel.scale.set(newScale);
     scale = newScale;
     setScaleAdjustment(newScale);
-    currentModel.position.set(w * 0.5, h * 0.5);
+    currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
   }
 }
 
@@ -368,7 +368,7 @@ function handleSceneChange(e) {
   _handleSceneChange();
 }
 
-function handleLive2DAnimationChange(motion, index) {
+export function handleLive2DAnimationChange(motion, index) {
   const motionManager = currentModel.internalModel.motionManager;
   motionManager.stopAllMotions();
   motionManager.startMotion(motion, Number(index), 1);

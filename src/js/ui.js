@@ -53,13 +53,26 @@ export function createSceneSelector(sceneIds) {
 export function createAnimationSelector(animations) {
   let options = "";
   if (modelType === "live2d") {
-    options = Object.entries(animations)
-      .flatMap(([key, values]) =>
-        values.map((value, index) => {
-          const file = (value.file ?? value.File).split("/").pop();
-          return `<option value="${key},${index}">${file}</option>`;
-        })
-      )
+    const displayableAnimations = [];
+    Object.entries(animations).forEach(([groupName, anims]) => {
+      anims.forEach((anim, originalIndex) => {
+        const fileName = (anim.file || anim.File || "").split("/").pop();
+        displayableAnimations.push({
+          text: fileName,
+          value: `${groupName},${originalIndex}`,
+          groupName: groupName,
+        });
+      });
+    });
+    displayableAnimations.sort((a, b) => {
+      const keyA = getSortableKey(a.text);
+      const keyB = getSortableKey(b.text);
+      if (keyA < keyB) return -1;
+      if (keyA > keyB) return 1;
+      return 0;
+    });
+    options = displayableAnimations
+      .map(anim => `<option value="${anim.value}">${anim.text}</option>`)
       .join("");
   } else {
     options = animations.map((v) => `<option>${v.name}</option>`).join("");
