@@ -13565,4 +13565,3 @@ void main () {
   };
   return __toCommonJS(src_exports);
 })();
-//# sourceMappingURL=spine-webgl.js.map

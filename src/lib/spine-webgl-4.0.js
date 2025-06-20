@@ -11572,4 +11572,3 @@ var spine = (() => {
   };
   return src_exports;
 })();
-//# sourceMappingURL=spine-webgl.js.map

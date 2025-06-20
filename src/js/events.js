@@ -9,6 +9,7 @@ import {
 } from "./main.js";
 import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
+const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 
 let scaleAdjustment = 1;
 const scaleInit = 1;
@@ -50,6 +51,10 @@ const settingDiv = document.getElementById("setting");
 const skin = document.getElementById("skin");
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
+const windowWidthInput = document.getElementById("windowWidth");
+const windowHeightInput = document.getElementById("windowHeight");
+const modelOriginalWidthInput = document.getElementById("modelOriginalWidth");
+const modelOriginalHeightInput = document.getElementById("modelOriginalHeight");
 setupEventListeners();
 
 export function setScaleAdjustment(value) {
@@ -100,6 +105,16 @@ function setupEventListeners() {
   settingSelector.addEventListener("change", handleSettingSelectorChange);
   filterBox.addEventListener("input", handleFilterInput);
   settingDiv.addEventListener("input", handleSettingChange);
+  windowWidthInput.addEventListener("change", () => {
+    const newWidth = Number(windowWidthInput.value);
+    const newHeight = Number(windowHeightInput.value);
+    getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
+  });
+  windowHeightInput.addEventListener("change", () => {
+    const newWidth = Number(windowWidthInput.value);
+    const newHeight = Number(windowHeightInput.value);
+    getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
+  });
 }
 
 function previousDir() {
@@ -161,6 +176,26 @@ function nextAnimation() {
   } else handleSpineAnimationChange(animationIndex);
 }
 
+function toggleDialog() {
+  const dialog = document.getElementById("dialog");
+  if (dialog.open) {
+    dialog.close();
+  } else {
+    dialog.showModal();
+    if (windowWidthInput && windowHeightInput) {
+      windowWidthInput.value = window.innerWidth;
+      windowHeightInput.value = window.innerHeight;
+    }
+    if (modelType === "live2d") {
+      modelOriginalWidthInput.value = currentModel.internalModel.originalWidth;
+      modelOriginalHeightInput.value = currentModel.internalModel.originalHeight;
+    } else if (modelType === "spine") {
+      modelOriginalWidthInput.value = skeletons["0"].skeleton.data.width;
+      modelOriginalHeightInput.value = skeletons["0"].skeleton.data.height;
+    }
+  }
+}
+
 function exportImage() {
   const activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
   const screenshotCanvas = document.getElementById("screenshotCanvas");
@@ -194,10 +229,7 @@ function exportAnimation() {
   isRecording = true;
   let animationName;
   if (modelType === "spine") {
-    animationName = animationSelector.value
-    for (const animationState of animationStates) {
-      animationState.setAnimation(0, animationName, true);
-    }
+    animationName = animationSelector.value;
   } else if (modelType === "live2d") {
     animationName = animationSelector.options[animationSelector.selectedIndex].textContent;
   }
@@ -234,6 +266,9 @@ function handleKeyboardInput(e) {
     case "x":
       nextAnimation();
       break;
+    case "e":
+      toggleDialog();
+      break;
     case "d":
       exportImage();
       break;
@@ -263,6 +298,10 @@ function handleResize() {
     scale = newScale;
     setScaleAdjustment(newScale);
     currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
+  }
+  if (windowWidthInput && windowHeightInput) {
+    windowWidthInput.value = window.innerWidth;
+    windowHeightInput.value = window.innerHeight;
   }
 }
 
