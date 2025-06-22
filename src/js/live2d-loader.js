@@ -28,7 +28,7 @@ export async function loadLive2DModel(dirName, fileNames) {
   app.stage.addChild(currentModel);
   const motions = currentModel.internalModel.motionManager.definitions;
   if (motions) createAnimationSelector(motions);
-  const expressions = currentModel.internalModel.motionManager.expressionManager.definitions;
+  const expressions = currentModel.internalModel.motionManager.expressionManager?.definitions;
   if (expressions) createExpressionSelector(expressions);
   const [motion, index] = animationSelector.value.split(",");
   handleLive2DAnimationChange(motion, index);

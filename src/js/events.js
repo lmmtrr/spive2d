@@ -416,7 +416,7 @@ export function handleLive2DAnimationChange(motion, index) {
 }
 
 export function handleExpressionChange(e) {
-  currentModel.expression(Number(e.target.value));
+  currentModel.expression("" === e.target.value ? currentModel.internalModel.motionManager.ExpressionManager?.defaultExpression: Number(e.target.value));
 }
 
 function handleSpineAnimationChange(index) {

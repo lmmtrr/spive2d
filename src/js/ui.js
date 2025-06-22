@@ -83,7 +83,7 @@ export function createAnimationSelector(animations) {
 }
 
 export function createExpressionSelector(expressions) {
-  let options = "";
+  let options = `<option value="">Default</option>`;
   if (modelType === "live2d") {
     const displayableExpressions = [];
     expressions.forEach((expr, originalIndex) => {
@@ -100,7 +100,7 @@ export function createExpressionSelector(expressions) {
       if (keyA > keyB) return 1;
       return 0;
     });
-    options = displayableExpressions
+    options += displayableExpressions
       .map(expr => `<option value="${expr.value}">${expr.text}</option>`)
       .join("");
   }
@@ -283,7 +283,6 @@ export function resetUI() {
     createParameterUI();
     createPartUI();
     createDrawableUI();
-    createExpressionSelector(currentModel.internalModel.motionManager.expressionManager.definitions);
   } else {
     parameters.style.display = "none";
     parts.style.display = "none";
