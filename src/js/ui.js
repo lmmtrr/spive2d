@@ -13,6 +13,7 @@ const part = document.getElementById("part");
 const drawable = document.getElementById("drawable");
 const attachment = document.getElementById("attachment");
 const skin = document.getElementById("skin");
+const expressionSelector = document.getElementById("expressionSelector");
 parameters.style.display = "none";
 parts.style.display = "none";
 drawables.style.display = "none";
@@ -24,6 +25,7 @@ part.style.display = "none";
 drawable.style.display = "none";
 attachment.style.display = "none";
 skin.style.display = "none";
+expressionSelector.style.display = "none";
 
 export function getSortableKey(str, padLength = 16) {
   const s = String(str || "");
@@ -78,6 +80,31 @@ export function createAnimationSelector(animations) {
     options = animations.map((v) => `<option>${v.name}</option>`).join("");
   }
   document.getElementById("animationSelector").innerHTML = options;
+}
+
+export function createExpressionSelector(expressions) {
+  let options = "";
+  if (modelType === "live2d") {
+    const displayableExpressions = [];
+    expressions.forEach((expr, originalIndex) => {
+      const fileName = (expr.file || expr.File || "").split("/").pop();
+      displayableExpressions.push({
+        text: fileName,
+        value: `${originalIndex}`,
+      });
+    });
+    displayableExpressions.sort((a, b) => {
+      const keyA = getSortableKey(a.text);
+      const keyB = getSortableKey(b.text);
+      if (keyA < keyB) return -1;
+      if (keyA > keyB) return 1;
+      return 0;
+    });
+    options = displayableExpressions
+      .map(expr => `<option value="${expr.value}">${expr.text}</option>`)
+      .join("");
+  }
+  document.getElementById("expressionSelector").innerHTML = options;
 }
 
 function createParameterUI() {
@@ -252,9 +279,11 @@ export function resetUI() {
     parameter.innerHTML = "";
     part.innerHTML = "";
     drawable.innerHTML = "";
+    expressionSelector.style.display = "block";
     createParameterUI();
     createPartUI();
     createDrawableUI();
+    createExpressionSelector(currentModel.internalModel.motionManager.expressionManager.definitions);
   } else {
     parameters.style.display = "none";
     parts.style.display = "none";
@@ -267,6 +296,7 @@ export function resetUI() {
     drawable.style.display = "none";
     attachment.style.display = "block";
     skin.style.display = "block";
+    expressionSelector.style.display = "none";
     attachment.innerHTML = "";
     skin.innerHTML = "";
     createAttachmentUI();
