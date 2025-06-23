@@ -48,6 +48,7 @@ const pmaCheckbox = document.getElementById("pmaCheckbox");
 export const dirSelector = document.getElementById("dirSelector");
 export const sceneSelector = document.getElementById("sceneSelector");
 export const animationSelector = document.getElementById("animationSelector");
+export const expressionSelector = document.getElementById("expressionSelector");
 const settingSelector = document.getElementById("settingSelector");
 const filterBox = document.getElementById("filterBox");
 const settingDiv = document.getElementById("setting");
@@ -107,6 +108,7 @@ function setupEventListeners() {
   dirSelector.addEventListener("change", handleDirChange);
   sceneSelector.addEventListener("change", handleSceneChange);
   animationSelector.addEventListener("change", handleAnimationChange);
+  expressionSelector.addEventListener("change", handleExpressionChange);
   settingSelector.addEventListener("change", handleSettingSelectorChange);
   filterBox.addEventListener("input", handleFilterInput);
   settingDiv.addEventListener("input", handleSettingChange);
@@ -534,6 +536,10 @@ export function handleLive2DAnimationChange(motion, index) {
   const motionManager = currentModel.internalModel.motionManager;
   motionManager.stopAllMotions();
   motionManager.startMotion(motion, Number(index), 1);
+}
+
+export function handleExpressionChange(e) {
+  currentModel.expression("" === e.target.value ? currentModel.internalModel.motionManager.ExpressionManager?.defaultExpression: Number(e.target.value));
 }
 
 function handleSpineAnimationChange(index) {

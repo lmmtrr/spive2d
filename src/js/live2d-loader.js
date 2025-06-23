@@ -1,5 +1,5 @@
 import { animationSelector, handleLive2DAnimationChange, setScaleAdjustment } from "./events.js";
-import { createAnimationSelector, resetUI } from "./ui.js";
+import { createAnimationSelector, createExpressionSelector, resetUI } from "./ui.js";
 const { convertFileSrc } = window.__TAURI__.core;
 
 const live2dCanvas = document.getElementById("live2dCanvas");
@@ -28,6 +28,8 @@ export async function loadLive2DModel(dirName, fileNames) {
   app.stage.addChild(currentModel);
   const motions = currentModel.internalModel.motionManager.definitions;
   if (motions) createAnimationSelector(motions);
+  const expressions = currentModel.internalModel.motionManager.expressionManager?.definitions;
+  if (expressions) createExpressionSelector(expressions);
   const [motion, index] = animationSelector.value.split(",");
   handleLive2DAnimationChange(motion, index);
   setScaleAdjustment(scale);
