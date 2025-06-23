@@ -6,10 +6,13 @@ import {
   init,
   isInit,
   modelType,
+  processPath,
 } from "./main.js";
 import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
 const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
+const { open } = window.__TAURI__.dialog;
+
 
 let scaleAdjustment = 1;
 const scaleInit = 1;
@@ -51,10 +54,12 @@ const settingDiv = document.getElementById("setting");
 const skin = document.getElementById("skin");
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
+const openDirectoryButton = document.getElementById("openDirectoryButton");
+const openArchiveButton = document.getElementById("openArchiveButton");
 const windowWidthInput = document.getElementById("windowWidth");
 const windowHeightInput = document.getElementById("windowHeight");
-const modelOriginalWidthInput = document.getElementById("modelOriginalWidth");
-const modelOriginalHeightInput = document.getElementById("modelOriginalHeight");
+const originalWidthInput = document.getElementById("originalWidth");
+const originalHeightInput = document.getElementById("originalHeight");
 setupEventListeners();
 
 export function setScaleAdjustment(value) {
@@ -105,14 +110,18 @@ function setupEventListeners() {
   settingSelector.addEventListener("change", handleSettingSelectorChange);
   filterBox.addEventListener("input", handleFilterInput);
   settingDiv.addEventListener("input", handleSettingChange);
+  openDirectoryButton.addEventListener("click", handleOpenDirectory);
+  openArchiveButton.addEventListener("click", handleOpenArchiveFile);
   windowWidthInput.addEventListener("change", () => {
     const newWidth = Number(windowWidthInput.value);
     const newHeight = Number(windowHeightInput.value);
+    if (newWidth < 100) windowWidthInput.value = 100;
     getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
   });
   windowHeightInput.addEventListener("change", () => {
     const newWidth = Number(windowWidthInput.value);
     const newHeight = Number(windowHeightInput.value);
+    if (newHeight < 100) windowHeightInput.value = 100;
     getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
   });
 }
@@ -182,37 +191,139 @@ function toggleDialog() {
     dialog.close();
   } else {
     dialog.showModal();
-    if (windowWidthInput && windowHeightInput) {
-      windowWidthInput.value = window.innerWidth;
-      windowHeightInput.value = window.innerHeight;
-    }
+    if (!isInit) return;
     if (modelType === "live2d") {
-      modelOriginalWidthInput.value = currentModel.internalModel.originalWidth;
-      modelOriginalHeightInput.value = currentModel.internalModel.originalHeight;
+      originalWidthInput.value = currentModel.internalModel.originalWidth;
+      originalHeightInput.value = currentModel.internalModel.originalHeight;
     } else if (modelType === "spine") {
-      modelOriginalWidthInput.value = skeletons["0"].skeleton.data.width;
-      modelOriginalHeightInput.value = skeletons["0"].skeleton.data.height;
+      originalWidthInput.value = skeletons["0"].skeleton.data.width;
+      originalHeightInput.value = skeletons["0"].skeleton.data.height;
     }
   }
 }
 
-function exportImage() {
-  const activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
-  const screenshotCanvas = document.getElementById("screenshotCanvas");
-  const ctx = screenshotCanvas.getContext("2d", { willReadFrequently: true });
+async function handleOpenDirectory() {
+  const file = await open({
+    multiple: false,
+    directory: true,
+  });
+  if (file) processPath([file]);
+}
+
+async function handleOpenArchiveFile() {
+  const file = await open({
+    multiple: false,
+    filters: [
+      { name: "Archive", extensions: ["zip", "7z"] },
+    ],
+  });
+  if (file) processPath([file]);
+}
+
+export function changeToOriginalSize(activeCanvas, screenshotCanvas, modelType, currentModel, skeletons) {
+  const prevActiveCanvasState = {
+    scaleAdjustment: scaleAdjustment,
+    scale: scale,
+    moveX: moveX,
+    moveY: moveY,
+    rotate: rotate,
+    width: activeCanvas.width,
+    height: activeCanvas.height,
+    styleWidth: activeCanvas.style.width,
+    styleHeight: activeCanvas.style.height,
+    display: activeCanvas.style.display,
+  };
+  let originalModelWidth;
+  let originalModelHeight;
+  if (modelType === 'live2d') {
+    originalModelWidth = currentModel.internalModel.originalWidth;
+    originalModelHeight = currentModel.internalModel.originalHeight;
+  } else if (modelType === "spine") {
+    originalModelWidth = skeletons['0'].skeleton.data.width;
+    originalModelHeight = skeletons['0'].skeleton.data.height;
+  }
+  getCurrentWindow().setSize(new PhysicalSize(originalModelWidth, originalModelHeight));
+  scaleAdjustment = 1;
+  scale = 1;
+  moveX = 0;
+  moveY = 0;
+  rotate = 0;
+  activeCanvas.width = originalModelWidth;
+  activeCanvas.height = originalModelHeight;
+  activeCanvas.style.width = originalModelWidth + 'px';
+  activeCanvas.style.height = originalModelHeight + 'px';
+  activeCanvas.style.display = 'none';
+  screenshotCanvas.width = originalModelWidth;
+  screenshotCanvas.height = originalModelHeight;
+  screenshotCanvas.style.width = originalModelWidth + 'px';
+  screenshotCanvas.style.height = originalModelHeight + 'px';
+  if (modelType === "live2d") {
+    currentModel.scale.set(1);
+    currentModel.position.set(originalModelWidth * 0.5, originalModelHeight * 0.5);
+    currentModel.rotation = 0;
+  }
+  return { prevActiveCanvasState, originalModelWidth, originalModelHeight };
+}
+
+export function restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel) {
+  getCurrentWindow().setSize(new PhysicalSize(prevActiveCanvasState.width, prevActiveCanvasState.height));
+  scaleAdjustment = prevActiveCanvasState.scaleAdjustment;
+  scale = prevActiveCanvasState.scale;
+  moveX = prevActiveCanvasState.moveX;
+  moveY = prevActiveCanvasState.moveY;
+  rotate = prevActiveCanvasState.rotate;
+  if (modelType === "live2d") currentModel.rotation = rotate;
+  activeCanvas.width = prevActiveCanvasState.width;
+  activeCanvas.height = prevActiveCanvasState.height;
+  activeCanvas.style.width = prevActiveCanvasState.styleWidth;
+  activeCanvas.style.height = prevActiveCanvasState.styleHeight;
+  activeCanvas.style.display = prevActiveCanvasState.display;
+  handleResize();
+}
+
+function exportImageOriginalSize(activeCanvas, screenshotCanvas) {
+  const { prevActiveCanvasState, originalModelWidth, originalModelHeight } =
+    changeToOriginalSize(activeCanvas, screenshotCanvas, modelType, currentModel, skeletons);
+  const ctx = screenshotCanvas.getContext('2d', { willReadFrequently: true });
+  let previousImageData = null;
+
+  function copyCanvasContentForOriginalSizeInternal() {
+    ctx.clearRect(0, 0, originalModelWidth, originalModelHeight);
+    ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
+    const imageData = ctx.getImageData(0, 0, originalModelWidth, originalModelHeight);
+    if (previousImageData === null) {
+      previousImageData = imageData;
+      requestAnimationFrame(copyCanvasContentForOriginalSizeInternal);
+    } else {
+      const link = document.createElement('a');
+      const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      link.download = `${selectedSceneText}_original.png`;
+      link.href = screenshotCanvas.toDataURL();
+      link.click();
+      restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
+      return;
+    }
+  }
+  requestAnimationFrame(copyCanvasContentForOriginalSizeInternal);
+}
+
+function exportImageWindowSize() {
+  const activeCanvas = modelType === 'live2d' ? live2dCanvas : spineCanvas;
+  const screenshotCanvas = document.getElementById('screenshotCanvas');
+  const ctx = screenshotCanvas.getContext('2d', { willReadFrequently: true });
   const { width, height } = activeCanvas;
   screenshotCanvas.width = width;
   screenshotCanvas.height = height;
   let previousImageData = null;
-  copyCanvasContent();
-
   function copyCanvasContent() {
+    ctx.clearRect(0, 0, width, height);
     ctx.drawImage(activeCanvas, 0, 0);
     const imageData = ctx.getImageData(0, 0, width, height);
     if (previousImageData === null) {
       previousImageData = imageData;
+      requestAnimationFrame(copyCanvasContent);
     } else {
-      const link = document.createElement("a");
+      const link = document.createElement('a');
       const selectedSceneText =
         sceneSelector.options[sceneSelector.selectedIndex].textContent;
       link.download = `${selectedSceneText}.png`;
@@ -220,7 +331,18 @@ function exportImage() {
       link.click();
       return;
     }
-    requestAnimationFrame(copyCanvasContent);
+  }
+  requestAnimationFrame(copyCanvasContent);
+}
+
+function exportImage() {
+  const originalSizeCheckbox = document.getElementById('originalSizeCheckbox');
+  const activeCanvas = modelType === 'live2d' ? live2dCanvas : spineCanvas;
+  const screenshotCanvas = document.getElementById('screenshotCanvas');
+  if (originalSizeCheckbox.checked) {
+    exportImageOriginalSize(activeCanvas, screenshotCanvas);
+  } else {
+    exportImageWindowSize();
   }
 }
 
@@ -246,7 +368,7 @@ function focusBody() {
 function handleKeyboardInput(e) {
   const isInputFocused = document.activeElement.matches("input");
   if (isInputFocused) return;
-  if (!isInit) return;
+  if (e.key !== 'e' && !isInit) return;
   switch (e.key) {
     case "q":
       previousDir();
@@ -289,7 +411,10 @@ function handleResize() {
   spineCanvas.height = h;
   spineCanvas.style.width = `${w}px`;
   spineCanvas.style.height = `${h}px`;
-  if (modelType === "live2d" && currentModel && currentModel.internalModel) {
+  windowWidthInput.value = w;
+  windowHeightInput.value = h;
+  if (!isInit) return;
+  if (modelType === "live2d") {
     const newScale = Math.min(
       w / currentModel.internalModel.originalWidth,
       h / currentModel.internalModel.originalHeight
@@ -298,10 +423,6 @@ function handleResize() {
     scale = newScale;
     setScaleAdjustment(newScale);
     currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
-  }
-  if (windowWidthInput && windowHeightInput) {
-    windowWidthInput.value = window.innerWidth;
-    windowHeightInput.value = window.innerHeight;
   }
 }
 
@@ -337,11 +458,13 @@ function handleMouseMove(e) {
   if (isMove) {
     moveX += e.clientX - startX;
     moveY += e.clientY - startY;
-    if (modelType === "live2d")
+    if (modelType === "live2d") {
+      const { innerWidth: w, innerHeight: h } = window;
       currentModel.position.set(
-        window.innerWidth * 0.5 + moveX,
-        window.innerHeight * 0.5 + moveY
+        w * 0.5 + moveX,
+        h * 0.5 + moveY
       );
+    }
   } else if (e.clientX >= live2dCanvas.width - sidebarWidth) {
     rotate +=
       (e.clientY - startY) *
@@ -374,7 +497,7 @@ function handlePMACheckboxChange() {
 }
 
 function findMaxNumberInString(inputString) {
-  const numbers = inputString.match(/\d+/g);
+  const numbers = inputString.match(/d+/g);
   if (numbers === null) return null;
   const numArray = numbers.map(Number);
   const maxNumber = Math.max(...numArray);

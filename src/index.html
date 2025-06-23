@@ -11,18 +11,26 @@
 <body>
   <div id="spinner"></div>
   <dialog id="dialog" closedby="any" autofocus>
-    <label for="windowWidth">Width:</label>
-    <input type="number" id="windowWidth" name="windowWidth">
-    <br>
-    <label for="windowHeight">Height:</label>
-    <input type="number" id="windowHeight" name="windowHeight">
+    <button id="openDirectoryButton">Open Directory</button>
+    <button id="openArchiveButton">Open Archive File</button>
     <br>
     <hr>
-    <label for="modelOriginalWidth">Model Original Width:</label>
-    <input type="text" id="modelOriginalWidth" name="modelOriginalWidth" readonly>
+    <label for="windowWidth">Width:</label>
+    <input type="number" id="windowWidth" name="windowWidth" min="100" max="10000">
     <br>
-    <label for="modelOriginalHeight">Model Original Height:</label>
-    <input type="text" id="modelOriginalHeight" name="modelOriginalHeight" readonly>
+    <label for="windowHeight">Height:</label>
+    <input type="number" id="windowHeight" name="windowHeight" min="100" max="10000">
+    <br>
+    <hr>
+    <label for="originalWidth">Original Width:</label>
+    <input type="text" id="originalWidth" name="originalWidth" readonly>
+    <br>
+    <label for="originalHeight">Original Height:</label>
+    <input type="text" id="originalHeight" name="originalHeight" readonly>
+    <br>
+    <hr>
+    <input type="checkbox" id="originalSizeCheckbox">
+    <label for="originalSizeCheckbox">Export at Original Size</label>
   </dialog>
   <div id="sidebar">
     <select id="dirSelector"></select>

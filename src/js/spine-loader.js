@@ -128,7 +128,7 @@ function loadSkeleton(fileName) {
   const atlas = assetManager.get(`${_dirName}${fileName}${atlasExt}`);
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
   const skeletonLoader =
-    skelExt === ".skel"
+    skelExt.includes(".skel")
       ? new spine.SkeletonBinary(atlasLoader)
       : new spine.SkeletonJson(atlasLoader);
   const skeletonData = skeletonLoader.readSkeletonData(

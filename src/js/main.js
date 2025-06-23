@@ -10,6 +10,11 @@ import { createDirSelector, createSceneSelector, getSortableKey } from "./ui.js"
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
+const spinner = document.getElementById("spinner");
+const dialog = document.getElementById("dialog");
+const windowWidth = document.getElementById("windowWidth");
+const windowHeight = document.getElementById("windowHeight");
+
 export let dirFiles;
 export let isInit = false;
 let isProcessing = false;
@@ -17,8 +22,9 @@ export const spines = {};
 export let modelType = "live2d";
 const versions = ["3.6", "3.7", "3.8", "4.0", "4.1", "4.2"];
 preloadSpines(versions);
-
-const spinner = document.getElementById("spinner");
+windowWidth.value = window.innerWidth;
+windowHeight.value = window.innerHeight;
+dialog.showModal();
 
 function preloadSpines(versions) {
   for (const version of versions) {
@@ -53,24 +59,14 @@ export function dispose() {
   else disposeSpine();
 }
 
-listen("progress", (event) => {
-  isProcessing = event.payload;
-  if (isProcessing) {
-    spinner.style.display = "block";
-  } else {
-    spinner.style.display = "none";
-  }
-});
-
-listen("tauri://drag-drop", async (event) => {
+export async function processPath(paths) {
   if (isProcessing) return;
   isInit = false;
-  const droppedPaths = event.payload.paths;
-  if (droppedPaths.length === 1) {
-    const droppedPath = droppedPaths[0];
+  if (paths.length === 1) {
+    const path = paths[0];
     try {
       const _dirFiles = await invoke("handle_dropped_path", {
-        path: droppedPath,
+        path: path,
       });
       const dirs = Object.keys(_dirFiles);
       dirs.sort((a, b) => {
@@ -89,10 +85,24 @@ listen("tauri://drag-drop", async (event) => {
         dispose();
         init();
         isInit = true;
+        dialog.close();
       }
     } catch (error) {
       console.error("Error handling dropped path:", error);
       spinner.style.display = "none";
     }
   }
+}
+
+listen("progress", (event) => {
+  isProcessing = event.payload;
+  if (isProcessing) {
+    spinner.style.display = "block";
+  } else {
+    spinner.style.display = "none";
+  }
+});
+
+listen("tauri://drag-drop", async (event) => {
+  processPath(event.payload.paths);
 });

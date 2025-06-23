@@ -279,6 +279,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![get_subdir_files, handle_dropped_path])
+        .plugin(tauri_plugin_dialog::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
