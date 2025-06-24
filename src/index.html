@@ -10,16 +10,24 @@
 
 <body>
   <div id="spinner"></div>
+  <div id="progressBarContainer">
+      <div id="progressBar"></div>
+  </div>
   <dialog id="dialog" closedby="any" autofocus>
     <button id="openDirectoryButton">Open Directory</button>
     <button id="openArchiveButton">Open Archive File</button>
     <br>
     <hr>
-    <label for="windowWidth">Width:</label>
+    <label for="windowWidth">Window Width:</label>
     <input type="number" id="windowWidth" name="windowWidth" min="100" max="10000">
     <br>
-    <label for="windowHeight">Height:</label>
+    <label for="windowHeight">Window Height:</label>
     <input type="number" id="windowHeight" name="windowHeight" min="100" max="10000">
+    <br>
+    <label for="aspectRatioToggle">
+      <input type="checkbox" id="aspectRatioToggle" value="1">
+      Keep Aspect Ratio
+    </label>
     <br>
     <hr>
     <label for="originalWidth">Original Width:</label>
@@ -28,9 +36,12 @@
     <label for="originalHeight">Original Height:</label>
     <input type="text" id="originalHeight" name="originalHeight" readonly>
     <br>
+    <button id="setOriginalSizeButton">Set to Original Size</button>    
     <hr>
-    <input type="checkbox" id="originalSizeCheckbox">
-    <label for="originalSizeCheckbox">Export at Original Size</label>
+    <label for="originalSizeCheckbox">
+      <input type="checkbox" id="originalSizeCheckbox">
+      Export at Original Size
+    </label>
   </dialog>
   <div id="sidebar">
     <select id="dirSelector"></select>

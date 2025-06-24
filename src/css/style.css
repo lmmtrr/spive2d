@@ -7,6 +7,30 @@
   --border-color: 1px solid #999;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  color: var(--text-color);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 100%;
+  margin: 0;
+}
+
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -28,18 +52,14 @@
 
 ::placeholder {
   color: var(--text-color);
-}
-
-body {
-  margin: 0;
-  padding: 0;
-  background: #000;
+  opacity: 0.8;
 }
 
 @keyframes spin {
   0% {
     transform: translate(-50%, -50%) rotate(0deg);
   }
+
   100% {
     transform: translate(-50%, -50%) rotate(360deg);
   }
@@ -59,6 +79,109 @@ body {
   transform: translate(-50%, -50%);
 }
 
+#progressBarContainer {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  max-width: 600px;
+  height: 25px;
+  background-color: #555;
+  border-radius: 10px;
+  border: var(--border-color);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+#progressBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0%;
+  height: 100%;
+  background-color: #3498db;
+  border-radius: 5px;
+  transition: width 0.1s linear;
+}
+
+#dialog {
+  background: var(--sidebar-color);
+  color: var(--text-color);
+  border: var(--border-color);
+  border-radius: 10px;
+  padding: 25px;
+  width: 400px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+#dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+#dialog button {
+  width: calc(50% - 4px);
+  padding: 10px;
+  border-radius: 6px;
+  outline: none;
+  border: var(--border-color);
+  background-color: var(--sidebar-color);
+  color: var(--text-color);
+  text-shadow: var(--text-shadow);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#dialog button:hover {
+  background-color: #555;
+}
+
+#dialog hr {
+  border: 0;
+  height: 1px;
+  background-color: #999;
+  margin: 20px 0;
+}
+
+#dialog label {
+  display: block;
+  margin-bottom: 8px;
+  text-shadow: var(--text-shadow);
+  user-select: none;
+}
+
+#dialog input[type="number"],
+#dialog input[type="text"] {
+  text-indent: 6px;
+  border-radius: 6px;
+  height: 35px;
+  width: 100%;
+  outline: none;
+  color: var(--text-color);
+  border: var(--border-color);
+  font-size: 15px;
+  background-color: #0006;
+  margin-bottom: 12px;
+}
+
+#dialog input[readonly] {
+  background-color: #222;
+  cursor: default;
+}
+
+#dialog label[for="originalSizeCheckbox"] {
+  display: flex;
+  align-items: center;
+}
+
+#dialog input[type="checkbox"] {
+  position: relative;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+}
+
 #sidebar {
   position: fixed;
   top: 0;
@@ -74,29 +197,36 @@ body {
 }
 
 select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   border-radius: 6px;
   width: 100%;
-  padding: 4px;
+  padding: 4px 8px;
   outline: none;
   border: var(--border-color);
   background-color: var(--sidebar-color);
   color: var(--text-color);
   text-shadow: var(--text-shadow);
+  background-image: url('data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white"><path d="M4.5 6L8 10l3.5-4h-7z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 6px center;
 }
 
-select + select {
+select+select {
   border-top: 0;
 }
 
 option {
   color: var(--text-color);
+  background-color: #333;
 }
 
 #filterBox {
   text-indent: 6px;
   border-radius: 6px;
   height: 30px;
-  width: 97%;
+  width: 100%;
   outline: none;
   color: var(--text-color);
   border: var(--border-color);

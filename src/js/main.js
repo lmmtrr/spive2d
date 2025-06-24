@@ -14,6 +14,7 @@ const spinner = document.getElementById("spinner");
 const dialog = document.getElementById("dialog");
 const windowWidth = document.getElementById("windowWidth");
 const windowHeight = document.getElementById("windowHeight");
+const aspectRatioToggle = document.getElementById("aspectRatioToggle");
 
 export let dirFiles;
 export let isInit = false;
@@ -24,7 +25,13 @@ const versions = ["3.6", "3.7", "3.8", "4.0", "4.1", "4.2"];
 preloadSpines(versions);
 windowWidth.value = window.innerWidth;
 windowHeight.value = window.innerHeight;
+aspectRatioToggle.value = window.innerHeight / window.innerWidth;
 dialog.showModal();
+
+export function setProcessing(status) {
+  isProcessing = status;
+  spinner.style.display = status ? "block" : "none";
+}
 
 function preloadSpines(versions) {
   for (const version of versions) {
@@ -95,12 +102,7 @@ export async function processPath(paths) {
 }
 
 listen("progress", (event) => {
-  isProcessing = event.payload;
-  if (isProcessing) {
-    spinner.style.display = "block";
-  } else {
-    spinner.style.display = "none";
-  }
+  setProcessing(event.payload);
 });
 
 listen("tauri://drag-drop", async (event) => {

@@ -1,3 +1,4 @@
+import { modelType, setProcessing } from "./main.js";
 import {
   animationSelector,
   changeToOriginalSize,
@@ -5,7 +6,6 @@ import {
   handleLive2DAnimationChange,
   restorePreviousSize,
   sceneSelector,
-  setRecordingFlag,
 } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { animationStates, skeletons } from "./spine-loader.js";
@@ -15,12 +15,31 @@ const { convertFileSrc } = window.__TAURI__.core;
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
 const RECORDING_BITRATE = 12000000;
 const RECORDING_FRAME_RATE = 60;
+let isRecording = false;
 let live2dAnimationDuration;
 let recordingStartTime;
 let activeCanvas;
 let prevActiveCanvasState;
 
-export async function startRecording(modelType, animationName) {
+const progressBarContainer = document.getElementById("progressBarContainer");
+const progressBar = document.getElementById("progressBar");
+
+export function exportAnimation() {
+  if (isRecording) return;
+  let animationName;
+  if (modelType === "spine") {
+    animationName = animationSelector.value;
+  } else if (modelType === "live2d") {
+    animationName = animationSelector.options[animationSelector.selectedIndex].textContent;
+  }
+  startRecording(modelType, animationName);
+}
+
+async function startRecording(modelType, animationName) {
+  isRecording = true;
+  setProcessing(true);
+  progressBar.style.width = "0%";
+  progressBarContainer.style.display = "block";
   const chunks = [];
   const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
   const live2dCanvas = document.getElementById("live2dCanvas");
@@ -43,9 +62,12 @@ export async function startRecording(modelType, animationName) {
       recordingStartTime = performance.now();
       const [motion, index] = animationSelector.value.split(",");
       handleLive2DAnimationChange(motion, index);
+      await new Promise(resolve => setTimeout(resolve, 300));
     } else {
-      setRecordingFlag(false);
+      isRecording = false;
+      setProcessing(false);
       if (originalSizeCheckbox.checked) restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
+      progressBarContainer.style.display = "none";
       return;
     }
   }
@@ -67,6 +89,7 @@ export async function startRecording(modelType, animationName) {
   };
 
   rec.onstop = async () => {
+    progressBarContainer.style.display = "none";
     const blob = new Blob(chunks, { type: "video/webm" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -76,19 +99,20 @@ export async function startRecording(modelType, animationName) {
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
-    setRecordingFlag(false);
+    isRecording = false;
+    setProcessing(false);
     if (originalSizeCheckbox.checked) restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
   };
 }
 
 function checkCondition(modelType, rec) {
+  let progress = 0;
   if (modelType === "spine") {
-    if (
-      animationStates[0].tracks[0].trackTime >=
-      animationStates[0].tracks[0].animationEnd
-    ) {
+    const track = animationStates[0].tracks[0];
+    if (track.trackTime >= track.animationEnd) {
       rec.stop();
     } else {
+      progress = (track.trackTime / track.animationEnd) * 100;
       requestAnimationFrame(() => checkCondition(modelType, rec));
     }
   } else if (modelType === "live2d") {
@@ -96,7 +120,9 @@ function checkCondition(modelType, rec) {
     if (elapsedTime >= live2dAnimationDuration) {
       rec.stop();
     } else {
+      progress = (elapsedTime / live2dAnimationDuration) * 100;
       requestAnimationFrame(() => checkCondition(modelType, rec));
     }
   }
+  progressBar.style.width = `${Math.min(progress, 100)}%`;
 }

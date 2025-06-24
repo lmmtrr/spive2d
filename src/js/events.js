@@ -1,4 +1,4 @@
-import { startRecording } from "./export.js";
+import { exportAnimation } from "./export.js";
 import { animationStates, skeletons, spine } from "./spine-loader.js";
 import {
   dispose,
@@ -12,7 +12,6 @@ import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
 const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 const { open } = window.__TAURI__.dialog;
-
 
 let scaleAdjustment = 1;
 const scaleInit = 1;
@@ -31,7 +30,6 @@ let startX = 0;
 let startY = 0;
 let mouseDown = false;
 let isMove = false;
-let isRecording = false;
 export let isFirstRender = true;
 export let premultipliedAlpha = false;
 export let setting = "parameters";
@@ -43,6 +41,7 @@ const sidebarWidth = Number(
   rootStyles.getPropertyValue("--sidebar-width").replace("px", "")
 );
 
+const dialog = document.getElementById("dialog");
 const sidebar = document.getElementById("sidebar");
 const pmaCheckbox = document.getElementById("pmaCheckbox");
 export const dirSelector = document.getElementById("dirSelector");
@@ -59,8 +58,10 @@ const openDirectoryButton = document.getElementById("openDirectoryButton");
 const openArchiveButton = document.getElementById("openArchiveButton");
 const windowWidthInput = document.getElementById("windowWidth");
 const windowHeightInput = document.getElementById("windowHeight");
+const aspectRatioToggle = document.getElementById('aspectRatioToggle');
 const originalWidthInput = document.getElementById("originalWidth");
 const originalHeightInput = document.getElementById("originalHeight");
+const setOriginalSizeButton = document.getElementById("setOriginalSizeButton");
 setupEventListeners();
 
 export function setScaleAdjustment(value) {
@@ -69,10 +70,6 @@ export function setScaleAdjustment(value) {
 
 export function setOpacities(value) {
   opacities = value;
-}
-
-export function setRecordingFlag(flag) {
-  isRecording = flag;
 }
 
 export function setFirstRenderFlag(flag) {
@@ -114,18 +111,9 @@ function setupEventListeners() {
   settingDiv.addEventListener("input", handleSettingChange);
   openDirectoryButton.addEventListener("click", handleOpenDirectory);
   openArchiveButton.addEventListener("click", handleOpenArchiveFile);
-  windowWidthInput.addEventListener("change", () => {
-    const newWidth = Number(windowWidthInput.value);
-    const newHeight = Number(windowHeightInput.value);
-    if (newWidth < 100) windowWidthInput.value = 100;
-    getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
-  });
-  windowHeightInput.addEventListener("change", () => {
-    const newWidth = Number(windowWidthInput.value);
-    const newHeight = Number(windowHeightInput.value);
-    if (newHeight < 100) windowHeightInput.value = 100;
-    getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
-  });
+  windowWidthInput.addEventListener("change", handleWindowWidthChange);
+  windowHeightInput.addEventListener("change", handleWindowHeightChange);
+  setOriginalSizeButton.addEventListener("click", handleSetOriginalSize);
 }
 
 function previousDir() {
@@ -188,7 +176,6 @@ function nextAnimation() {
 }
 
 function toggleDialog() {
-  const dialog = document.getElementById("dialog");
   if (dialog.open) {
     dialog.close();
   } else {
@@ -220,6 +207,44 @@ async function handleOpenArchiveFile() {
     ],
   });
   if (file) processPath([file]);
+}
+
+function handleWindowWidthChange() {
+  if (aspectRatioToggle.checked) {
+    const newWidth = Number(windowWidthInput.value);
+    const aspectRatio = Number(aspectRatioToggle.value);
+    windowHeightInput.value = Math.round(newWidth * aspectRatio);
+  }
+  if (windowWidthInput.value < 100) windowWidthInput.value = 100;
+  if (windowWidthInput.value > 10000) windowWidthInput.value = 10000;
+  if (windowHeightInput.value < 100) windowHeightInput.value = 100;
+  if (windowHeightInput.value > 10000) windowHeightInput.value = 10000;
+  const newWidth = Number(windowWidthInput.value);
+  const newHeight = Number(windowHeightInput.value);
+  getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
+  aspectRatioToggle.value = newHeight / newWidth;
+}
+
+function handleWindowHeightChange() {
+  if (aspectRatioToggle.checked) {
+    const newHeight = Number(windowHeightInput.value);
+    const aspectRatio = Number(aspectRatioToggle.value);
+    windowWidthInput.value = Math.round(newHeight / aspectRatio);
+  }
+  if (windowWidthInput.value < 100) windowWidthInput.value = 100;
+  if (windowWidthInput.value > 10000) windowWidthInput.value = 10000;
+  if (windowHeightInput.value < 100) windowHeightInput.value = 100;
+  if (windowHeightInput.value > 10000) windowHeightInput.value = 10000;
+  const newWidth = Number(windowWidthInput.value);
+  const newHeight = Number(windowHeightInput.value);
+  getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
+  aspectRatioToggle.value = newHeight / newWidth;
+}
+
+function handleSetOriginalSize() {
+  const originalWidth = Math.round(Number(originalWidthInput.value));
+  const originalHeight = Math.round(Number(originalHeightInput.value));
+  getCurrentWindow().setSize(new PhysicalSize(originalWidth, originalHeight));
 }
 
 export function changeToOriginalSize(activeCanvas, screenshotCanvas, modelType, currentModel, skeletons) {
@@ -286,27 +311,17 @@ export function restorePreviousSize(activeCanvas, prevActiveCanvasState, modelTy
 function exportImageOriginalSize(activeCanvas, screenshotCanvas) {
   const { prevActiveCanvasState, originalModelWidth, originalModelHeight } =
     changeToOriginalSize(activeCanvas, screenshotCanvas, modelType, currentModel, skeletons);
-  const ctx = screenshotCanvas.getContext('2d', { willReadFrequently: true });
-  let previousImageData = null;
-
-  function copyCanvasContentForOriginalSizeInternal() {
+  const ctx = screenshotCanvas.getContext('2d');
+  setTimeout(() => {
     ctx.clearRect(0, 0, originalModelWidth, originalModelHeight);
     ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
-    const imageData = ctx.getImageData(0, 0, originalModelWidth, originalModelHeight);
-    if (previousImageData === null) {
-      previousImageData = imageData;
-      requestAnimationFrame(copyCanvasContentForOriginalSizeInternal);
-    } else {
-      const link = document.createElement('a');
-      const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
-      link.download = `${selectedSceneText}_original.png`;
-      link.href = screenshotCanvas.toDataURL();
-      link.click();
-      restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
-      return;
-    }
-  }
-  requestAnimationFrame(copyCanvasContentForOriginalSizeInternal);
+    const link = document.createElement('a');
+    const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
+    link.download = `${selectedSceneText}_original.png`;
+    link.href = screenshotCanvas.toDataURL();
+    link.click();
+    restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
+  }, 200);
 }
 
 function exportImageWindowSize() {
@@ -346,18 +361,6 @@ function exportImage() {
   } else {
     exportImageWindowSize();
   }
-}
-
-function exportAnimation() {
-  if (isRecording) return;
-  isRecording = true;
-  let animationName;
-  if (modelType === "spine") {
-    animationName = animationSelector.value;
-  } else if (modelType === "live2d") {
-    animationName = animationSelector.options[animationSelector.selectedIndex].textContent;
-  }
-  startRecording(modelType, animationName);
 }
 
 function focusBody() {
@@ -415,6 +418,7 @@ function handleResize() {
   spineCanvas.style.height = `${h}px`;
   windowWidthInput.value = w;
   windowHeightInput.value = h;
+  aspectRatioToggle.value = h / w;
   if (!isInit) return;
   if (modelType === "live2d") {
     const newScale = Math.min(
@@ -433,6 +437,7 @@ function handleMouseOut() {
 }
 
 function handleMouseDown(e) {
+  if (dialog.open) return;
   if (!isInit) return;
   if (e.button === 2) return;
   startX = e.clientX;
@@ -539,7 +544,7 @@ export function handleLive2DAnimationChange(motion, index) {
 }
 
 export function handleExpressionChange(e) {
-  currentModel.expression("" === e.target.value ? currentModel.internalModel.motionManager.ExpressionManager?.defaultExpression: Number(e.target.value));
+  currentModel.expression("" === e.target.value ? currentModel.internalModel.motionManager.ExpressionManager?.defaultExpression : Number(e.target.value));
 }
 
 function handleSpineAnimationChange(index) {
