@@ -11,33 +11,40 @@
 <body>
   <div id="spinner"></div>
   <div id="progressBarContainer">
-      <div id="progressBar"></div>
+    <div id="progressBar"></div>
   </div>
   <dialog id="dialog" closedby="any" autofocus>
-    <button id="openDirectoryButton">Open Directory</button>
-    <button id="openArchiveButton">Open Archive File</button>
-    <br>
+    <div class="button-group">
+      <button id="openDirectoryButton">Open Directory</button>
+      <button id="openArchiveButton">Open Archive File</button>
+    </div>
     <hr>
-    <label for="windowWidth">Window Width:</label>
-    <input type="number" id="windowWidth" name="windowWidth" min="100" max="10000">
-    <br>
-    <label for="windowHeight">Window Height:</label>
-    <input type="number" id="windowHeight" name="windowHeight" min="100" max="10000">
-    <br>
+    <div class="button-group">
+      <button id="openImageButton">Open Image for Background</button>
+      <button id="removeImageButton">Remove Background Image</button>
+    </div>
+    <hr>
     <label for="aspectRatioToggle">
       <input type="checkbox" id="aspectRatioToggle" value="1">
       Keep Aspect Ratio
     </label>
-    <br>
-    <hr>
-    <label for="originalWidth">Original Width:</label>
-    <input type="text" id="originalWidth" name="originalWidth" readonly>
-    <br>
-    <label for="originalHeight">Original Height:</label>
-    <input type="text" id="originalHeight" name="originalHeight" readonly>
-    <br>
-    <button id="setOriginalSizeButton">Set to Original Size</button>    
-    <hr>
+    <div class="input-row">
+      <label for="windowWidth">Window Width:</label>
+      <input type="number" id="windowWidth" name="windowWidth" min="100" max="10000">
+    </div>
+    <div class="input-row">
+      <label for="windowHeight">Window Height:</label>
+      <input type="number" id="windowHeight" name="windowHeight" min="100" max="10000">
+    </div>
+    <div class="input-row">
+      <label for="originalWidth">Original Width:</label>
+      <input type="text" id="originalWidth" name="originalWidth" readonly>
+    </div>
+    <div class="input-row">
+      <label for="originalHeight">Original Height:</label>
+      <input type="text" id="originalHeight" name="originalHeight" readonly>
+    </div>
+    <button id="setOriginalSizeButton">Set to Original Size</button>
     <label for="originalSizeCheckbox">
       <input type="checkbox" id="originalSizeCheckbox">
       Export at Original Size

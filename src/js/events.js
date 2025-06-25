@@ -5,13 +5,15 @@ import {
   dirFiles,
   init,
   isInit,
+  isProcessing,
   modelType,
   processPath,
 } from "./main.js";
 import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
-const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
+const { convertFileSrc } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
+const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 
 let scaleAdjustment = 1;
 const scaleInit = 1;
@@ -56,6 +58,8 @@ const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
 const openArchiveButton = document.getElementById("openArchiveButton");
+const openImageButton = document.getElementById("openImageButton");
+const removeImageButton = document.getElementById("removeImageButton");
 const windowWidthInput = document.getElementById("windowWidth");
 const windowHeightInput = document.getElementById("windowHeight");
 const aspectRatioToggle = document.getElementById('aspectRatioToggle');
@@ -111,6 +115,8 @@ function setupEventListeners() {
   settingDiv.addEventListener("input", handleSettingChange);
   openDirectoryButton.addEventListener("click", handleOpenDirectory);
   openArchiveButton.addEventListener("click", handleOpenArchiveFile);
+  openImageButton.addEventListener("click", handleOpenImage);
+  removeImageButton.addEventListener("click", handleRemoveImage);
   windowWidthInput.addEventListener("change", handleWindowWidthChange);
   windowHeightInput.addEventListener("change", handleWindowHeightChange);
   setOriginalSizeButton.addEventListener("click", handleSetOriginalSize);
@@ -207,6 +213,21 @@ async function handleOpenArchiveFile() {
     ],
   });
   if (file) processPath([file]);
+}
+
+async function handleOpenImage() {
+  const file = await open({
+    multiple: false,
+    filters: [
+      { name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
+    ],
+  });
+  if (!file) return;
+  document.body.style.backgroundImage = `url("${convertFileSrc(file)}")`;
+}
+
+async function handleRemoveImage() {
+  document.body.style.backgroundImage = "none";
 }
 
 function handleWindowWidthChange() {
@@ -439,6 +460,7 @@ function handleMouseOut() {
 function handleMouseDown(e) {
   if (dialog.open) return;
   if (!isInit) return;
+  if (isProcessing) return;
   if (e.button === 2) return;
   startX = e.clientX;
   startY = e.clientY;

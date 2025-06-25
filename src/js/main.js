@@ -18,7 +18,7 @@ const aspectRatioToggle = document.getElementById("aspectRatioToggle");
 
 export let dirFiles;
 export let isInit = false;
-let isProcessing = false;
+export let isProcessing = false;
 export const spines = {};
 export let modelType = "live2d";
 const versions = ["3.6", "3.7", "3.8", "4.0", "4.1", "4.2"];
@@ -30,7 +30,6 @@ dialog.showModal();
 
 export function setProcessing(status) {
   isProcessing = status;
-  spinner.style.display = status ? "block" : "none";
 }
 
 function preloadSpines(versions) {
@@ -103,6 +102,7 @@ export async function processPath(paths) {
 
 listen("progress", (event) => {
   setProcessing(event.payload);
+  spinner.style.display = event.payload ? "block" : "none";
 });
 
 listen("tauri://drag-drop", async (event) => {

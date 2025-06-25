@@ -1,4 +1,4 @@
-import { modelType, setProcessing } from "./main.js";
+import { isProcessing, modelType, setProcessing } from "./main.js";
 import {
   animationSelector,
   changeToOriginalSize,
@@ -15,7 +15,6 @@ const { convertFileSrc } = window.__TAURI__.core;
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
 const RECORDING_BITRATE = 12000000;
 const RECORDING_FRAME_RATE = 60;
-let isRecording = false;
 let live2dAnimationDuration;
 let recordingStartTime;
 let activeCanvas;
@@ -25,7 +24,7 @@ const progressBarContainer = document.getElementById("progressBarContainer");
 const progressBar = document.getElementById("progressBar");
 
 export function exportAnimation() {
-  if (isRecording) return;
+  if (isProcessing) return;
   let animationName;
   if (modelType === "spine") {
     animationName = animationSelector.value;
@@ -36,7 +35,6 @@ export function exportAnimation() {
 }
 
 async function startRecording(modelType, animationName) {
-  isRecording = true;
   setProcessing(true);
   progressBar.style.width = "0%";
   progressBarContainer.style.display = "block";
@@ -45,6 +43,7 @@ async function startRecording(modelType, animationName) {
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
   activeCanvas = modelType === 'live2d' ? live2dCanvas : spineCanvas;
+  activeCanvas.style.display = 'none';
   const screenshotCanvas = document.getElementById("screenshotCanvas");
   if (originalSizeCheckbox.checked) {
     ({ prevActiveCanvasState } = changeToOriginalSize(activeCanvas, screenshotCanvas, modelType, currentModel, skeletons));
@@ -64,10 +63,10 @@ async function startRecording(modelType, animationName) {
       handleLive2DAnimationChange(motion, index);
       await new Promise(resolve => setTimeout(resolve, 300));
     } else {
-      isRecording = false;
-      setProcessing(false);
       if (originalSizeCheckbox.checked) restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
+      setProcessing(false);
       progressBarContainer.style.display = "none";
+      activeCanvas.style.display = 'block';
       return;
     }
   }
@@ -89,7 +88,6 @@ async function startRecording(modelType, animationName) {
   };
 
   rec.onstop = async () => {
-    progressBarContainer.style.display = "none";
     const blob = new Blob(chunks, { type: "video/webm" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -99,9 +97,10 @@ async function startRecording(modelType, animationName) {
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
-    isRecording = false;
-    setProcessing(false);
     if (originalSizeCheckbox.checked) restorePreviousSize(activeCanvas, prevActiveCanvasState, modelType, currentModel);
+    setProcessing(false);
+    progressBarContainer.style.display = "none";
+    activeCanvas.style.display = 'block';
   };
 }
 
