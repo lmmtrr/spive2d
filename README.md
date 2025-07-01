@@ -16,53 +16,54 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 ## ⌨️ Keyboard Shortcuts
 
-| Action                           | Shortcuts |
-| -------------------------------- | --------- |
-| 📂 Previous Directory            | `Q`       |
-| 📁 Next Directory                | `W`       |
-| ⏮️ Previous Scene                | `A`       |
-| ⏭️ Next Scene                    | `S`       |
-| ◀️ Previous Animation            | `Z`       |
-| ▶️ Next Animation                | `X`       |
-| 📷 Screenshots                   | `D`       |
-| 💾 Export Animation (Spine only) | `C`       |
+| Action                 | Shortcuts |
+| ---------------------- | --------- |
+| 📂 Previous Directory  | `Q`       |
+| 📁 Next Directory      | `W`       |
+| ⏮️ Previous Scene      | `A`       |
+| ⏭️ Next Scene          | `S`       |
+| ◀️ Previous Animation  | `Z`       |
+| ▶️ Next Animation      | `X`       |
+| ⚙️ Open/Close Settings | `E`       |
+| 📷 Screenshots         | `D`       |
+| 💾 Export Animation    | `C`       |
 
 ## 🚀 Development
 
-**Requirements for Development**:
+To set up a local development environment, you'll need to install the following tools.
 
-- **Node.js & npm**: [https://nodejs.org/en/download](https://nodejs.org/en/download)
+**Prerequisites:**
 
-  - **Documentation on Downloading and Installing**: [https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)
+- **Node.js & npm**: [Download & Install](https://nodejs.org/en/download)
+  - _See also: [npm documentation](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)_
+- **Rust**: [Install Rust](https://www.rust-lang.org/tools/install)
+- **Tauri**: Follow the [Tauri setup guide](https://v2.tauri.app/start/prerequisites/) for your specific OS.
 
-- **Rust**: [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+**Setup Steps:**
 
-- **Tauri Prerequisites**: [https://v2.tauri.app/start/prerequisites/](https://v2.tauri.app/start/prerequisites/)
+1.  **Clone the repository:**
 
-1. Clone the repository:
+    ```bash
+    git clone https://github.com/lmmtrr/spive2d.git
+    cd spive2d
+    ```
 
-   ```bash
-   git clone https://github.com/lmmtrr/spive2d.git
-   cd spive2d
-   ```
+2.  **Install dependencies:**
 
-2. Install dependencies:
+    ```bash
+    npm install
+    ```
 
-   ```bash
-   npm i
-   ```
+3.  **Run the development server:**
 
-3. Start development server:
+    ```bash
+    npm run tauri dev
+    ```
 
-   ```bash
-   npm run tauri dev
-   ```
-
-4. Package the application:
-
-   ```bash
-   npm run tauri build
-   ```
+4.  **Build the application:**
+    ```bash
+    npm run tauri build
+    ```
 
 ## 🌐 Supported Versions
 
