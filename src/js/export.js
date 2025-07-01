@@ -184,10 +184,8 @@ async function startRecording(animationName) {
   const spineCanvas = document.getElementById("spineCanvas");
   const originalSizeCheckbox = document.getElementById('originalSizeCheckbox');
   activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
-
   let compositingCanvas = null;
   let streamSource = activeCanvas;
-
   const cleanup = (error) => {
     if (error) {
       console.error("Recording failed:", error);
@@ -200,7 +198,6 @@ async function startRecording(animationName) {
     backgroundImageToRender = null;
     _prevActiveCanvasState = null;
   };
-
   backgroundImageToRender = null;
   const backgroundImage = document.body.style.backgroundImage;
   if (backgroundImage && backgroundImage !== "none") {
@@ -216,19 +213,16 @@ async function startRecording(animationName) {
     compositingCanvas = document.createElement('canvas');
     streamSource = compositingCanvas;
   }
-
   if (originalSizeCheckbox.checked) {
     if (!compositingCanvas) {
       compositingCanvas = document.createElement('canvas');
     }
     _prevActiveCanvasState = (await changeToOriginalSize(compositingCanvas, modelType, currentModel, skeletons)).prevActiveCanvasState;
   }
-
   if (compositingCanvas) {
     compositingCanvas.width = activeCanvas.width;
     compositingCanvas.height = activeCanvas.height;
   }
-
   if (modelType === "live2d") {
     if (!animationName.endsWith(".json")) {
       return cleanup("Not a recordable Live2D motion.");
@@ -247,9 +241,12 @@ async function startRecording(animationName) {
       animationDuration = 0.1;
     }
   }
-
+  if (typeof MediaRecorder === 'undefined') {
+    console.error('Video recording is not supported on this platform.');
+    cleanup();
+    return;
+  }
   await new Promise(resolve => setTimeout(resolve, 100));
-
   const stream = streamSource.captureStream(RECORDING_FRAME_RATE);
   const rec = new MediaRecorder(stream, {
     mimeType: RECORDING_MIME_TYPE,
