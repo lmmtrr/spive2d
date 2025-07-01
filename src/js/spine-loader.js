@@ -78,7 +78,9 @@ export async function loadSpineModel(dirName, fileNames) {
   spine = spines[spineVersion];
   spineCanvas.width = window.innerWidth;
   spineCanvas.height = window.innerHeight;
-  ctx = new spine.ManagedWebGLRenderingContext(spineCanvas);
+  ctx = new spine.ManagedWebGLRenderingContext(spineCanvas, {
+    preserveDrawingBuffer: true,
+  });
   shader = spine.Shader.newTwoColoredTextured(ctx);
   batcher = new spine.PolygonBatcher(ctx);
   skeletonRenderer = new spine.SkeletonRenderer(ctx);

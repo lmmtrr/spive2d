@@ -1,7 +1,8 @@
 import {
   dirSelector,
   resetAttachmentsCache,
-  resetValues,
+  resetConfiguration,
+  resetModelState,
   sceneSelector,
 } from "./events.js";
 import { disposeLive2D, loadLive2DModel } from "./live2d-loader.js";
@@ -57,7 +58,8 @@ export function init() {
     modelType = "spine";
     loadSpineModel(dirName, fileNames);
   }
-  resetValues();
+  resetConfiguration();
+  resetModelState();
 }
 
 export function dispose() {

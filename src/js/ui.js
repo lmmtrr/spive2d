@@ -3,337 +3,227 @@ import { currentModel } from "./live2d-loader.js";
 import { modelType } from "./main.js";
 import { skeletons } from "./spine-loader.js";
 
-const parameters = document.getElementById("parameters");
-const parts = document.getElementById("parts");
-const drawables = document.getElementById("drawables");
-const attachments = document.getElementById("attachments");
-const skins = document.getElementById("skins");
-const parameter = document.getElementById("parameter");
-const part = document.getElementById("part");
-const drawable = document.getElementById("drawable");
-const attachment = document.getElementById("attachment");
-const skin = document.getElementById("skin");
-const expressionSelector = document.getElementById("expressionSelector");
-parameters.style.display = "none";
-parts.style.display = "none";
-drawables.style.display = "none";
-attachments.style.display = "none";
-skins.style.display = "none";
-checkbox.style.display = "none";
-parameter.style.display = "none";
-part.style.display = "none";
-drawable.style.display = "none";
-attachment.style.display = "none";
-skin.style.display = "none";
-expressionSelector.style.display = "none";
+const UIElements = {
+  parameters: document.getElementById("parameters"),
+  parts: document.getElementById("parts"),
+  drawables: document.getElementById("drawables"),
+  attachments: document.getElementById("attachments"),
+  skins: document.getElementById("skins"),
+  checkbox: document.getElementById("checkbox"),
+  parameter: document.getElementById("parameter"),
+  part: document.getElementById("part"),
+  drawable: document.getElementById("drawable"),
+  attachment: document.getElementById("attachment"),
+  skin: document.getElementById("skin"),
+  expressionSelector: document.getElementById("expressionSelector"),
+  dirSelector: document.getElementById("dirSelector"),
+  sceneSelector: document.getElementById("sceneSelector"),
+  animationSelector: document.getElementById("animationSelector"),
+  settingElement: document.getElementById("setting"),
+  settingSelector: document.getElementById("settingSelector"),
+};
 
 export function getSortableKey(str, padLength = 16) {
   const s = String(str || "");
   return s.replace(/\d+/g, (match) => match.padStart(padLength, '0'));
 }
 
-export function createDirSelector(dirs) {
-  const options = dirs
-    .map((dir) => {
-      const textContent = dir.split("/").filter(Boolean).pop();
-      return `<option value="${dir}">${textContent}</option>`;
-    })
+const createSorter = (keyExtractor) => (a, b) => {
+  const keyA = getSortableKey(keyExtractor(a));
+  const keyB = getSortableKey(keyExtractor(b));
+  if (keyA < keyB) return -1;
+  if (keyA > keyB) return 1;
+  return 0;
+};
+
+const sortByText = createSorter(item => item.text);
+const sortById = createSorter(item => item.id);
+const sortByName = createSorter(item => item[0]);
+
+function populateSelector(element, items, valueMapper, textMapper, initialOptions = "") {
+  const options = items
+    .map(item => `<option value="${valueMapper(item)}">${textMapper(item)}</option>`)
     .join("");
-  document.getElementById("dirSelector").innerHTML = options;
+  element.innerHTML = initialOptions + options;
+}
+
+export function createDirSelector(dirs) {
+  populateSelector(UIElements.dirSelector, dirs, dir => dir, dir => dir.split("/").filter(Boolean).pop());
 }
 
 export function createSceneSelector(sceneIds) {
-  const options = sceneIds
-    .map((scenePath) => {
-      const textContent = scenePath[0].split("/").filter(Boolean).pop();
-      return `<option value="${scenePath[0]}">${textContent}</option>`;
-    })
-    .join("");
-  document.getElementById("sceneSelector").innerHTML = options;
+  populateSelector(UIElements.sceneSelector, sceneIds, scenePath => scenePath[0], scenePath => scenePath[0].split("/").filter(Boolean).pop());
 }
 
 export function createAnimationSelector(animations) {
-  let options = "";
   if (modelType === "live2d") {
-    const displayableAnimations = [];
-    Object.entries(animations).forEach(([groupName, anims]) => {
-      anims.forEach((anim, originalIndex) => {
-        const fileName = (anim.file || anim.File || "").split("/").pop();
-        displayableAnimations.push({
-          text: fileName,
+    const displayableAnimations = Object.entries(animations)
+      .flatMap(([groupName, anims]) =>
+        anims.map((anim, originalIndex) => ({
+          text: (anim.file || anim.File || "").split("/").pop(),
           value: `${groupName},${originalIndex}`,
-          groupName: groupName,
-        });
-      });
-    });
-    displayableAnimations.sort((a, b) => {
-      const keyA = getSortableKey(a.text);
-      const keyB = getSortableKey(b.text);
-      if (keyA < keyB) return -1;
-      if (keyA > keyB) return 1;
-      return 0;
-    });
-    options = displayableAnimations
-      .map(anim => `<option value="${anim.value}">${anim.text}</option>`)
-      .join("");
-  } else {
-    options = animations.map((v) => `<option>${v.name}</option>`).join("");
+        }))
+      )
+      .sort(sortByText);
+    populateSelector(UIElements.animationSelector, displayableAnimations, anim => anim.value, anim => anim.text);
+  } else if (modelType === "spine") {
+    populateSelector(UIElements.animationSelector, animations, v => v.name, v => v.name);
   }
-  document.getElementById("animationSelector").innerHTML = options;
 }
 
 export function createExpressionSelector(expressions) {
-  let options = `<option value="">Default</option>`;
   if (modelType === "live2d") {
-    const displayableExpressions = [];
-    expressions.forEach((expr, originalIndex) => {
-      const fileName = (expr.file || expr.File || "").split("/").pop();
-      displayableExpressions.push({
-        text: fileName,
-        value: `${originalIndex}`,
-      });
-    });
-    displayableExpressions.sort((a, b) => {
-      const keyA = getSortableKey(a.text);
-      const keyB = getSortableKey(b.text);
-      if (keyA < keyB) return -1;
-      if (keyA > keyB) return 1;
-      return 0;
-    });
-    options += displayableExpressions
-      .map(expr => `<option value="${expr.value}">${expr.text}</option>`)
-      .join("");
+    const displayableExpressions = expressions
+      .map((expr, originalIndex) => ({
+        text: (expr.file || expr.File || "").split("/").pop(),
+        value: String(originalIndex),
+      }))
+      .sort(sortByText);
+    populateSelector(UIElements.expressionSelector, displayableExpressions, expr => expr.value, expr => expr.text, `<option value="">Default</option>`);
   }
-  document.getElementById("expressionSelector").innerHTML = options;
+}
+
+function createCheckboxList(parentElement, items, isChecked = true) {
+  const checkedAttribute = isChecked ? 'checked' : '';
+  const checkboxListHTML = items
+    .map(([name, index]) => `
+      <div class="item">
+        <label title="${name}">${name}<input type="checkbox" data-old-index="${index}" ${checkedAttribute}></label>
+      </div>
+    `)
+    .join('');
+  parentElement.innerHTML = checkboxListHTML;
 }
 
 function createParameterUI() {
-  const parameterIds = currentModel.internalModel.coreModel._parameterIds;
-  if (!parameterIds) return;
-  const a = parameterIds.map((value, index) => [value, index]);
-  a.sort((aItem, bItem) => {
-    const keyA = getSortableKey(aItem[0]);
-    const keyB = getSortableKey(bItem[0]);
-    if (keyA < keyB) return -1;
-    if (keyA > keyB) return 1;
-    return 0;
-  });
-  const parameterMaximumValues =
-    currentModel.internalModel.coreModel._parameterMaximumValues;
-  const parameterMinimumValues =
-    currentModel.internalModel.coreModel._parameterMinimumValues;
-  const parameterValues = currentModel.internalModel.coreModel._parameterValues;
-  const parameter = document.getElementById("parameter");
-  parameter.style.display = "block";
-  a.forEach((item) => {
-    const value = item[0];
-    const index = item[1];
-    const div = document.createElement("div");
-    div.className = "item";
-    const label = document.createElement("label");
-    label.title = value;
-    label.textContent = value;
-    const input = document.createElement("input");
-    input.type = "range";
-    input.max = parameterMaximumValues[index];
-    input.min = parameterMinimumValues[index];
-    input.step =
-      (parameterMaximumValues[index] + parameterMinimumValues[index]) / 10;
-    input.value = parameterValues[index];
-    div.appendChild(label);
-    div.appendChild(input);
-    parameter.appendChild(div);
-  });
+  const coreModel = currentModel.internalModel.coreModel;
+  if (!coreModel._parameterIds) return;
+  const parametersData = coreModel._parameterIds
+    .map((id, index) => ({
+      id,
+      index,
+      max: coreModel._parameterMaximumValues[index],
+      min: coreModel._parameterMinimumValues[index],
+      value: coreModel._parameterValues[index],
+    }))
+    .sort(sortById);
+  const parametersHTML = parametersData
+    .map(({ id, max, min, value }) => `
+      <div class="item">
+        <label title="${id}">${id}</label>
+        <input type="range" max="${max}" min="${min}" step="${(max - min) / 100}" value="${value}">
+      </div>
+    `)
+    .join('');
+  UIElements.parameter.innerHTML = parametersHTML;
+}
+
+function createCheckboxesFor(uiElement, sourceData, mapFn, filterFn) {
+  if (!sourceData) return;
+  let items = sourceData.map(mapFn);
+  if (filterFn) items = items.filter(filterFn);
+  const sortedItems = items.sort(sortByName);
+  createCheckboxList(uiElement, sortedItems);
 }
 
 function createPartUI() {
-  const partIds = currentModel.internalModel.coreModel._partIds;
-  if (!partIds) return;
-  const a = partIds.map((value, index) => [value, index]);
-  a.sort((aItem, bItem) => {
-    const keyA = getSortableKey(aItem[0]);
-    const keyB = getSortableKey(bItem[0]);
-    if (keyA < keyB) return -1;
-    if (keyA > keyB) return 1;
-    return 0;
-  });
-  const part = document.getElementById("part");
-  part.style.display = "none";
-  for (let i = 0; i < a.length; i++) {
-    const div = document.createElement("div");
-    div.className = "item";
-    const label = document.createElement("label");
-    label.title = a[i][0];
-    label.textContent = a[i][0];
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = "checked";
-    input.dataset.oldIndex = String(a[i][1]);
-    label.appendChild(input);
-    div.appendChild(label);
-    part.appendChild(div);
-  }
+  const partIds = currentModel.internalModel.coreModel?._partIds;
+  createCheckboxesFor(
+    UIElements.part,
+    partIds,
+    (value, index) => [value, index]
+  );
 }
 
 function createDrawableUI() {
-  const drawableIds = currentModel.internalModel.coreModel._drawableIds;
-  if (!drawableIds) return;
-  const opacities = new Float32Array(drawableIds.length);
-  opacities.set(
-    currentModel.internalModel.coreModel._model.drawables.opacities
-  );
+  const coreModel = currentModel.internalModel.coreModel;
+  if (!coreModel?._drawableIds) return;
+  const opacities = new Float32Array(coreModel._drawableIds.length);
+  opacities.set(coreModel._model.drawables.opacities);
   setOpacities(opacities);
-  const a = drawableIds.map((value, index) => [value, index]);
-  a.sort((aItem, bItem) => {
-    const keyA = getSortableKey(aItem[0]);
-    const keyB = getSortableKey(bItem[0]);
-    if (keyA < keyB) return -1;
-    if (keyA > keyB) return 1;
-    return 0;
-  });
-  const drawable = document.getElementById("drawable");
-  drawable.style.display = "none";
-  for (let i = 0; i < a.length; i++) {
-    if (Math.round(opacities[a[i][1]])) {
-      const div = document.createElement("div");
-      div.className = "item";
-      const label = document.createElement("label");
-      label.title = a[i][0];
-      label.textContent = a[i][0];
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.checked = "checked";
-      input.dataset.oldIndex = String(a[i][1]);
-      label.appendChild(input);
-      div.appendChild(label);
-      drawable.appendChild(div);
-    }
-  }
+  createCheckboxesFor(
+    UIElements.drawable,
+    coreModel._drawableIds,
+    (value, index) => [value, index],
+    ([, index]) => Math.round(opacities[index]) > 0
+  );
 }
 
 function createAttachmentUI() {
-  const slots = skeletons["0"].skeleton.slots;
-  const a = slots.map((value, index) => [value.attachment?.name, index]);
-  a.sort((aItem, bItem) => {
-    const keyA = getSortableKey(aItem[0]);
-    const keyB = getSortableKey(bItem[0]);
-    if (keyA < keyB) return -1;
-    if (keyA > keyB) return 1;
-    return 0;
-  });
-  const f = a.filter((v) => v[0]);
-  const attachment = document.getElementById("attachment");
-  attachment.style.display = "block";
-  for (let i = 0; i < f.length; i++) {
-    const div = document.createElement("div");
-    div.className = "item";
-    const label = document.createElement("label");
-    label.title = f[i][0];
-    label.textContent = f[i][0];
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = "checked";
-    input.dataset.oldIndex = String(f[i][1]);
-    label.appendChild(input);
-    div.appendChild(label);
-    attachment.appendChild(div);
-  }
+  const slots = skeletons["0"]?.skeleton?.slots;
+  createCheckboxesFor(
+    UIElements.attachment,
+    slots,
+    (slot, index) => [slot.attachment?.name, index],
+    ([name]) => !!name
+  );
 }
 
 function createSkinUI() {
   const skins = skeletons["0"].skeleton.data.skins;
-  if (skins.length === 1)
-    document.getElementById("settingSelector").disabled = true;
-  else {
-    const skin = document.getElementById("skin");
-    skin.style.display = "none";
-    for (let i = 1; i < skins.length; i++) {
-      const div = document.createElement("div");
-      div.className = "item";
-      const label = document.createElement("label");
-      label.title = skins[i].name;
-      label.textContent = skins[i].name;
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      if (i === 0) input.checked = "checked";
-      label.appendChild(input);
-      div.appendChild(label);
-      skin.appendChild(div);
-    }
+  if (skins.length <= 1) {
+    UIElements.settingSelector.disabled = true;
+    return;
   }
+  UIElements.settingSelector.disabled = false;
+  const skinData = skins.slice(1).map(skin => [skin.name, -1]);
+  const skinsHTML = skinData
+    .map(([name]) => `
+      <div class="item">
+        <label title="${name}">${name}<input type="checkbox"></label>
+      </div>
+    `)
+    .join('');
+  UIElements.skin.innerHTML = skinsHTML;
+}
+
+function setElementDisplay(elements, display) {
+  elements.forEach(elKey => {
+    UIElements[elKey].style.display = display;
+  });
+}
+
+function setupUIForLive2D() {
+  setElementDisplay(['parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'block');
+  setElementDisplay(['attachments', 'skins', 'attachment', 'skin', 'checkbox'], 'none');
+  UIElements.parameter.innerHTML = "";
+  UIElements.part.innerHTML = "";
+  UIElements.drawable.innerHTML = "";
+  createParameterUI();
+  createPartUI();
+  createDrawableUI();
+}
+
+function setupUIForSpine() {
+  setElementDisplay(['attachments', 'skins', 'attachment', 'skin', 'checkbox'], 'block');
+  setElementDisplay(['parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'none');
+  UIElements.attachment.innerHTML = "";
+  UIElements.skin.innerHTML = "";
+  createAttachmentUI();
+  createSkinUI();
 }
 
 export function resetUI() {
   if (modelType === "live2d") {
-    parameters.style.display = "block";
-    parts.style.display = "block";
-    drawables.style.display = "block";
-    attachments.style.display = "none";
-    skins.style.display = "none";
-    checkbox.style.display = "none";
-    parameter.style.display = "block";
-    part.style.display = "block";
-    drawable.style.display = "block";
-    attachment.style.display = "none";
-    skin.style.display = "none";
-    parameter.innerHTML = "";
-    part.innerHTML = "";
-    drawable.innerHTML = "";
-    expressionSelector.style.display = "block";
-    createParameterUI();
-    createPartUI();
-    createDrawableUI();
-  } else {
-    parameters.style.display = "none";
-    parts.style.display = "none";
-    drawables.style.display = "none";
-    attachments.style.display = "block";
-    skins.style.display = "block";
-    checkbox.style.display = "block";
-    parameter.style.display = "none";
-    part.style.display = "none";
-    drawable.style.display = "none";
-    attachment.style.display = "block";
-    skin.style.display = "block";
-    expressionSelector.style.display = "none";
-    attachment.innerHTML = "";
-    skin.innerHTML = "";
-    createAttachmentUI();
-    createSkinUI();
+    setupUIForLive2D();
+  } else if (modelType === "spine") {
+    setupUIForSpine();
   }
-  document.getElementById("setting").scrollTop = 0;
+  UIElements.settingElement.scrollTop = 0;
   handleFilterInput();
 }
 
 export function resetSettingUI() {
-  const parameter = document.getElementById("parameter");
-  const part = document.getElementById("part");
-  const drawable = document.getElementById("drawable");
-  const attachment = document.getElementById("attachment");
-  const skin = document.getElementById("skin");
-  switch (setting) {
-    case "parameters":
-      parameter.style.display = "block";
-      part.style.display = "none";
-      drawable.style.display = "none";
-      break;
-    case "parts":
-      parameter.style.display = "none";
-      part.style.display = "block";
-      drawable.style.display = "none";
-      break;
-    case "drawables":
-      parameter.style.display = "none";
-      part.style.display = "none";
-      drawable.style.display = "block";
-      break;
-    case "attachments":
-      attachment.style.display = "block";
-      skin.style.display = "none";
-      break;
-    case "skins":
-      attachment.style.display = "none";
-      skin.style.display = "block";
-      break;
-  }
+  const allPanels = [UIElements.parameter, UIElements.part, UIElements.drawable, UIElements.attachment, UIElements.skin];
+  allPanels.forEach(p => {
+    p.style.display = "none";
+  });
+  const panelMap = {
+    parameters: UIElements.parameter,
+    parts: UIElements.part,
+    drawables: UIElements.drawable,
+    attachments: UIElements.attachment,
+    skins: UIElements.skin,
+  };
+  panelMap[setting].style.display = "block";
 }
