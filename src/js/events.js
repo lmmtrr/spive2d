@@ -17,9 +17,7 @@ const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 
 const scaleMax = 8;
 const scaleMin = 0.5;
-const scaleStep = 0.05;
 const rotateStep = 0.001;
-export const moveStep = 0.001;
 export let scale = 1;
 export let moveX = 0;
 export let moveY = 0;
@@ -54,10 +52,12 @@ const settingDiv = document.getElementById("setting");
 const skin = document.getElementById("skin");
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
+const languageSelector = document.getElementById("languageSelector");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
 const openArchiveButton = document.getElementById("openArchiveButton");
 const openImageButton = document.getElementById("openImageButton");
 const removeImageButton = document.getElementById("removeImageButton");
+const bgColorPicker = document.getElementById("bgColorPicker");
 const windowWidthInput = document.getElementById("windowWidth");
 const windowHeightInput = document.getElementById("windowHeight");
 const aspectRatioToggle = document.getElementById('aspectRatioToggle');
@@ -66,10 +66,6 @@ const originalHeightInput = document.getElementById("originalHeight");
 const setOriginalSizeButton = document.getElementById("setOriginalSizeButton");
 const resetStateButton = document.getElementById("resetStateButton");
 setupEventListeners();
-
-export function setScale(value) {
-  scale = value;
-}
 
 export function setOpacities(value) {
   opacities = value;
@@ -99,16 +95,15 @@ export function resetModelState() {
   if (!isInit) return;
   if (modelType === "live2d") {
     const { innerWidth: w, innerHeight: h } = window;
-    const scale = Math.min(
+    let _scale = Math.max(
       w / currentModel.internalModel.originalWidth,
       h / currentModel.internalModel.originalHeight
     );
-    setScale(scale);
-    currentModel.scale.set(scale);
+    _scale *= scale;
+    scale = _scale;
+    currentModel.scale.set(_scale);
     currentModel.position.set(w * 0.5, h * 0.5);
     currentModel.rotation = 0;
-  } else if (modelType === "spine") {
-    setScale(1);
   }
 }
 
@@ -134,17 +129,22 @@ function setupEventListeners() {
   animationSelector.addEventListener("change", handleAnimationChange);
   expressionSelector.addEventListener("change", handleExpressionChange);
   settingSelector.addEventListener("change", handleSettingSelectorChange);
+  languageSelector.addEventListener("change", handleLanguageSelectorChange);
   filterBox.addEventListener("input", handleFilterInput);
   settingDiv.addEventListener("input", handleSettingChange);
   openDirectoryButton.addEventListener("click", handleOpenDirectory);
   openArchiveButton.addEventListener("click", handleOpenArchiveFile);
   openImageButton.addEventListener("click", handleOpenImage);
   removeImageButton.addEventListener("click", handleRemoveImage);
+  bgColorPicker.addEventListener("input", handleColorPickerChange);
   windowWidthInput.addEventListener("change", handleWindowWidthChange);
   windowHeightInput.addEventListener("change", handleWindowHeightChange);
   setOriginalSizeButton.addEventListener("click", handleSetOriginalSize);
   resetStateButton.addEventListener("click", resetModelState);
 }
+
+const savedLang = localStorage.getItem("spive2d_language") || "en";
+handleLanguageSelectorChange({ target: { value: savedLang } });
 
 function navigateAndTriggerChange(selector, delta) {
   const optionsLength = selector.options.length;
@@ -220,10 +220,25 @@ async function handleOpenImage() {
     ],
   });
   if (!file) return;
+  document.body.style.backgroundColor = "";
   document.body.style.backgroundImage = `url("${convertFileSrc(file)}")`;
+  document.body.style.backgroundSize = "cover";
+  document.body.style.backgroundPosition = "center";
 }
 
 async function handleRemoveImage() {
+  document.body.style.backgroundColor = "";
+  document.body.style.backgroundImage = `
+    linear-gradient(45deg, #fff 25%, transparent 0),
+    linear-gradient(45deg, transparent 75%, #fff 0),
+    linear-gradient(45deg, #fff 25%, transparent 0),
+    linear-gradient(45deg, transparent 75%, #fff 0)`;
+  document.body.style.backgroundSize = "32px 32px";
+  document.body.style.backgroundPosition = "0 0, 16px 16px, 16px 16px, 32px 32px";
+}
+
+function handleColorPickerChange() {
+  document.body.style.backgroundColor = bgColorPicker.value;
   document.body.style.backgroundImage = "none";
 }
 
@@ -389,11 +404,22 @@ function handleMouseUp() {
 function handleWheel(e) {
   if (!isInit) return;
   if (e.clientX < sidebarWidth) return;
+  const baseScaleStep = 0.1;
+  const scaleFactor = 0.1;
+  const scaleStep = baseScaleStep + Math.abs(scale - 1) * scaleFactor;
   scale = Math.min(
     scaleMax,
     Math.max(scaleMin, scale - Math.sign(e.deltaY) * scaleStep)
   );
-  if (modelType === "live2d") currentModel.scale.set(scale);
+  if (modelType === "live2d") {
+    const { innerWidth: w, innerHeight: h } = window;
+    let _scale = Math.max(
+      w / currentModel.internalModel.originalWidth,
+      h / currentModel.internalModel.originalHeight
+    );
+    _scale *= scale;
+    currentModel.scale.set(_scale);
+  }
 }
 
 function handlePMACheckboxChange() {
@@ -436,9 +462,7 @@ function handleSceneChange(e) {
 }
 
 export function handleLive2DAnimationChange(motion, index) {
-  const motionManager = currentModel.internalModel.motionManager;
-  motionManager.stopAllMotions();
-  motionManager.startMotion(motion, Number(index), 1);
+  currentModel.motion(motion, Number(index), 3);
 }
 
 export function handleExpressionChange(e) {
@@ -529,6 +553,30 @@ export function restoreSkins(skinFlags) {
 function handleSettingSelectorChange(e) {
   setting = e.target.value;
   resetSettingUI();
+}
+
+async function loadTranslations(lang) {
+  const response = await fetch(`../locales/${lang}.json`);
+  return await response.json();
+}
+
+function applyTranslations(translations) {
+  document.querySelectorAll("[data-i18n]").forEach((element) => {
+    const key = element.getAttribute("data-i18n");
+    if (translations[key]) {
+      element.textContent = translations[key];
+    }
+  });
+}
+
+async function handleLanguageSelectorChange(e) {
+  const lang = e.target.value;
+  const translations = await loadTranslations(lang);
+  applyTranslations(translations);
+  localStorage.setItem("spive2d_language", lang);
+  if (languageSelector) {
+    languageSelector.value = lang;
+  }
 }
 
 export function handleFilterInput() {

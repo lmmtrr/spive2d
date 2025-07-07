@@ -1,6 +1,6 @@
 [package]
 name = "spive2d"
-version = "0.0.5"
+version = "0.0.6"
 description = ""
 authors = ["lmmtrr"]
 edition = "2024"

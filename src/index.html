@@ -14,43 +14,55 @@
     <div id="progressBar"></div>
   </div>
   <dialog id="dialog" closedby="any" autofocus>
-    <div class="button-group">
-      <button id="openDirectoryButton">Open Directory</button>
-      <button id="openArchiveButton">Open Archive File</button>
+    <div class="input-row">
+      <label for="languageSelector" data-i18n="language">Language:</label>
+      <select id="languageSelector">
+        <option value="en">English</option>
+        <option value="zh">简体中文</option>
+      </select>
     </div>
     <hr>
     <div class="button-group">
-      <button id="openImageButton">Open Image for Background</button>
-      <button id="removeImageButton">Remove Background Image</button>
+      <button id="openDirectoryButton" data-i18n="openDirectory">Open Directory</button>
+      <button id="openArchiveButton" data-i18n="openArchive">Open Archive File</button>
+    </div>
+    <hr>
+    <div class="button-group">
+      <button id="openImageButton" data-i18n="openImage">Open Image for Background</button>
+      <button id="removeImageButton" data-i18n="removeImage">Remove Background Image</button>
+    </div>
+    <div class="input-row">
+      <label for="bgColorPicker" data-i18n="backgroundColor">Background Color:</label>
+      <input type="color" id="bgColorPicker">
     </div>
     <hr>
     <label for="aspectRatioToggle">
       <input type="checkbox" id="aspectRatioToggle" value="1">
-      Keep Aspect Ratio
+      <span data-i18n="keepAspectRatio">Keep Aspect Ratio</span>
     </label>
     <div class="input-row">
-      <label for="windowWidth">Window Width:</label>
+      <label for="windowWidth" data-i18n="windowWidth">Window Width:</label>
       <input type="number" id="windowWidth" name="windowWidth" min="100" max="10000">
     </div>
     <div class="input-row">
-      <label for="windowHeight">Window Height:</label>
+      <label for="windowHeight" data-i18n="windowHeight">Window Height:</label>
       <input type="number" id="windowHeight" name="windowHeight" min="100" max="10000">
     </div>
     <div class="input-row">
-      <label for="originalWidth">Original Width:</label>
+      <label for="originalWidth" data-i18n="originalWidth">Original Width:</label>
       <input type="text" id="originalWidth" name="originalWidth" readonly>
     </div>
     <div class="input-row">
-      <label for="originalHeight">Original Height:</label>
+      <label for="originalHeight" data-i18n="originalHeight">Original Height:</label>
       <input type="text" id="originalHeight" name="originalHeight" readonly>
     </div>
     <div class="button-group">
-      <button id="setOriginalSizeButton">Set to Original Size</button>
-      <button id="resetStateButton">Reset State</button>
+      <button id="setOriginalSizeButton" data-i18n="setOriginalSize">Set to Original Size</button>
+      <button id="resetStateButton" data-i18n="resetState">Reset State</button>
     </div>
     <label for="originalSizeCheckbox">
       <input type="checkbox" id="originalSizeCheckbox">
-      Export at Original Size
+      <span data-i18n="exportOriginalSize">Export at Original Size</span>
     </label>
   </dialog>
   <div id="sidebar">
@@ -59,14 +71,14 @@
     <select id="animationSelector"></select>
     <select id="expressionSelector"></select>
     <select id="settingSelector">
-      <option id="parameters" value="parameters">Parameters</option>
-      <option id="parts" value="parts">Parts</option>
-      <option id="drawables" value="drawables">Drawables</option>
-      <option id="attachments" value="attachments">Attachments</option>
-      <option id="skins" value="skins">Skins</option>
+      <option id="parameters" value="parameters" data-i18n="parameters">Parameters</option>
+      <option id="parts" value="parts" data-i18n="parts">Parts</option>
+      <option id="drawables" value="drawables" data-i18n="drawables">Drawables</option>
+      <option id="attachments" value="attachments" data-i18n="attachments">Attachments</option>
+      <option id="skins" value="skins" data-i18n="skins">Skins</option>
     </select>
-    <div class="item" id="checkbox">
-      <label title="premultipliedAlpha">premultipliedAlpha<input type="checkbox" id="pmaCheckbox" /></label>
+    <div class="item" id="pmaDiv">
+      <label title="premultipliedAlpha"><span data-i18n="premultipliedAlpha">premultipliedAlpha</span><input type="checkbox" id="pmaCheckbox" /></label>
     </div>
     <input type="text" id="filterBox" placeholder="Filter..." autocomplete="off" />
     <div id="setting">
@@ -79,7 +91,7 @@
   </div>
   <canvas id="live2dCanvas"></canvas>
   <canvas id="spineCanvas"></canvas>
-  
+
   <script src="lib/live2dcubismcore.min.js"></script>
   <script src="lib/live2d.min.js"></script>
   <script src="lib/pixi.min.js"></script>

@@ -9,7 +9,7 @@ const UIElements = {
   drawables: document.getElementById("drawables"),
   attachments: document.getElementById("attachments"),
   skins: document.getElementById("skins"),
-  checkbox: document.getElementById("checkbox"),
+  pmaDiv: document.getElementById("pmaDiv"),
   parameter: document.getElementById("parameter"),
   part: document.getElementById("part"),
   drawable: document.getElementById("drawable"),
@@ -184,8 +184,8 @@ function setElementDisplay(elements, display) {
 }
 
 function setupUIForLive2D() {
-  setElementDisplay(['parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'block');
-  setElementDisplay(['attachments', 'skins', 'attachment', 'skin', 'checkbox'], 'none');
+  setElementDisplay(['parameters', 'parts', 'drawables', 'parameter'], 'block');
+  setElementDisplay(['part', 'drawable', 'expressionSelector', 'attachments', 'skins', 'attachment', 'skin', 'pmaDiv'], 'none');
   UIElements.parameter.innerHTML = "";
   UIElements.part.innerHTML = "";
   UIElements.drawable.innerHTML = "";
@@ -195,8 +195,8 @@ function setupUIForLive2D() {
 }
 
 function setupUIForSpine() {
-  setElementDisplay(['attachments', 'skins', 'attachment', 'skin', 'checkbox'], 'block');
-  setElementDisplay(['parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'none');
+  setElementDisplay(['attachments', 'skins', 'attachment', 'pmaDiv'], 'block');
+  setElementDisplay(['skin', 'parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'none');
   UIElements.attachment.innerHTML = "";
   UIElements.skin.innerHTML = "";
   createAttachmentUI();

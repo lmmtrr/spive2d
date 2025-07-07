@@ -1,0 +1,22 @@
+{
+  "language": "Language:",
+  "openDirectory": "Open Directory",
+  "openArchive": "Open Archive File",
+  "openImage": "Open Image for Background",
+  "removeImage": "Remove Background Image",
+  "backgroundColor": "Background Color:",
+  "keepAspectRatio": "Keep Aspect Ratio",
+  "windowWidth": "Window Width:",
+  "windowHeight": "Window Height:",
+  "originalWidth": "Original Width:",
+  "originalHeight": "Original Height:",
+  "setOriginalSize": "Set to Original Size",
+  "resetState": "Reset State",
+  "exportOriginalSize": "Export at Original Size",
+  "parameters": "Parameters",
+  "parts": "Parts",
+  "drawables": "Drawables",
+  "attachments": "Attachments",
+  "skins": "Skins",
+  "premultipliedAlpha": "premultipliedAlpha"
+}

@@ -1,0 +1,22 @@
+{
+  "language": "语言:",
+  "openDirectory": "打开目录",
+  "openArchive": "打开压缩文件",
+  "openImage": "打开背景图片",
+  "removeImage": "删除背景图片",
+  "backgroundColor": "背景颜色:",
+  "keepAspectRatio": "保持宽高比",
+  "windowWidth": "窗口宽度:",
+  "windowHeight": "窗口高度:",
+  "originalWidth": "原始宽度:",
+  "originalHeight": "原始高度:",
+  "setOriginalSize": "设置为原始尺寸",
+  "resetState": "重置状态",
+  "exportOriginalSize": "以原始尺寸导出",
+  "parameters": "参数",
+  "parts": "部件",
+  "drawables": "可绘制对象",
+  "attachments": "附件",
+  "skins": "皮肤",
+  "premultipliedAlpha": "预乘 Alpha"
+}

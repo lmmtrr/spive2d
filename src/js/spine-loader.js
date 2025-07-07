@@ -2,7 +2,6 @@ import {
   isFirstRender,
   moveX,
   moveY,
-  moveStep,
   premultipliedAlpha,
   removeAttachments,
   restoreAnimation,
@@ -192,17 +191,21 @@ export function resize() {
   const centerY = bounds.offset.y + bounds.size.y * 0.5;
   const scaleX = bounds.size.x / spineCanvas.width;
   const scaleY = bounds.size.y / spineCanvas.height;
-  let scale_ = Math.max(scaleX, scaleY);
-  scale_ /= scale;
-  const width = spineCanvas.width * scale_;
-  const height = spineCanvas.height * scale_;
-  mvp.ortho2d(centerX - width * 0.5, centerY - height * 0.5, width, height);
+  let _scale = Math.max(scaleX, scaleY);
+  _scale /= scale;
+  const width = spineCanvas.width * _scale;
+  const height = spineCanvas.height * _scale;
+  mvp.ortho2d(
+    centerX - width * 0.5 - moveX * _scale,
+    centerY - height * 0.5 + moveY * _scale,
+    width,
+    height
+  );
   const c = Math.cos(Math.PI * rotate);
   const s = Math.sin(Math.PI * rotate);
   const rotateMatrix = new spine.Matrix4();
   rotateMatrix.set([c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   mvp.multiply(rotateMatrix);
-  mvp.translate(moveX * moveStep, -moveY * moveStep, 0);
   ctx.gl.viewport(0, 0, spineCanvas.width, spineCanvas.height);
 }
 

@@ -1,4 +1,4 @@
-import { animationSelector, handleLive2DAnimationChange, setScale } from "./events.js";
+import { animationSelector, handleLive2DAnimationChange } from "./events.js";
 import { createAnimationSelector, createExpressionSelector, resetUI } from "./ui.js";
 const { convertFileSrc } = window.__TAURI__.core;
 
@@ -8,7 +8,6 @@ let app = new PIXI.Application({
   resizeTo: window,
   preserveDrawingBuffer: true,
   transparent: true,
-  backgroundAlpha: 0,
 });
 export let currentModel;
 const {
@@ -22,12 +21,11 @@ export async function loadLive2DModel(dirName, fileNames) {
     autoInteract: false,
   });
   const { innerWidth: w, innerHeight: h } = window;
-  const scale = Math.min(
+  const _scale = Math.max(
     w / currentModel.internalModel.originalWidth,
     h / currentModel.internalModel.originalHeight
   );
-  setScale(scale);
-  currentModel.scale.set(scale);
+  currentModel.scale.set(_scale);
   currentModel.anchor.set(0.5, 0.5);
   currentModel.position.set(w * 0.5, h * 0.5);
   app.stage.addChild(currentModel);

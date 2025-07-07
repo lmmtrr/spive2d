@@ -5,7 +5,6 @@ import {
   moveY,
   rotate,
   animationSelector,
-  dirSelector,
   sceneSelector,
   resetModelState,
   setModelState,
@@ -14,10 +13,8 @@ import {
 } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { animationStates, skeletons } from "./spine-loader.js";
-const { convertFileSrc } = window.__TAURI__.core;
 const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 
-// ref. https://github.com/Nikke-db/nikke-db-vue/blob/main/src/components/common/Spine/Loader.vue
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
 const RECORDING_BITRATE = 12000000;
 const RECORDING_FRAME_RATE = 60;
@@ -83,12 +80,13 @@ async function exportImageOriginalSize() {
   const tempCanvas = document.createElement('canvas');
   const { prevActiveCanvasState, originalModelWidth, originalModelHeight } =
     await changeToOriginalSize(tempCanvas, modelType, currentModel, skeletons);
+  const backgroundColor = document.body.style.backgroundColor;
   const ctx = tempCanvas.getContext('2d', {
-    alpha: true,
+    alpha: !backgroundColor,
   });
   setTimeout(() => {
     const backgroundImage = document.body.style.backgroundImage;
-    if (backgroundImage && backgroundImage !== "none") {
+    if (backgroundImage && backgroundImage.startsWith("url")) {
       const imageUrl = backgroundImage.slice(5, -2);
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -106,6 +104,10 @@ async function exportImageOriginalSize() {
       };
     } else {
       ctx.clearRect(0, 0, originalModelWidth, originalModelHeight);
+      if (backgroundColor) {
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, originalModelWidth, originalModelHeight);
+      }
       ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
       const link = document.createElement('a');
       const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
@@ -121,11 +123,12 @@ function exportImageWindowSize() {
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = activeCanvas.width;
   tempCanvas.height = activeCanvas.height;
+  const backgroundColor = document.body.style.backgroundColor;
   const ctx = tempCanvas.getContext('2d', {
-    alpha: true,
+    alpha: !backgroundColor,
   });
   const backgroundImage = document.body.style.backgroundImage;
-  if (backgroundImage && backgroundImage !== "none") {
+  if (backgroundImage && backgroundImage.startsWith("url")) {
     const imageUrl = backgroundImage.slice(5, -2);
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -142,11 +145,16 @@ function exportImageWindowSize() {
       link.click();
     }
   } else {
+    if (backgroundColor) {
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(0, 0, activeCanvas.width, activeCanvas.height);
+    }
+    ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
     const link = document.createElement('a');
     const selectedSceneText =
       sceneSelector.options[sceneSelector.selectedIndex].textContent;
     link.download = `${selectedSceneText}.png`;
-    link.href = activeCanvas.toDataURL('image/png');
+    link.href = tempCanvas.toDataURL();
     link.click();
   }
 }
@@ -199,8 +207,9 @@ async function startRecording(animationName) {
     _prevActiveCanvasState = null;
   };
   backgroundImageToRender = null;
+  const backgroundColor = document.body.style.backgroundColor;
   const backgroundImage = document.body.style.backgroundImage;
-  if (backgroundImage && backgroundImage !== "none") {
+  if (backgroundImage && backgroundImage.startsWith("url")) {
     const imageUrl = backgroundImage.slice(5, -2);
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -210,6 +219,9 @@ async function startRecording(animationName) {
       img.onerror = () => reject(new Error("Background image failed to load"));
     });
     backgroundImageToRender = img;
+    compositingCanvas = document.createElement('canvas');
+    streamSource = compositingCanvas;
+  } else if (backgroundColor) {
     compositingCanvas = document.createElement('canvas');
     streamSource = compositingCanvas;
   }
@@ -224,14 +236,15 @@ async function startRecording(animationName) {
     compositingCanvas.height = activeCanvas.height;
   }
   if (modelType === "live2d") {
-    if (!animationName.endsWith(".json")) {
-      return cleanup("Not a recordable Live2D motion.");
-    }
-    const file = await fetch(convertFileSrc(`${dirSelector[dirSelector.selectedIndex].value}motions/${animationName}`));
-    const content = await file.text();
-    const jsonData = JSON.parse(content);
-    animationDuration = jsonData.Meta.Duration;
-    if (typeof animationDuration !== 'number' || isNaN(animationDuration) || animationDuration <= 0) {
+    const [group, index] = animationSelector.value.split(",");
+    const motion = currentModel.internalModel.motionManager.motionGroups[group]?.[index];
+    if (motion) {
+      if ('_loopDurationSeconds' in motion) {
+        animationDuration = motion._loopDurationSeconds;
+      } else if ('getDurationMSec' in motion) {
+        animationDuration = motion.getDurationMSec() / 1000;
+      }
+    } else {
       animationDuration = 0.1;
     }
   } else if (modelType === "spine") {
@@ -296,12 +309,18 @@ async function startRecording(animationName) {
 }
 
 function checkCondition(rec, compositingCanvas) {
-  if (compositingCanvas && backgroundImageToRender) {
+  if (compositingCanvas) {
+    const backgroundColor = document.body.style.backgroundColor;
     const ctx = compositingCanvas.getContext('2d', {
-      alpha: true,
+      alpha: !backgroundColor,
     });
     ctx.clearRect(0, 0, compositingCanvas.width, compositingCanvas.height);
-    ctx.drawImage(backgroundImageToRender, 0, 0, compositingCanvas.width, compositingCanvas.height);
+    if (backgroundImageToRender) {
+      ctx.drawImage(backgroundImageToRender, 0, 0, compositingCanvas.width, compositingCanvas.height);
+    } else if (backgroundColor) {
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(0, 0, compositingCanvas.width, compositingCanvas.height);
+    }
     ctx.drawImage(activeCanvas, 0, 0, compositingCanvas.width, compositingCanvas.height);
   }
   let progress = 0;
