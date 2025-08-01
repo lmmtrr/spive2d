@@ -76,7 +76,7 @@ async function restorePreviousSize(prevActiveCanvasState, modelType, currentMode
   handleResize();
 }
 
-async function exportImageOriginalSize() {
+async function exportImageOriginalSize(animationName) {
   const tempCanvas = document.createElement('canvas');
   const { prevActiveCanvasState, originalModelWidth, originalModelHeight } =
     await changeToOriginalSize(tempCanvas, modelType, currentModel, skeletons);
@@ -97,7 +97,7 @@ async function exportImageOriginalSize() {
         ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
         const link = document.createElement('a');
         const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
-        link.download = `${selectedSceneText}_original.png`;
+        link.download = `${selectedSceneText}_${animationName.split(".")[0]}_original.png`;
         link.href = tempCanvas.toDataURL();
         link.click();
         restorePreviousSize(prevActiveCanvasState, modelType, currentModel);
@@ -111,7 +111,7 @@ async function exportImageOriginalSize() {
       ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
       const link = document.createElement('a');
       const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
-      link.download = `${selectedSceneText}_original.png`;
+      link.download = `${selectedSceneText}_${animationName.split(".")[0]}_original.png`;
       link.href = tempCanvas.toDataURL();
       link.click();
       restorePreviousSize(prevActiveCanvasState, modelType, currentModel);
@@ -119,7 +119,7 @@ async function exportImageOriginalSize() {
   }, 200);
 }
 
-function exportImageWindowSize() {
+function exportImageWindowSize(animationName) {
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = activeCanvas.width;
   tempCanvas.height = activeCanvas.height;
@@ -140,7 +140,7 @@ function exportImageWindowSize() {
       const link = document.createElement('a');
       const selectedSceneText =
         sceneSelector.options[sceneSelector.selectedIndex].textContent;
-      link.download = `${selectedSceneText}.png`;
+      link.download = `${selectedSceneText}_${animationName.split(".")[0]}.png`;
       link.href = tempCanvas.toDataURL();
       link.click();
     }
@@ -153,21 +153,28 @@ function exportImageWindowSize() {
     const link = document.createElement('a');
     const selectedSceneText =
       sceneSelector.options[sceneSelector.selectedIndex].textContent;
-    link.download = `${selectedSceneText}.png`;
+    link.download = `${selectedSceneText}_${animationName.split(".")[0]}.png`;
     link.href = tempCanvas.toDataURL();
     link.click();
   }
 }
 
 export function exportImage() {
+  let animationName;
+  if (modelType === "spine") {
+    animationName = animationSelector.value;
+  } else if (modelType === "live2d") {
+    animationName =
+      animationSelector.options[animationSelector.selectedIndex].textContent;
+  }
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
   const originalSizeCheckbox = document.getElementById('originalSizeCheckbox');
   activeCanvas = modelType === 'live2d' ? live2dCanvas : spineCanvas;
   if (originalSizeCheckbox.checked) {
-    exportImageOriginalSize();
+    exportImageOriginalSize(animationName);
   } else {
-    exportImageWindowSize();
+    exportImageWindowSize(animationName);
   }
 }
 

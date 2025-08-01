@@ -1,7 +1,8 @@
 {
   "language": "语言:",
-  "openDirectory": "打开目录",
-  "openArchive": "打开压缩文件",
+  "openDirectory": "打开文件夹",
+  "openArchive": "打开压缩包",
+  "openCurrentDirectory": "打开当前文件所在目录",
   "openImage": "打开背景图片",
   "removeImage": "删除背景图片",
   "backgroundColor": "背景颜色:",
@@ -18,5 +19,6 @@
   "drawables": "可绘制对象",
   "attachments": "附件",
   "skins": "皮肤",
-  "premultipliedAlpha": "预乘 Alpha"
+  "premultipliedAlpha": "预乘 Alpha",
+  "filter": "筛选..."
 }

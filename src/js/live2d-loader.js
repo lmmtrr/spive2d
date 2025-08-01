@@ -21,7 +21,7 @@ export async function loadLive2DModel(dirName, fileNames) {
     autoInteract: false,
   });
   const { innerWidth: w, innerHeight: h } = window;
-  const _scale = Math.max(
+  const _scale = Math.min(
     w / currentModel.internalModel.originalWidth,
     h / currentModel.internalModel.originalHeight
   );

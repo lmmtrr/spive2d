@@ -2,6 +2,7 @@
   "language": "Language:",
   "openDirectory": "Open Directory",
   "openArchive": "Open Archive File",
+  "openCurrentDirectory": "Open Current Directory",
   "openImage": "Open Image for Background",
   "removeImage": "Remove Background Image",
   "backgroundColor": "Background Color:",
@@ -18,5 +19,6 @@
   "drawables": "Drawables",
   "attachments": "Attachments",
   "skins": "Skins",
-  "premultipliedAlpha": "premultipliedAlpha"
+  "premultipliedAlpha": "premultipliedAlpha",
+  "filter": "Filter..."
 }

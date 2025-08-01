@@ -215,15 +215,13 @@ export function resetUI() {
 
 export function resetSettingUI() {
   const allPanels = [UIElements.parameter, UIElements.part, UIElements.drawable, UIElements.attachment, UIElements.skin];
-  allPanels.forEach(p => {
-    p.style.display = "none";
-  });
-  const panelMap = {
-    parameters: UIElements.parameter,
-    parts: UIElements.part,
-    drawables: UIElements.drawable,
-    attachments: UIElements.attachment,
-    skins: UIElements.skin,
+  allPanels.forEach(p => p.innerHTML = "");
+  const panelCreationMap = {
+    parameters: createParameterUI,
+    parts: createPartUI,
+    drawables: createDrawableUI,
+    attachments: createAttachmentUI,
+    skins: createSkinUI,
   };
-  panelMap[setting].style.display = "block";
+  if (panelCreationMap[setting]) panelCreationMap[setting]();
 }

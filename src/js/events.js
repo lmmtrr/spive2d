@@ -13,6 +13,7 @@ import { currentModel } from "./live2d-loader.js";
 import { createSceneSelector, resetSettingUI } from "./ui.js";
 const { convertFileSrc } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
+const { openPath } = window.__TAURI__.opener;
 const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 
 const scaleMax = 8;
@@ -55,6 +56,7 @@ const spineCanvas = document.getElementById("spineCanvas");
 const languageSelector = document.getElementById("languageSelector");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
 const openArchiveButton = document.getElementById("openArchiveButton");
+const openCurrentDirectoryButton = document.getElementById("openCurrentDirectoryButton");
 const openImageButton = document.getElementById("openImageButton");
 const removeImageButton = document.getElementById("removeImageButton");
 const bgColorPicker = document.getElementById("bgColorPicker");
@@ -95,12 +97,11 @@ export function resetModelState() {
   if (!isInit) return;
   if (modelType === "live2d") {
     const { innerWidth: w, innerHeight: h } = window;
-    let _scale = Math.max(
+    let _scale = Math.min(
       w / currentModel.internalModel.originalWidth,
       h / currentModel.internalModel.originalHeight
     );
     _scale *= scale;
-    scale = _scale;
     currentModel.scale.set(_scale);
     currentModel.position.set(w * 0.5, h * 0.5);
     currentModel.rotation = 0;
@@ -134,6 +135,7 @@ function setupEventListeners() {
   settingDiv.addEventListener("input", handleSettingChange);
   openDirectoryButton.addEventListener("click", handleOpenDirectory);
   openArchiveButton.addEventListener("click", handleOpenArchiveFile);
+  openCurrentDirectoryButton.addEventListener("click", handleOpenCurrentDirectory);
   openImageButton.addEventListener("click", handleOpenImage);
   removeImageButton.addEventListener("click", handleRemoveImage);
   bgColorPicker.addEventListener("input", handleColorPickerChange);
@@ -206,10 +208,19 @@ async function handleOpenArchiveFile() {
   const file = await open({
     multiple: false,
     filters: [
-      { name: "Archive", extensions: ["zip", "7z"] },
+      {
+        name: "Archive",
+        extensions: ["zip", "7z"],
+      },
     ],
   });
   if (file) processPath([file]);
+}
+
+async function handleOpenCurrentDirectory() {
+  if (!isInit) return;
+  const currentDir = dirSelector[dirSelector.selectedIndex].value;
+  await openPath(currentDir.replace(/\//g, "\\"));
 }
 
 async function handleOpenImage() {
@@ -413,7 +424,7 @@ function handleWheel(e) {
   );
   if (modelType === "live2d") {
     const { innerWidth: w, innerHeight: h } = window;
-    let _scale = Math.max(
+    let _scale = Math.min(
       w / currentModel.internalModel.originalWidth,
       h / currentModel.internalModel.originalHeight
     );
@@ -565,6 +576,12 @@ function applyTranslations(translations) {
     const key = element.getAttribute("data-i18n");
     if (translations[key]) {
       element.textContent = translations[key];
+    }
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-placeholder");
+    if (translations[key]) {
+      element.placeholder = translations[key];
     }
   });
 }
