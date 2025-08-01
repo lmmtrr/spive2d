@@ -177,15 +177,30 @@ function createSkinUI() {
   UIElements.skin.innerHTML = skinsHTML;
 }
 
+const optionsHTML = {
+  parameters: '<option id="parameters" value="parameters" data-i18n="parameters">Parameters</option>',
+  parts: '<option id="parts" value="parts" data-i18n="parts">Parts</option>',
+  drawables: '<option id="drawables" value="drawables" data-i18n="drawables">Drawables</option>',
+  attachments: '<option id="attachments" value="attachments" data-i18n="attachments">Attachments</option>',
+  skins: '<option id="skins" value="skins" data-i18n="skins">Skins</option>',
+};
+
 function setElementDisplay(elements, display) {
   elements.forEach(elKey => {
-    UIElements[elKey].style.display = display;
+    if (UIElements[elKey]) {
+      UIElements[elKey].style.display = display;
+    }
   });
 }
 
 function setupUIForLive2D() {
   setElementDisplay(['parameters', 'parts', 'drawables', 'parameter'], 'block');
   setElementDisplay(['part', 'drawable', 'expressionSelector', 'attachments', 'skins', 'attachment', 'skin', 'pmaDiv'], 'none');
+  UIElements.settingSelector.innerHTML = `
+    ${optionsHTML.parameters}
+    ${optionsHTML.parts}
+    ${optionsHTML.drawables}
+  `;
   UIElements.parameter.innerHTML = "";
   UIElements.part.innerHTML = "";
   UIElements.drawable.innerHTML = "";
@@ -197,6 +212,10 @@ function setupUIForLive2D() {
 function setupUIForSpine() {
   setElementDisplay(['attachments', 'skins', 'attachment', 'pmaDiv'], 'block');
   setElementDisplay(['skin', 'parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'none');
+  UIElements.settingSelector.innerHTML = `
+    ${optionsHTML.attachments}
+    ${optionsHTML.skins}
+  `;
   UIElements.attachment.innerHTML = "";
   UIElements.skin.innerHTML = "";
   createAttachmentUI();
@@ -209,19 +228,26 @@ export function resetUI() {
   } else if (modelType === "spine") {
     setupUIForSpine();
   }
-  UIElements.settingElement.scrollTop = 0;
+  if (UIElements.settingElement) {
+    UIElements.settingElement.scrollTop = 0;
+  }
   handleFilterInput();
 }
 
 export function resetSettingUI() {
   const allPanels = [UIElements.parameter, UIElements.part, UIElements.drawable, UIElements.attachment, UIElements.skin];
-  allPanels.forEach(p => p.innerHTML = "");
-  const panelCreationMap = {
-    parameters: createParameterUI,
-    parts: createPartUI,
-    drawables: createDrawableUI,
-    attachments: createAttachmentUI,
-    skins: createSkinUI,
+  allPanels.forEach(p => {
+    if (p) p.style.display = "none";
+  });
+  const panelMap = {
+    parameters: UIElements.parameter,
+    parts: UIElements.part,
+    drawables: UIElements.drawable,
+    attachments: UIElements.attachment,
+    skins: UIElements.skin,
   };
-  if (panelCreationMap[setting]) panelCreationMap[setting]();
+  const selectedPanel = panelMap[setting];
+  if (selectedPanel) {
+    selectedPanel.style.display = "block";
+  }
 }

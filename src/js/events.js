@@ -219,8 +219,11 @@ async function handleOpenArchiveFile() {
 
 async function handleOpenCurrentDirectory() {
   if (!isInit) return;
+  console.log(navigator.userAgent);
+  const isWindows = navigator.userAgent.includes('Windows');
   const currentDir = dirSelector[dirSelector.selectedIndex].value;
-  await openPath(currentDir.replace(/\//g, "\\"));
+  if (isWindows) await openPath(currentDir.replace(/\//g, "\\"));
+  else await openPath(currentDir);
 }
 
 async function handleOpenImage() {
@@ -602,7 +605,7 @@ export function handleFilterInput() {
     const label = item.querySelector("label");
     const title = label.getAttribute("title").toLowerCase() || "";
     item.style.display =
-      title.includes(filterValue) || filterValue === "" ? "" : "none";
+      title.includes(filterValue) || filterValue === "" ? "flex" : "none";
   });
 }
 
