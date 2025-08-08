@@ -219,11 +219,13 @@ async function handleOpenArchiveFile() {
 
 async function handleOpenCurrentDirectory() {
   if (!isInit) return;
-  console.log(navigator.userAgent);
   const isWindows = navigator.userAgent.includes('Windows');
   const currentDir = dirSelector[dirSelector.selectedIndex].value;
-  if (isWindows) await openPath(currentDir.replace(/\//g, "\\"));
-  else await openPath(currentDir);
+  const sceneId = sceneSelector[sceneSelector.selectedIndex].value;
+  const path = await window.__TAURI__.path.join(currentDir, sceneId);
+  const dir = await window.__TAURI__.path.dirname(path);
+  if (isWindows) await openPath(dir.replace(/\//g, "\\"));
+  else await openPath(dir);
 }
 
 async function handleOpenImage() {
