@@ -4,6 +4,7 @@
   "openArchive": "Open Archive File",
   "openCurrentDirectory": "Open Current Directory",
   "openImage": "Open Image for Background",
+  "openExportDirectory": "Open Export Directory",
   "removeImage": "Remove Background Image",
   "backgroundColor": "Background Color:",
   "keepAspectRatio": "Keep Aspect Ratio",

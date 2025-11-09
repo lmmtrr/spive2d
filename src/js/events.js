@@ -57,6 +57,7 @@ const languageSelector = document.getElementById("languageSelector");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
 const openArchiveButton = document.getElementById("openArchiveButton");
 const openCurrentDirectoryButton = document.getElementById("openCurrentDirectoryButton");
+const openExportDirectoryButton = document.getElementById("openExportDirectoryButton");
 const openImageButton = document.getElementById("openImageButton");
 const removeImageButton = document.getElementById("removeImageButton");
 const bgColorPicker = document.getElementById("bgColorPicker");
@@ -136,6 +137,7 @@ function setupEventListeners() {
   openDirectoryButton.addEventListener("click", handleOpenDirectory);
   openArchiveButton.addEventListener("click", handleOpenArchiveFile);
   openCurrentDirectoryButton.addEventListener("click", handleOpenCurrentDirectory);
+  openExportDirectoryButton.addEventListener("click", handleOpenExportDirectory);
   openImageButton.addEventListener("click", handleOpenImage);
   removeImageButton.addEventListener("click", handleRemoveImage);
   bgColorPicker.addEventListener("input", handleColorPickerChange);
@@ -224,6 +226,14 @@ async function handleOpenCurrentDirectory() {
   const sceneId = sceneSelector[sceneSelector.selectedIndex].value;
   const path = await window.__TAURI__.path.join(currentDir, sceneId);
   const dir = await window.__TAURI__.path.dirname(path);
+  if (isWindows) await openPath(dir.replace(/\//g, "\\"));
+  else await openPath(dir);
+}
+
+async function handleOpenExportDirectory() {
+  const isWindows = navigator.userAgent.includes('Windows');
+  const { downloadDir } = window.__TAURI__.path;
+  const dir = await downloadDir();
   if (isWindows) await openPath(dir.replace(/\//g, "\\"));
   else await openPath(dir);
 }

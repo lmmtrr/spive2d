@@ -119,13 +119,13 @@ textarea {
   border: var(--border-color);
   border-radius: 10px;
   padding: 10px 25px;
-  width: 400px;
+  width: 480px;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
 }
 
 .button-group {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
 }
 
 #dialog button {
