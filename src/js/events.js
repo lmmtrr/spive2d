@@ -10,7 +10,7 @@ import {
   processPath,
 } from "./main.js";
 import { currentModel } from "./live2d-loader.js";
-import { createSceneSelector, resetSettingUI } from "./ui.js";
+import { createSceneSelector, resetSettingUI, createAttachmentUI } from "./ui.js";
 const { convertFileSrc } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
 const { openPath } = window.__TAURI__.opener;
@@ -32,7 +32,7 @@ let isMove = false;
 export let isFirstRender = true;
 export let premultipliedAlpha = false;
 export let setting = "parameters";
-let attachmentsCache = {};
+export let attachmentsCache = {};
 let opacities;
 
 const rootStyles = getComputedStyle(document.documentElement);
@@ -500,7 +500,6 @@ function handleSpineAnimationChange(index) {
   for (const animationState of animationStates) {
     animationState.setAnimation(0, animationName, true);
   }
-  isFirstRender = true;
 }
 
 function handleAnimationChange(e) {
@@ -509,6 +508,7 @@ function handleAnimationChange(e) {
     handleLive2DAnimationChange(motion, index);
   } else {
     handleSpineAnimationChange(e.target.selectedIndex);
+    createAttachmentUI();
   }
 }
 
@@ -650,25 +650,36 @@ function handleAttachmentCheckboxChange(e) {
   const slotIndex = Number(targetCheckbox.getAttribute("data-old-index"));
   const defaultSkin = skeleton.data.defaultSkin;
   if (targetCheckbox.checked) {
-    if (attachmentsCache[name] && attachmentsCache[name][1]) {
-      defaultSkin.setAttachment(
-        attachmentsCache[name][0],
-        name,
-        attachmentsCache[name][1]
-      );
+    if (attachmentsCache[name]) {
+      const [cachedSlotIndex, cachedAttachment, wasFromSkin] = attachmentsCache[name];
+      if (wasFromSkin) {
+        defaultSkin.setAttachment(cachedSlotIndex, name, cachedAttachment);
+        skeleton.setToSetupPose();
+      } else {
+        const slot = skeleton.slots[cachedSlotIndex];
+        if (slot) {
+          slot.attachment = cachedAttachment;
+        }
+      }
       delete attachmentsCache[name];
     }
   } else {
     const currentAttachment = defaultSkin.getAttachment(slotIndex, name);
     if (currentAttachment) {
-      attachmentsCache[name] = [slotIndex, currentAttachment];
+      attachmentsCache[name] = [slotIndex, currentAttachment, true];
       defaultSkin.removeAttachment(slotIndex, name);
+      skeleton.setToSetupPose();
+    } else {
+      const slot = skeleton.slots[slotIndex];
+      if (slot && slot.attachment && slot.attachment.name === name) {
+        attachmentsCache[name] = [slotIndex, slot.attachment, false];
+        slot.attachment = null;
+      }
     }
   }
-  skeleton.setToSetupPose();
 }
 
-export function handleSkinCheckboxChange() {
+function handleSkinCheckboxChange() {
   const skeleton = skeletons["0"].skeleton;
   const newSkin = new spine.Skin("_");
   const checkboxes = skin.querySelectorAll("input[type='checkbox']");

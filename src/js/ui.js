@@ -1,4 +1,4 @@
-import { handleFilterInput, setOpacities, setting } from "./events.js";
+import { attachmentsCache, handleFilterInput, setOpacities, setting } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { modelType } from "./main.js";
 import { skeletons } from "./spine-loader.js";
@@ -95,6 +95,21 @@ function createCheckboxList(parentElement, items, isChecked = true) {
   parentElement.innerHTML = checkboxListHTML;
 }
 
+function createAttachmentCheckboxList(parentElement, items) {
+  const checkboxListHTML = items
+    .map(([name, index]) => {
+      const isChecked = !attachmentsCache[name];
+      const checkedAttribute = isChecked ? 'checked' : '';
+      return `
+      <div class="item">
+        <label title="${name}">${name}<input type="checkbox" data-old-index="${index}" ${checkedAttribute}></label>
+      </div>
+    `
+    })
+    .join('');
+  parentElement.innerHTML = checkboxListHTML;
+}
+
 function createParameterUI() {
   const coreModel = currentModel.internalModel.coreModel;
   if (!coreModel._parameterIds) return;
@@ -149,13 +164,25 @@ function createDrawableUI() {
   );
 }
 
-function createAttachmentUI() {
-  const slots = skeletons["0"]?.skeleton?.slots;
-  createCheckboxesFor(
+export function createAttachmentUI() {
+  const skeleton = skeletons["0"]?.skeleton;
+  if (!skeleton) return;
+  const attachmentSet = new Map();
+  skeleton.slots.forEach((slot, index) => {
+    if (slot.attachment) {
+      attachmentSet.set(slot.attachment.name, index);
+    }
+  });
+  for (const name in attachmentsCache) {
+    if (!attachmentSet.has(name)) {
+      const [index] = attachmentsCache[name];
+      attachmentSet.set(name, index);
+    }
+  }
+  const allAttachments = Array.from(attachmentSet.entries());
+  createAttachmentCheckboxList(
     UIElements.attachment,
-    slots,
-    (slot, index) => [slot.attachment?.name, index],
-    ([name]) => !!name
+    allAttachments.sort(sortByName)
   );
 }
 
