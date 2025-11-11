@@ -136,6 +136,8 @@ function loadSkeleton(fileName) {
     assetManager.get(`${_dirName}${fileName}${skelExt}`)
   );
   const skeleton = new spine.Skeleton(skeletonData);
+  if (skeleton.data.skins.length > 1)
+    skeleton.setSkinByName(skeleton.data.skins[1].name);
   const bounds = calculateSetupPoseBounds(skeleton);
   const animationStateData = new spine.AnimationStateData(skeleton.data);
   const animationState = new spine.AnimationState(animationStateData);
