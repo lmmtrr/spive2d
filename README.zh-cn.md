@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-https://github.com/user-attachments/assets/6157b44d-3c8c-4b9c-9545-b919afdf4d02
+https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 
 一款使用 Tauri 构建的桌面应用程序，用于查看 Spine 骨骼动画和 Live2D 模型并与之交互。
 
@@ -88,3 +88,4 @@ https://github.com/user-attachments/assets/6157b44d-3c8c-4b9c-9545-b919afdf4d02
 ## 📄 许可证
 
 [MIT 许可证](https://github.com/lmmtrr/spive2d/blob/main/LICENSE)
+
