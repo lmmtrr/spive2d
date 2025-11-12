@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-cn.md)
 
-https://github.com/user-attachments/assets/6157b44d-3c8c-4b9c-9545-b919afdf4d02
+https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 
 A desktop application built with Tauri for viewing and interacting with Spine skeletal animations and Live2D models.
 
@@ -87,3 +87,4 @@ To set up a local development environment, you'll need to install the following 
 ## 📄 Licenses
 
 [MIT License](https://github.com/lmmtrr/spive2d/blob/main/LICENSE)
+
