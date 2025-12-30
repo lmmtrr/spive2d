@@ -278,8 +278,8 @@ function handleWindowWidthChange() {
   if (windowWidthInput.value > 10000) windowWidthInput.value = 10000;
   if (windowHeightInput.value < 100) windowHeightInput.value = 100;
   if (windowHeightInput.value > 10000) windowHeightInput.value = 10000;
-  const newWidth = Number(windowWidthInput.value);
-  const newHeight = Number(windowHeightInput.value);
+  const newWidth = Math.round(Number(windowWidthInput.value));
+  const newHeight = Math.round(Number(windowHeightInput.value));
   getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
   aspectRatioToggle.value = newHeight / newWidth;
 }
@@ -294,8 +294,8 @@ function handleWindowHeightChange() {
   if (windowWidthInput.value > 10000) windowWidthInput.value = 10000;
   if (windowHeightInput.value < 100) windowHeightInput.value = 100;
   if (windowHeightInput.value > 10000) windowHeightInput.value = 10000;
-  const newWidth = Number(windowWidthInput.value);
-  const newHeight = Number(windowHeightInput.value);
+  const newWidth = Math.round(Number(windowWidthInput.value));
+  const newHeight = Math.round(Number(windowHeightInput.value));
   getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
   aspectRatioToggle.value = newHeight / newWidth;
 }

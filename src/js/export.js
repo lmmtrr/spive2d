@@ -47,14 +47,16 @@ async function changeToOriginalSize(compositingCanvas, modelType, currentModel, 
     originalModelWidth = skeletons['0'].skeleton.data.width;
     originalModelHeight = skeletons['0'].skeleton.data.height;
   }
-  await getCurrentWindow().setSize(new PhysicalSize(originalModelWidth, originalModelHeight));
-  activeCanvas.width = originalModelWidth;
-  activeCanvas.height = originalModelHeight;
-  activeCanvas.style.width = originalModelWidth + 'px';
-  activeCanvas.style.height = originalModelHeight + 'px';
+  const width = Math.round(originalModelWidth);
+  const height = Math.round(originalModelHeight);
+  await getCurrentWindow().setSize(new PhysicalSize(width, height));
+  activeCanvas.width = width;
+  activeCanvas.height = height;
+  activeCanvas.style.width = width + 'px';
+  activeCanvas.style.height = height + 'px';
   if (compositingCanvas) {
-    compositingCanvas.width = originalModelWidth;
-    compositingCanvas.height = originalModelHeight;
+    compositingCanvas.width = width;
+    compositingCanvas.height = height;
   }
   resetModelState();
   return { prevActiveCanvasState, originalModelWidth, originalModelHeight };
