@@ -26,7 +26,12 @@ let backgroundImageToRender = null;
 const progressBarContainer = document.getElementById("progressBarContainer");
 const progressBar = document.getElementById("progressBar");
 
-async function changeToOriginalSize(compositingCanvas, modelType, currentModel, skeletons) {
+async function changeToOriginalSize(
+  compositingCanvas,
+  modelType,
+  currentModel,
+  skeletons,
+) {
   const prevActiveCanvasState = {
     scale: scale,
     moveX: moveX,
@@ -40,20 +45,20 @@ async function changeToOriginalSize(compositingCanvas, modelType, currentModel, 
   };
   let originalModelWidth;
   let originalModelHeight;
-  if (modelType === 'live2d') {
+  if (modelType === "live2d") {
     originalModelWidth = currentModel.internalModel.originalWidth;
     originalModelHeight = currentModel.internalModel.originalHeight;
   } else if (modelType === "spine") {
-    originalModelWidth = skeletons['0'].skeleton.data.width;
-    originalModelHeight = skeletons['0'].skeleton.data.height;
+    originalModelWidth = skeletons["0"].skeleton.data.width;
+    originalModelHeight = skeletons["0"].skeleton.data.height;
   }
   const width = Math.round(originalModelWidth);
   const height = Math.round(originalModelHeight);
   await getCurrentWindow().setSize(new PhysicalSize(width, height));
   activeCanvas.width = width;
   activeCanvas.height = height;
-  activeCanvas.style.width = width + 'px';
-  activeCanvas.style.height = height + 'px';
+  activeCanvas.style.width = width + "px";
+  activeCanvas.style.height = height + "px";
   if (compositingCanvas) {
     compositingCanvas.width = width;
     compositingCanvas.height = height;
@@ -62,28 +67,42 @@ async function changeToOriginalSize(compositingCanvas, modelType, currentModel, 
   return { prevActiveCanvasState, originalModelWidth, originalModelHeight };
 }
 
-async function restorePreviousSize(prevActiveCanvasState, modelType, currentModel) {
-  await getCurrentWindow().setSize(new PhysicalSize(prevActiveCanvasState.width, prevActiveCanvasState.height));
+async function restorePreviousSize(
+  prevActiveCanvasState,
+  modelType,
+  currentModel,
+) {
+  await getCurrentWindow().setSize(
+    new PhysicalSize(prevActiveCanvasState.width, prevActiveCanvasState.height),
+  );
   activeCanvas.width = prevActiveCanvasState.width;
   activeCanvas.height = prevActiveCanvasState.height;
   activeCanvas.style.width = prevActiveCanvasState.styleWidth;
   activeCanvas.style.height = prevActiveCanvasState.styleHeight;
   activeCanvas.style.display = prevActiveCanvasState.display;
-  setModelState(prevActiveCanvasState.scale, prevActiveCanvasState.moveX, prevActiveCanvasState.moveY, prevActiveCanvasState.rotate);
+  setModelState(
+    prevActiveCanvasState.scale,
+    prevActiveCanvasState.moveX,
+    prevActiveCanvasState.moveY,
+    prevActiveCanvasState.rotate,
+  );
   if (modelType === "live2d") {
     currentModel.scale.set(prevActiveCanvasState.scale);
-    currentModel.position.set(prevActiveCanvasState.moveX, prevActiveCanvasState.moveY);
+    currentModel.position.set(
+      prevActiveCanvasState.moveX,
+      prevActiveCanvasState.moveY,
+    );
     currentModel.rotation = prevActiveCanvasState.rotate;
   }
   handleResize();
 }
 
 async function exportImageOriginalSize(animationName) {
-  const tempCanvas = document.createElement('canvas');
+  const tempCanvas = document.createElement("canvas");
   const { prevActiveCanvasState, originalModelWidth, originalModelHeight } =
     await changeToOriginalSize(tempCanvas, modelType, currentModel, skeletons);
   const backgroundColor = document.body.style.backgroundColor;
-  const ctx = tempCanvas.getContext('2d', {
+  const ctx = tempCanvas.getContext("2d", {
     alpha: !backgroundColor,
   });
   setTimeout(() => {
@@ -96,9 +115,16 @@ async function exportImageOriginalSize(animationName) {
       img.onload = () => {
         ctx.clearRect(0, 0, originalModelWidth, originalModelHeight);
         ctx.drawImage(img, 0, 0, originalModelWidth, originalModelHeight);
-        ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
-        const link = document.createElement('a');
-        const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
+        ctx.drawImage(
+          activeCanvas,
+          0,
+          0,
+          originalModelWidth,
+          originalModelHeight,
+        );
+        const link = document.createElement("a");
+        const selectedSceneText =
+          sceneSelector.options[sceneSelector.selectedIndex].textContent;
         link.download = `${selectedSceneText}_${animationName.split(".")[0]}_original.png`;
         link.href = tempCanvas.toDataURL();
         link.click();
@@ -110,9 +136,16 @@ async function exportImageOriginalSize(animationName) {
         ctx.fillStyle = backgroundColor;
         ctx.fillRect(0, 0, originalModelWidth, originalModelHeight);
       }
-      ctx.drawImage(activeCanvas, 0, 0, originalModelWidth, originalModelHeight);
-      const link = document.createElement('a');
-      const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      ctx.drawImage(
+        activeCanvas,
+        0,
+        0,
+        originalModelWidth,
+        originalModelHeight,
+      );
+      const link = document.createElement("a");
+      const selectedSceneText =
+        sceneSelector.options[sceneSelector.selectedIndex].textContent;
       link.download = `${selectedSceneText}_${animationName.split(".")[0]}_original.png`;
       link.href = tempCanvas.toDataURL();
       link.click();
@@ -122,11 +155,11 @@ async function exportImageOriginalSize(animationName) {
 }
 
 function exportImageWindowSize(animationName) {
-  const tempCanvas = document.createElement('canvas');
+  const tempCanvas = document.createElement("canvas");
   tempCanvas.width = activeCanvas.width;
   tempCanvas.height = activeCanvas.height;
   const backgroundColor = document.body.style.backgroundColor;
-  const ctx = tempCanvas.getContext('2d', {
+  const ctx = tempCanvas.getContext("2d", {
     alpha: !backgroundColor,
   });
   const backgroundImage = document.body.style.backgroundImage;
@@ -138,21 +171,27 @@ function exportImageWindowSize(animationName) {
     img.onload = () => {
       ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
       ctx.drawImage(img, 0, 0, activeCanvas.width, activeCanvas.height);
-      ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
-      const link = document.createElement('a');
+      ctx.drawImage(
+        activeCanvas,
+        0,
+        0,
+        activeCanvas.width,
+        activeCanvas.height,
+      );
+      const link = document.createElement("a");
       const selectedSceneText =
         sceneSelector.options[sceneSelector.selectedIndex].textContent;
       link.download = `${selectedSceneText}_${animationName.split(".")[0]}.png`;
       link.href = tempCanvas.toDataURL();
       link.click();
-    }
+    };
   } else {
     if (backgroundColor) {
       ctx.fillStyle = backgroundColor;
       ctx.fillRect(0, 0, activeCanvas.width, activeCanvas.height);
     }
     ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     const selectedSceneText =
       sceneSelector.options[sceneSelector.selectedIndex].textContent;
     link.download = `${selectedSceneText}_${animationName.split(".")[0]}.png`;
@@ -171,8 +210,8 @@ export function exportImage() {
   }
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
-  const originalSizeCheckbox = document.getElementById('originalSizeCheckbox');
-  activeCanvas = modelType === 'live2d' ? live2dCanvas : spineCanvas;
+  const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
+  activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
   if (originalSizeCheckbox.checked) {
     exportImageOriginalSize(animationName);
   } else {
@@ -199,7 +238,7 @@ async function startRecording(animationName) {
   const chunks = [];
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
-  const originalSizeCheckbox = document.getElementById('originalSizeCheckbox');
+  const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
   activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
   let compositingCanvas = null;
   let streamSource = activeCanvas;
@@ -228,17 +267,24 @@ async function startRecording(animationName) {
       img.onerror = () => reject(new Error("Background image failed to load"));
     });
     backgroundImageToRender = img;
-    compositingCanvas = document.createElement('canvas');
+    compositingCanvas = document.createElement("canvas");
     streamSource = compositingCanvas;
   } else if (backgroundColor) {
-    compositingCanvas = document.createElement('canvas');
+    compositingCanvas = document.createElement("canvas");
     streamSource = compositingCanvas;
   }
   if (originalSizeCheckbox.checked) {
     if (!compositingCanvas) {
-      compositingCanvas = document.createElement('canvas');
+      compositingCanvas = document.createElement("canvas");
     }
-    _prevActiveCanvasState = (await changeToOriginalSize(compositingCanvas, modelType, currentModel, skeletons)).prevActiveCanvasState;
+    _prevActiveCanvasState = (
+      await changeToOriginalSize(
+        compositingCanvas,
+        modelType,
+        currentModel,
+        skeletons,
+      )
+    ).prevActiveCanvasState;
   }
   if (compositingCanvas) {
     compositingCanvas.width = activeCanvas.width;
@@ -246,11 +292,12 @@ async function startRecording(animationName) {
   }
   if (modelType === "live2d") {
     const [group, index] = animationSelector.value.split(",");
-    const motion = currentModel.internalModel.motionManager.motionGroups[group]?.[index];
+    const motion =
+      currentModel.internalModel.motionManager.motionGroups[group]?.[index];
     if (motion) {
-      if ('_loopDurationSeconds' in motion) {
+      if ("_loopDurationSeconds" in motion) {
         animationDuration = motion._loopDurationSeconds;
-      } else if ('getDurationMSec' in motion) {
+      } else if ("getDurationMSec" in motion) {
         animationDuration = motion.getDurationMSec() / 1000;
       }
     } else {
@@ -263,12 +310,12 @@ async function startRecording(animationName) {
       animationDuration = 0.1;
     }
   }
-  if (typeof MediaRecorder === 'undefined') {
-    console.error('Video recording is not supported on this platform.');
+  if (typeof MediaRecorder === "undefined") {
+    console.error("Video recording is not supported on this platform.");
     cleanup();
     return;
   }
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await new Promise((resolve) => setTimeout(resolve, 100));
   const stream = streamSource.captureStream(RECORDING_FRAME_RATE);
   const rec = new MediaRecorder(stream, {
     mimeType: RECORDING_MIME_TYPE,
@@ -286,7 +333,8 @@ async function startRecording(animationName) {
     if (blob.size > 0) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const selectedSceneText = sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      const selectedSceneText =
+        sceneSelector.options[sceneSelector.selectedIndex].textContent;
       link.download = `${selectedSceneText}_${animationName.split(".")[0]}.webm`;
       link.href = url;
       link.click();
@@ -320,17 +368,29 @@ async function startRecording(animationName) {
 function checkCondition(rec, compositingCanvas) {
   if (compositingCanvas) {
     const backgroundColor = document.body.style.backgroundColor;
-    const ctx = compositingCanvas.getContext('2d', {
+    const ctx = compositingCanvas.getContext("2d", {
       alpha: !backgroundColor,
     });
     ctx.clearRect(0, 0, compositingCanvas.width, compositingCanvas.height);
     if (backgroundImageToRender) {
-      ctx.drawImage(backgroundImageToRender, 0, 0, compositingCanvas.width, compositingCanvas.height);
+      ctx.drawImage(
+        backgroundImageToRender,
+        0,
+        0,
+        compositingCanvas.width,
+        compositingCanvas.height,
+      );
     } else if (backgroundColor) {
       ctx.fillStyle = backgroundColor;
       ctx.fillRect(0, 0, compositingCanvas.width, compositingCanvas.height);
     }
-    ctx.drawImage(activeCanvas, 0, 0, compositingCanvas.width, compositingCanvas.height);
+    ctx.drawImage(
+      activeCanvas,
+      0,
+      0,
+      compositingCanvas.width,
+      compositingCanvas.height,
+    );
   }
   let progress = 0;
   if (modelType === "spine") {

@@ -10,7 +10,11 @@ import {
   processPath,
 } from "./main.js";
 import { currentModel } from "./live2d-loader.js";
-import { createSceneSelector, resetSettingUI, createAttachmentUI } from "./ui.js";
+import {
+  createSceneSelector,
+  resetSettingUI,
+  createAttachmentUI,
+} from "./ui.js";
 const { convertFileSrc } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
 const { openPath } = window.__TAURI__.opener;
@@ -37,7 +41,7 @@ let opacities;
 
 const rootStyles = getComputedStyle(document.documentElement);
 const sidebarWidth = Number(
-  rootStyles.getPropertyValue("--sidebar-width").replace("px", "")
+  rootStyles.getPropertyValue("--sidebar-width").replace("px", ""),
 );
 
 const dialog = document.getElementById("dialog");
@@ -56,14 +60,18 @@ const spineCanvas = document.getElementById("spineCanvas");
 const languageSelector = document.getElementById("languageSelector");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
 const openArchiveButton = document.getElementById("openArchiveButton");
-const openCurrentDirectoryButton = document.getElementById("openCurrentDirectoryButton");
-const openExportDirectoryButton = document.getElementById("openExportDirectoryButton");
+const openCurrentDirectoryButton = document.getElementById(
+  "openCurrentDirectoryButton",
+);
+const openExportDirectoryButton = document.getElementById(
+  "openExportDirectoryButton",
+);
 const openImageButton = document.getElementById("openImageButton");
 const removeImageButton = document.getElementById("removeImageButton");
 const bgColorPicker = document.getElementById("bgColorPicker");
 const windowWidthInput = document.getElementById("windowWidth");
 const windowHeightInput = document.getElementById("windowHeight");
-const aspectRatioToggle = document.getElementById('aspectRatioToggle');
+const aspectRatioToggle = document.getElementById("aspectRatioToggle");
 const originalWidthInput = document.getElementById("originalWidth");
 const originalHeightInput = document.getElementById("originalHeight");
 const setOriginalSizeButton = document.getElementById("setOriginalSizeButton");
@@ -100,7 +108,7 @@ export function resetModelState() {
     const { innerWidth: w, innerHeight: h } = window;
     let _scale = Math.min(
       w / currentModel.internalModel.originalWidth,
-      h / currentModel.internalModel.originalHeight
+      h / currentModel.internalModel.originalHeight,
     );
     _scale *= scale;
     currentModel.scale.set(_scale);
@@ -136,8 +144,14 @@ function setupEventListeners() {
   settingDiv.addEventListener("input", handleSettingChange);
   openDirectoryButton.addEventListener("click", handleOpenDirectory);
   openArchiveButton.addEventListener("click", handleOpenArchiveFile);
-  openCurrentDirectoryButton.addEventListener("click", handleOpenCurrentDirectory);
-  openExportDirectoryButton.addEventListener("click", handleOpenExportDirectory);
+  openCurrentDirectoryButton.addEventListener(
+    "click",
+    handleOpenCurrentDirectory,
+  );
+  openExportDirectoryButton.addEventListener(
+    "click",
+    handleOpenExportDirectory,
+  );
   openImageButton.addEventListener("click", handleOpenImage);
   removeImageButton.addEventListener("click", handleRemoveImage);
   bgColorPicker.addEventListener("input", handleColorPickerChange);
@@ -153,7 +167,8 @@ handleLanguageSelectorChange({ target: { value: savedLang } });
 function navigateAndTriggerChange(selector, delta) {
   const optionsLength = selector.options.length;
   if (optionsLength === 1) return;
-  let newIndex = (selector.selectedIndex + delta + optionsLength) % optionsLength;
+  let newIndex =
+    (selector.selectedIndex + delta + optionsLength) % optionsLength;
   selector.selectedIndex = newIndex;
   selector.dispatchEvent(new Event("change"));
 }
@@ -221,7 +236,7 @@ async function handleOpenArchiveFile() {
 
 async function handleOpenCurrentDirectory() {
   if (!isInit) return;
-  const isWindows = navigator.userAgent.includes('Windows');
+  const isWindows = navigator.userAgent.includes("Windows");
   const currentDir = dirSelector[dirSelector.selectedIndex].value;
   const sceneId = sceneSelector[sceneSelector.selectedIndex].value;
   const path = await window.__TAURI__.path.join(currentDir, sceneId);
@@ -231,7 +246,7 @@ async function handleOpenCurrentDirectory() {
 }
 
 async function handleOpenExportDirectory() {
-  const isWindows = navigator.userAgent.includes('Windows');
+  const isWindows = navigator.userAgent.includes("Windows");
   const { downloadDir } = window.__TAURI__.path;
   const dir = await downloadDir();
   if (isWindows) await openPath(dir.replace(/\//g, "\\"));
@@ -260,7 +275,8 @@ async function handleRemoveImage() {
     linear-gradient(45deg, #fff 25%, transparent 0),
     linear-gradient(45deg, transparent 75%, #fff 0)`;
   document.body.style.backgroundSize = "32px 32px";
-  document.body.style.backgroundPosition = "0 0, 16px 16px, 16px 16px, 32px 32px";
+  document.body.style.backgroundPosition =
+    "0 0, 16px 16px, 16px 16px, 32px 32px";
 }
 
 function handleColorPickerChange() {
@@ -304,7 +320,9 @@ async function handleSetOriginalSize() {
   if (!isInit) return;
   const originalWidth = Math.round(Number(originalWidthInput.value));
   const originalHeight = Math.round(Number(originalHeightInput.value));
-  await getCurrentWindow().setSize(new PhysicalSize(originalWidth, originalHeight));
+  await getCurrentWindow().setSize(
+    new PhysicalSize(originalWidth, originalHeight),
+  );
   resetModelState();
 }
 
@@ -318,7 +336,7 @@ function focusBody() {
 function handleKeyboardInput(e) {
   const isInputFocused = document.activeElement.matches("input");
   if (isInputFocused) return;
-  if (e.key !== 'e' && !isInit) return;
+  if (e.key !== "e" && !isInit) return;
   switch (e.key) {
     case "q":
       previousDir();
@@ -406,10 +424,7 @@ function handleMouseMove(e) {
     moveY += e.clientY - startY;
     if (modelType === "live2d") {
       const { innerWidth: w, innerHeight: h } = window;
-      currentModel.position.set(
-        w * 0.5 + moveX,
-        h * 0.5 + moveY
-      );
+      currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
     }
   } else if (e.clientX >= live2dCanvas.width - sidebarWidth) {
     rotate +=
@@ -435,13 +450,13 @@ function handleWheel(e) {
   const scaleStep = baseScaleStep + Math.abs(scale - 1) * scaleFactor;
   scale = Math.min(
     scaleMax,
-    Math.max(scaleMin, scale - Math.sign(e.deltaY) * scaleStep)
+    Math.max(scaleMin, scale - Math.sign(e.deltaY) * scaleStep),
   );
   if (modelType === "live2d") {
     const { innerWidth: w, innerHeight: h } = window;
     let _scale = Math.min(
       w / currentModel.internalModel.originalWidth,
-      h / currentModel.internalModel.originalHeight
+      h / currentModel.internalModel.originalHeight,
     );
     _scale *= scale;
     currentModel.scale.set(_scale);
@@ -492,7 +507,12 @@ export function handleLive2DAnimationChange(motion, index) {
 }
 
 export function handleExpressionChange(e) {
-  currentModel.expression("" === e.target.value ? currentModel.internalModel.motionManager.ExpressionManager?.defaultExpression : Number(e.target.value));
+  currentModel.expression(
+    "" === e.target.value
+      ? currentModel.internalModel.motionManager.ExpressionManager
+          ?.defaultExpression
+      : Number(e.target.value),
+  );
 }
 
 function handleSpineAnimationChange(index) {
@@ -514,7 +534,7 @@ function handleAnimationChange(e) {
 
 export function restoreAnimation(animationName) {
   const optionExists = Array.from(animationSelector.options).some(
-    (option) => option.value === animationName
+    (option) => option.value === animationName,
   );
   if (optionExists) {
     animationSelector.value = animationName;
@@ -552,7 +572,7 @@ export function removeAttachments() {
 function getCheckedSkinNames() {
   const checkboxes = skin.querySelectorAll("input[type='checkbox']:checked");
   return Array.from(checkboxes).map(
-    (checkbox) => checkbox.parentElement.textContent
+    (checkbox) => checkbox.parentElement.textContent,
   );
 }
 
@@ -562,7 +582,7 @@ export function saveSkins() {
   const allCheckboxes = skin.querySelectorAll("input[type='checkbox']");
   allCheckboxes.forEach((checkbox, index) => {
     skinFlags[index] = checkedSkinNames.includes(
-      checkbox.parentElement.textContent
+      checkbox.parentElement.textContent,
     );
   });
   return skinFlags;
@@ -623,7 +643,9 @@ export function handleFilterInput() {
 
 function handleParameterSliderChange(e) {
   const inputs = Array.from(
-    document.getElementById("parameter").querySelectorAll('input[type="range"]')
+    document
+      .getElementById("parameter")
+      .querySelectorAll('input[type="range"]'),
   );
   const index = inputs.indexOf(e.target);
   const parameterValues = currentModel.internalModel.coreModel._parameterValues;
@@ -633,7 +655,7 @@ function handleParameterSliderChange(e) {
 function handlePartCheckboxChange(e) {
   currentModel.internalModel.coreModel.setPartOpacityById(
     e.target.previousSibling.textContent,
-    +e.target.checked
+    +e.target.checked,
   );
 }
 
@@ -651,7 +673,8 @@ function handleAttachmentCheckboxChange(e) {
   const defaultSkin = skeleton.data.defaultSkin;
   if (targetCheckbox.checked) {
     if (attachmentsCache[name]) {
-      const [cachedSlotIndex, cachedAttachment, wasFromSkin] = attachmentsCache[name];
+      const [cachedSlotIndex, cachedAttachment, wasFromSkin] =
+        attachmentsCache[name];
       if (wasFromSkin) {
         defaultSkin.setAttachment(cachedSlotIndex, name, cachedAttachment);
         skeleton.setToSetupPose();
@@ -687,7 +710,7 @@ function handleSkinCheckboxChange() {
   checkboxes.forEach((checkbox) => {
     if (checkbox.checked) {
       newSkin.addSkin(
-        skeleton.data.findSkin(checkbox.parentElement.textContent)
+        skeleton.data.findSkin(checkbox.parentElement.textContent),
       );
     }
   });

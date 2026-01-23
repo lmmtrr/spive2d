@@ -56,7 +56,7 @@ async function getSpineVersion(dirName, fileNames) {
     if (position === -1)
       throw new Error("Valid version pattern not found in .skel file");
     spineVersion = `${String.fromCharCode(
-      data[position - 1]
+      data[position - 1],
     )}.${String.fromCharCode(data[position + 1])}`;
   } else if (ext.includes(".json")) {
     const content = await file.text();
@@ -96,7 +96,9 @@ export async function loadSpineModel(dirName, fileNames) {
     skelExt.includes(".skel")
       ? assetManager.loadBinary(`${_dirName}${baseName}${fileNames[i]}`)
       : assetManager.loadText(`${_dirName}${baseName}${fileNames[i]}`);
-    assetManager.loadTextureAtlas(`${_dirName}${baseName}${fileNames[i].split('.')[0]}${atlasExt}`);
+    assetManager.loadTextureAtlas(
+      `${_dirName}${baseName}${fileNames[i].split(".")[0]}${atlasExt}`,
+    );
   }
   requestAnimationFrame(load);
 }
@@ -106,7 +108,7 @@ function load() {
     const baseName = _fileNames[0];
     skeletons["0"] = loadSkeleton(baseName);
     for (let i = 3; i < _fileNames.length; i++) {
-      const FileName2 = `${baseName}${_fileNames[i].split('.')[0]}`;
+      const FileName2 = `${baseName}${_fileNames[i].split(".")[0]}`;
       skeletons[String(i - 2)] = loadSkeleton(FileName2);
     }
     lastFrameTime = Date.now() / 1000;
@@ -128,12 +130,11 @@ function loadSkeleton(fileName) {
   const atlasExt = _fileNames[2];
   const atlas = assetManager.get(`${_dirName}${fileName}${atlasExt}`);
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
-  const skeletonLoader =
-    skelExt.includes(".skel")
-      ? new spine.SkeletonBinary(atlasLoader)
-      : new spine.SkeletonJson(atlasLoader);
+  const skeletonLoader = skelExt.includes(".skel")
+    ? new spine.SkeletonBinary(atlasLoader)
+    : new spine.SkeletonJson(atlasLoader);
   const skeletonData = skeletonLoader.readSkeletonData(
-    assetManager.get(`${_dirName}${fileName}${skelExt}`)
+    assetManager.get(`${_dirName}${fileName}${skelExt}`),
   );
   const skeleton = new spine.Skeleton(skeletonData);
   if (skeleton.data.skins.length > 1)
@@ -201,7 +202,7 @@ export function resize() {
     centerX - width * 0.5 - moveX * _scale,
     centerY - height * 0.5 + moveY * _scale,
     width,
-    height
+    height,
   );
   const c = Math.cos(Math.PI * rotate);
   const s = Math.sin(Math.PI * rotate);

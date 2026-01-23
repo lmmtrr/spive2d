@@ -7,7 +7,11 @@ import {
 } from "./events.js";
 import { disposeLive2D, loadLive2DModel } from "./live2d-loader.js";
 import { disposeSpine, loadSpineModel } from "./spine-loader.js";
-import { createDirSelector, createSceneSelector, getSortableKey } from "./ui.js";
+import {
+  createDirSelector,
+  createSceneSelector,
+  getSortableKey,
+} from "./ui.js";
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 

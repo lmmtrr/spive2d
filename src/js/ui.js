@@ -1,4 +1,9 @@
-import { attachmentsCache, handleFilterInput, setOpacities, setting } from "./events.js";
+import {
+  attachmentsCache,
+  handleFilterInput,
+  setOpacities,
+  setting,
+} from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { modelType } from "./main.js";
 import { skeletons } from "./spine-loader.js";
@@ -25,7 +30,7 @@ const UIElements = {
 
 export function getSortableKey(str, padLength = 16) {
   const s = String(str || "");
-  return s.replace(/\d+/g, (match) => match.padStart(padLength, '0'));
+  return s.replace(/\d+/g, (match) => match.padStart(padLength, "0"));
 }
 
 const createSorter = (keyExtractor) => (a, b) => {
@@ -36,23 +41,42 @@ const createSorter = (keyExtractor) => (a, b) => {
   return 0;
 };
 
-const sortByText = createSorter(item => item.text);
-const sortById = createSorter(item => item.id);
-const sortByName = createSorter(item => item[0]);
+const sortByText = createSorter((item) => item.text);
+const sortById = createSorter((item) => item.id);
+const sortByName = createSorter((item) => item[0]);
 
-function populateSelector(element, items, valueMapper, textMapper, initialOptions = "") {
+function populateSelector(
+  element,
+  items,
+  valueMapper,
+  textMapper,
+  initialOptions = "",
+) {
   const options = items
-    .map(item => `<option value="${valueMapper(item)}">${textMapper(item)}</option>`)
+    .map(
+      (item) =>
+        `<option value="${valueMapper(item)}">${textMapper(item)}</option>`,
+    )
     .join("");
   element.innerHTML = initialOptions + options;
 }
 
 export function createDirSelector(dirs) {
-  populateSelector(UIElements.dirSelector, dirs, dir => dir, dir => dir.split("/").filter(Boolean).pop());
+  populateSelector(
+    UIElements.dirSelector,
+    dirs,
+    (dir) => dir,
+    (dir) => dir.split("/").filter(Boolean).pop(),
+  );
 }
 
 export function createSceneSelector(sceneIds) {
-  populateSelector(UIElements.sceneSelector, sceneIds, scenePath => scenePath[0], scenePath => scenePath[0].split("/").filter(Boolean).pop());
+  populateSelector(
+    UIElements.sceneSelector,
+    sceneIds,
+    (scenePath) => scenePath[0],
+    (scenePath) => scenePath[0].split("/").filter(Boolean).pop(),
+  );
 }
 
 export function createAnimationSelector(animations) {
@@ -62,12 +86,22 @@ export function createAnimationSelector(animations) {
         anims.map((anim, originalIndex) => ({
           text: (anim.file || anim.File || "").split("/").pop(),
           value: `${groupName},${originalIndex}`,
-        }))
+        })),
       )
       .sort(sortByText);
-    populateSelector(UIElements.animationSelector, displayableAnimations, anim => anim.value, anim => anim.text);
+    populateSelector(
+      UIElements.animationSelector,
+      displayableAnimations,
+      (anim) => anim.value,
+      (anim) => anim.text,
+    );
   } else if (modelType === "spine") {
-    populateSelector(UIElements.animationSelector, animations, v => v.name, v => v.name);
+    populateSelector(
+      UIElements.animationSelector,
+      animations,
+      (v) => v.name,
+      (v) => v.name,
+    );
   }
 }
 
@@ -79,19 +113,27 @@ export function createExpressionSelector(expressions) {
         value: String(originalIndex),
       }))
       .sort(sortByText);
-    populateSelector(UIElements.expressionSelector, displayableExpressions, expr => expr.value, expr => expr.text, `<option value="">Default</option>`);
+    populateSelector(
+      UIElements.expressionSelector,
+      displayableExpressions,
+      (expr) => expr.value,
+      (expr) => expr.text,
+      `<option value="">Default</option>`,
+    );
   }
 }
 
 function createCheckboxList(parentElement, items, isChecked = true) {
-  const checkedAttribute = isChecked ? 'checked' : '';
+  const checkedAttribute = isChecked ? "checked" : "";
   const checkboxListHTML = items
-    .map(([name, index]) => `
+    .map(
+      ([name, index]) => `
       <div class="item">
         <label title="${name}">${name}<input type="checkbox" data-old-index="${index}" ${checkedAttribute}></label>
       </div>
-    `)
-    .join('');
+    `,
+    )
+    .join("");
   parentElement.innerHTML = checkboxListHTML;
 }
 
@@ -99,14 +141,14 @@ function createAttachmentCheckboxList(parentElement, items) {
   const checkboxListHTML = items
     .map(([name, index]) => {
       const isChecked = !attachmentsCache[name];
-      const checkedAttribute = isChecked ? 'checked' : '';
+      const checkedAttribute = isChecked ? "checked" : "";
       return `
       <div class="item">
         <label title="${name}">${name}<input type="checkbox" data-old-index="${index}" ${checkedAttribute}></label>
       </div>
-    `
+    `;
     })
-    .join('');
+    .join("");
   parentElement.innerHTML = checkboxListHTML;
 }
 
@@ -123,13 +165,15 @@ function createParameterUI() {
     }))
     .sort(sortById);
   const parametersHTML = parametersData
-    .map(({ id, max, min, value }) => `
+    .map(
+      ({ id, max, min, value }) => `
       <div class="item">
         <label title="${id}">${id}</label>
         <input type="range" max="${max}" min="${min}" step="${(max - min) / 100}" value="${value}">
       </div>
-    `)
-    .join('');
+    `,
+    )
+    .join("");
   UIElements.parameter.innerHTML = parametersHTML;
 }
 
@@ -143,11 +187,10 @@ function createCheckboxesFor(uiElement, sourceData, mapFn, filterFn) {
 
 function createPartUI() {
   const partIds = currentModel.internalModel.coreModel?._partIds;
-  createCheckboxesFor(
-    UIElements.part,
-    partIds,
-    (value, index) => [value, index]
-  );
+  createCheckboxesFor(UIElements.part, partIds, (value, index) => [
+    value,
+    index,
+  ]);
 }
 
 function createDrawableUI() {
@@ -160,7 +203,7 @@ function createDrawableUI() {
     UIElements.drawable,
     coreModel._drawableIds,
     (value, index) => [value, index],
-    ([, index]) => Math.round(opacities[index]) > 0
+    ([, index]) => Math.round(opacities[index]) > 0,
   );
 }
 
@@ -182,7 +225,7 @@ export function createAttachmentUI() {
   const allAttachments = Array.from(attachmentSet.entries());
   createAttachmentCheckboxList(
     UIElements.attachment,
-    allAttachments.sort(sortByName)
+    allAttachments.sort(sortByName),
   );
 }
 
@@ -193,27 +236,32 @@ function createSkinUI() {
     return;
   }
   UIElements.settingSelector.disabled = false;
-  const skinData = skins.slice(1).map(skin => [skin.name, -1]);
+  const skinData = skins.slice(1).map((skin) => [skin.name, -1]);
   const skinsHTML = skinData
-    .map(([name]) => `
+    .map(
+      ([name]) => `
       <div class="item">
         <label title="${name}">${name}<input type="checkbox"></label>
       </div>
-    `)
-    .join('');
+    `,
+    )
+    .join("");
   UIElements.skin.innerHTML = skinsHTML;
 }
 
 const optionsHTML = {
-  parameters: '<option id="parameters" value="parameters" data-i18n="parameters">Parameters</option>',
+  parameters:
+    '<option id="parameters" value="parameters" data-i18n="parameters">Parameters</option>',
   parts: '<option id="parts" value="parts" data-i18n="parts">Parts</option>',
-  drawables: '<option id="drawables" value="drawables" data-i18n="drawables">Drawables</option>',
-  attachments: '<option id="attachments" value="attachments" data-i18n="attachments">Attachments</option>',
+  drawables:
+    '<option id="drawables" value="drawables" data-i18n="drawables">Drawables</option>',
+  attachments:
+    '<option id="attachments" value="attachments" data-i18n="attachments">Attachments</option>',
   skins: '<option id="skins" value="skins" data-i18n="skins">Skins</option>',
 };
 
 function setElementDisplay(elements, display) {
-  elements.forEach(elKey => {
+  elements.forEach((elKey) => {
     if (UIElements[elKey]) {
       UIElements[elKey].style.display = display;
     }
@@ -221,8 +269,20 @@ function setElementDisplay(elements, display) {
 }
 
 function setupUIForLive2D() {
-  setElementDisplay(['parameters', 'parts', 'drawables', 'parameter'], 'block');
-  setElementDisplay(['part', 'drawable', 'expressionSelector', 'attachments', 'skins', 'attachment', 'skin', 'pmaDiv'], 'none');
+  setElementDisplay(["parameters", "parts", "drawables", "parameter"], "block");
+  setElementDisplay(
+    [
+      "part",
+      "drawable",
+      "expressionSelector",
+      "attachments",
+      "skins",
+      "attachment",
+      "skin",
+      "pmaDiv",
+    ],
+    "none",
+  );
   UIElements.settingSelector.innerHTML = `
     ${optionsHTML.parameters}
     ${optionsHTML.parts}
@@ -237,8 +297,20 @@ function setupUIForLive2D() {
 }
 
 function setupUIForSpine() {
-  setElementDisplay(['attachments', 'skins', 'attachment', 'pmaDiv'], 'block');
-  setElementDisplay(['skin', 'parameters', 'parts', 'drawables', 'parameter', 'part', 'drawable', 'expressionSelector'], 'none');
+  setElementDisplay(["attachments", "skins", "attachment", "pmaDiv"], "block");
+  setElementDisplay(
+    [
+      "skin",
+      "parameters",
+      "parts",
+      "drawables",
+      "parameter",
+      "part",
+      "drawable",
+      "expressionSelector",
+    ],
+    "none",
+  );
   UIElements.settingSelector.innerHTML = `
     ${optionsHTML.attachments}
     ${optionsHTML.skins}
@@ -262,8 +334,14 @@ export function resetUI() {
 }
 
 export function resetSettingUI() {
-  const allPanels = [UIElements.parameter, UIElements.part, UIElements.drawable, UIElements.attachment, UIElements.skin];
-  allPanels.forEach(p => {
+  const allPanels = [
+    UIElements.parameter,
+    UIElements.part,
+    UIElements.drawable,
+    UIElements.attachment,
+    UIElements.skin,
+  ];
+  allPanels.forEach((p) => {
     if (p) p.style.display = "none";
   });
   const panelMap = {
