@@ -11,9 +11,10 @@ import {
   scale,
   setFirstRenderFlag,
 } from "./events.js";
-import { createAnimationSelector, resetUI } from "./ui.js";
-import { spines } from "./main.js";
-const { convertFileSrc } = window.__TAURI__.core;
+import { resetUI } from "./ui.js";
+import { getSpine, populateAnimateSelector } from "../utils";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { getSelectorCurrentState } from "../store.js";
 
 export let spine;
 let ctx;
@@ -74,7 +75,7 @@ export async function loadSpineModel(dirName, fileNames) {
   _dirName = dirName;
   _fileNames = fileNames;
   const spineVersion = await getSpineVersion(dirName, fileNames);
-  spine = spines[spineVersion];
+  spine = getSpine(spineVersion);
   spineCanvas.width = window.innerWidth;
   spineCanvas.height = window.innerHeight;
   ctx = new spine.ManagedWebGLRenderingContext(spineCanvas, {
@@ -176,10 +177,10 @@ function render() {
     shader.unbind();
   }
   if (isFirstRender) {
-    const animationName = document.getElementById("animationSelector").value;
+    const animationName = getSelectorCurrentState("animate").selected.value;
     const skinFlags = saveSkins();
     resetUI();
-    createAnimationSelector(skeletons["0"].skeleton.data.animations);
+    populateAnimateSelector(skeletons["0"].skeleton.data.animations);
     restoreAnimation(animationName);
     restoreSkins(skinFlags);
     removeAttachments();

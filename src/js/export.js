@@ -1,11 +1,8 @@
-import { isProcessing, modelType, setProcessing } from "./main.js";
 import {
   scale,
   moveX,
   moveY,
   rotate,
-  animationSelector,
-  sceneSelector,
   resetModelState,
   setModelState,
   handleResize,
@@ -13,7 +10,14 @@ import {
 } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { animationStates, skeletons } from "./spine-loader.js";
-const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
+import { setProcessing, isProcessing } from "../utils";
+import {
+  getModelType,
+  getSelectorCurrentState,
+  isModelType,
+  getGlobalSetting,
+} from "../store";
+import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
 const RECORDING_BITRATE = 12000000;
@@ -100,7 +104,12 @@ async function restorePreviousSize(
 async function exportImageOriginalSize(animationName) {
   const tempCanvas = document.createElement("canvas");
   const { prevActiveCanvasState, originalModelWidth, originalModelHeight } =
-    await changeToOriginalSize(tempCanvas, modelType, currentModel, skeletons);
+    await changeToOriginalSize(
+      tempCanvas,
+      getModelType(),
+      currentModel,
+      skeletons,
+    );
   const backgroundColor = document.body.style.backgroundColor;
   const ctx = tempCanvas.getContext("2d", {
     alpha: !backgroundColor,
@@ -124,11 +133,15 @@ async function exportImageOriginalSize(animationName) {
         );
         const link = document.createElement("a");
         const selectedSceneText =
-          sceneSelector.options[sceneSelector.selectedIndex].textContent;
+          getSelectorCurrentState("scene").selected.label;
         link.download = `${selectedSceneText}_${animationName.split(".")[0]}_original.png`;
         link.href = tempCanvas.toDataURL();
         link.click();
-        restorePreviousSize(prevActiveCanvasState, modelType, currentModel);
+        restorePreviousSize(
+          prevActiveCanvasState,
+          getModelType(),
+          currentModel,
+        );
       };
     } else {
       ctx.clearRect(0, 0, originalModelWidth, originalModelHeight);
@@ -144,12 +157,11 @@ async function exportImageOriginalSize(animationName) {
         originalModelHeight,
       );
       const link = document.createElement("a");
-      const selectedSceneText =
-        sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      const selectedSceneText = getSelectorCurrentState("scene").selected.label;
       link.download = `${selectedSceneText}_${animationName.split(".")[0]}_original.png`;
       link.href = tempCanvas.toDataURL();
       link.click();
-      restorePreviousSize(prevActiveCanvasState, modelType, currentModel);
+      restorePreviousSize(prevActiveCanvasState, getModelType(), currentModel);
     }
   }, 200);
 }
@@ -179,8 +191,7 @@ function exportImageWindowSize(animationName) {
         activeCanvas.height,
       );
       const link = document.createElement("a");
-      const selectedSceneText =
-        sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      const selectedSceneText = getSelectorCurrentState("scene").selected.label;
       link.download = `${selectedSceneText}_${animationName.split(".")[0]}.png`;
       link.href = tempCanvas.toDataURL();
       link.click();
@@ -192,41 +203,39 @@ function exportImageWindowSize(animationName) {
     }
     ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
     const link = document.createElement("a");
-    const selectedSceneText =
-      sceneSelector.options[sceneSelector.selectedIndex].textContent;
+    const selectedSceneText = getSelectorCurrentState("scene").selected.label;
     link.download = `${selectedSceneText}_${animationName.split(".")[0]}.png`;
     link.href = tempCanvas.toDataURL();
     link.click();
   }
 }
 
+// TODO: why earth need check those type?
 export function exportImage() {
   let animationName;
-  if (modelType === "spine") {
-    animationName = animationSelector.value;
-  } else if (modelType === "live2d") {
-    animationName =
-      animationSelector.options[animationSelector.selectedIndex].textContent;
+  if (isModelType("spine")) {
+    animationName = getSelectorCurrentState("animate").selected.value;
+  } else if (isModelType("live2d")) {
+    animationName = getSelectorCurrentState("animate").selected.label;
   }
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
-  const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
-  activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
-  if (originalSizeCheckbox.checked) {
+  activeCanvas = isModelType("live2d") ? live2dCanvas : spineCanvas;
+  if (getGlobalSetting("exportAsOriginalSize")) {
     exportImageOriginalSize(animationName);
   } else {
     exportImageWindowSize(animationName);
   }
 }
 
+// TODO: why earth need check those type?
 export async function exportAnimation() {
-  if (isProcessing) return;
+  if (isProcessing()) return;
   let animationName;
-  if (modelType === "spine") {
-    animationName = animationSelector.value;
-  } else if (modelType === "live2d") {
-    animationName =
-      animationSelector.options[animationSelector.selectedIndex].textContent;
+  if (isModelType("spine")) {
+    animationName = getSelectorCurrentState("animate").selected.value;
+  } else if (isModelType("live2d")) {
+    animationName = getSelectorCurrentState("animate").selected.label;
   }
   await startRecording(animationName);
 }
@@ -238,16 +247,16 @@ async function startRecording(animationName) {
   const chunks = [];
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
-  const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
-  activeCanvas = modelType === "live2d" ? live2dCanvas : spineCanvas;
+  const exportAsOriginalSize = getGlobalSetting("exportAsOriginalSize");
+  activeCanvas = isModelType("live2d") ? live2dCanvas : spineCanvas;
   let compositingCanvas = null;
   let streamSource = activeCanvas;
   const cleanup = (error) => {
     if (error) {
       console.error("Recording failed:", error);
     }
-    if (originalSizeCheckbox.checked && _prevActiveCanvasState) {
-      restorePreviousSize(_prevActiveCanvasState, modelType, currentModel);
+    if (exportAsOriginalSize && _prevActiveCanvasState) {
+      restorePreviousSize(_prevActiveCanvasState, getModelType(), currentModel);
     }
     setProcessing(false);
     progressBarContainer.style.display = "none";
@@ -273,14 +282,14 @@ async function startRecording(animationName) {
     compositingCanvas = document.createElement("canvas");
     streamSource = compositingCanvas;
   }
-  if (originalSizeCheckbox.checked) {
+  if (exportAsOriginalSize) {
     if (!compositingCanvas) {
       compositingCanvas = document.createElement("canvas");
     }
     _prevActiveCanvasState = (
       await changeToOriginalSize(
         compositingCanvas,
-        modelType,
+        getModelType(),
         currentModel,
         skeletons,
       )
@@ -290,8 +299,9 @@ async function startRecording(animationName) {
     compositingCanvas.width = activeCanvas.width;
     compositingCanvas.height = activeCanvas.height;
   }
-  if (modelType === "live2d") {
-    const [group, index] = animationSelector.value.split(",");
+  if (isModelType("live2d")) {
+    const [group, index] =
+      getSelectorCurrentState("animate").selected.value.split(",");
     const motion =
       currentModel.internalModel.motionManager.motionGroups[group]?.[index];
     if (motion) {
@@ -303,7 +313,7 @@ async function startRecording(animationName) {
     } else {
       animationDuration = 0.1;
     }
-  } else if (modelType === "spine") {
+  } else if (isModelType("spine")) {
     const track = animationStates[0] && animationStates[0].tracks[0];
     animationDuration = track.animation.duration;
     if (animationDuration <= 0) {
@@ -333,8 +343,7 @@ async function startRecording(animationName) {
     if (blob.size > 0) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const selectedSceneText =
-        sceneSelector.options[sceneSelector.selectedIndex].textContent;
+      const selectedSceneText = getSelectorCurrentState("scene").selected.label;
       link.download = `${selectedSceneText}_${animationName.split(".")[0]}.webm`;
       link.href = url;
       link.click();
@@ -347,15 +356,16 @@ async function startRecording(animationName) {
     cleanup(e.error || new Error("MediaRecorder error"));
   };
 
-  if (modelType === "spine") {
+  if (isModelType("spine")) {
     for (const animationState of animationStates) {
       animationState.tracks[0].trackTime = 0;
     }
     rec.start();
     recordingStartTime = performance.now();
     requestAnimationFrame(() => checkCondition(rec, compositingCanvas));
-  } else if (modelType === "live2d") {
-    const [motion, index] = animationSelector.value.split(",");
+  } else if (isModelType("live2d")) {
+    const [motion, index] =
+      getSelectorCurrentState("animate").selected.value.split(",");
     handleLive2DAnimationChange(motion, index);
     setTimeout(() => {
       rec.start();
@@ -393,7 +403,7 @@ function checkCondition(rec, compositingCanvas) {
     );
   }
   let progress = 0;
-  if (modelType === "spine") {
+  if (isModelType("spine")) {
     const track = animationStates[0].tracks[0];
     if (track.trackTime >= track.animationEnd) {
       rec.stop();
@@ -401,7 +411,7 @@ function checkCondition(rec, compositingCanvas) {
       progress = (track.trackTime / track.animationEnd) * 100;
       requestAnimationFrame(() => checkCondition(rec, compositingCanvas));
     }
-  } else if (modelType === "live2d") {
+  } else if (isModelType("live2d")) {
     const elapsedTime = (performance.now() - recordingStartTime) / 1000;
     if (elapsedTime >= animationDuration) {
       rec.stop();

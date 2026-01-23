@@ -1,12 +1,8 @@
-import {
-  attachmentsCache,
-  handleFilterInput,
-  setOpacities,
-  setting,
-} from "./events.js";
+import { attachmentsCache, handleFilterInput, setOpacities } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
-import { modelType } from "./main.js";
 import { skeletons } from "./spine-loader.js";
+import { getCurrentSetting, isModelType } from "../store";
+import { sortByName, sortById } from "../sort";
 
 const UIElements = {
   parameters: document.getElementById("parameters"),
@@ -21,107 +17,9 @@ const UIElements = {
   attachment: document.getElementById("attachment"),
   skin: document.getElementById("skin"),
   expressionSelector: document.getElementById("expressionSelector"),
-  dirSelector: document.getElementById("dirSelector"),
-  sceneSelector: document.getElementById("sceneSelector"),
-  animationSelector: document.getElementById("animationSelector"),
   settingElement: document.getElementById("setting"),
   settingSelector: document.getElementById("settingSelector"),
 };
-
-export function getSortableKey(str, padLength = 16) {
-  const s = String(str || "");
-  return s.replace(/\d+/g, (match) => match.padStart(padLength, "0"));
-}
-
-const createSorter = (keyExtractor) => (a, b) => {
-  const keyA = getSortableKey(keyExtractor(a));
-  const keyB = getSortableKey(keyExtractor(b));
-  if (keyA < keyB) return -1;
-  if (keyA > keyB) return 1;
-  return 0;
-};
-
-const sortByText = createSorter((item) => item.text);
-const sortById = createSorter((item) => item.id);
-const sortByName = createSorter((item) => item[0]);
-
-function populateSelector(
-  element,
-  items,
-  valueMapper,
-  textMapper,
-  initialOptions = "",
-) {
-  const options = items
-    .map(
-      (item) =>
-        `<option value="${valueMapper(item)}">${textMapper(item)}</option>`,
-    )
-    .join("");
-  element.innerHTML = initialOptions + options;
-}
-
-export function createDirSelector(dirs) {
-  populateSelector(
-    UIElements.dirSelector,
-    dirs,
-    (dir) => dir,
-    (dir) => dir.split("/").filter(Boolean).pop(),
-  );
-}
-
-export function createSceneSelector(sceneIds) {
-  populateSelector(
-    UIElements.sceneSelector,
-    sceneIds,
-    (scenePath) => scenePath[0],
-    (scenePath) => scenePath[0].split("/").filter(Boolean).pop(),
-  );
-}
-
-export function createAnimationSelector(animations) {
-  if (modelType === "live2d") {
-    const displayableAnimations = Object.entries(animations)
-      .flatMap(([groupName, anims]) =>
-        anims.map((anim, originalIndex) => ({
-          text: (anim.file || anim.File || "").split("/").pop(),
-          value: `${groupName},${originalIndex}`,
-        })),
-      )
-      .sort(sortByText);
-    populateSelector(
-      UIElements.animationSelector,
-      displayableAnimations,
-      (anim) => anim.value,
-      (anim) => anim.text,
-    );
-  } else if (modelType === "spine") {
-    populateSelector(
-      UIElements.animationSelector,
-      animations,
-      (v) => v.name,
-      (v) => v.name,
-    );
-  }
-}
-
-export function createExpressionSelector(expressions) {
-  if (modelType === "live2d") {
-    const displayableExpressions = expressions
-      .map((expr, originalIndex) => ({
-        text: (expr.file || expr.File || "").split("/").pop(),
-        value: String(originalIndex),
-      }))
-      .sort(sortByText);
-    populateSelector(
-      UIElements.expressionSelector,
-      displayableExpressions,
-      (expr) => expr.value,
-      (expr) => expr.text,
-      `<option value="">Default</option>`,
-    );
-  }
-}
 
 function createCheckboxList(parentElement, items, isChecked = true) {
   const checkedAttribute = isChecked ? "checked" : "";
@@ -268,6 +166,7 @@ function setElementDisplay(elements, display) {
   });
 }
 
+// TODO
 function setupUIForLive2D() {
   setElementDisplay(["parameters", "parts", "drawables", "parameter"], "block");
   setElementDisplay(
@@ -296,6 +195,7 @@ function setupUIForLive2D() {
   createDrawableUI();
 }
 
+// TODO
 function setupUIForSpine() {
   setElementDisplay(["attachments", "skins", "attachment", "pmaDiv"], "block");
   setElementDisplay(
@@ -322,9 +222,9 @@ function setupUIForSpine() {
 }
 
 export function resetUI() {
-  if (modelType === "live2d") {
+  if (isModelType("live2d")) {
     setupUIForLive2D();
-  } else if (modelType === "spine") {
+  } else if (isModelType("spine")) {
     setupUIForSpine();
   }
   if (UIElements.settingElement) {
@@ -351,7 +251,7 @@ export function resetSettingUI() {
     attachments: UIElements.attachment,
     skins: UIElements.skin,
   };
-  const selectedPanel = panelMap[setting];
+  const selectedPanel = panelMap[getCurrentSetting()];
   if (selectedPanel) {
     selectedPanel.style.display = "block";
   }

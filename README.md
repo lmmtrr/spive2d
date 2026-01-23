@@ -87,4 +87,3 @@ To set up a local development environment, you'll need to install the following 
 ## 📄 Licenses
 
 [MIT License](https://github.com/lmmtrr/spive2d/blob/main/LICENSE)
-

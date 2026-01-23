@@ -35,6 +35,11 @@ body {
   color: var(--text-color);
 }
 
+#app {
+  height: 100vh;
+  width: 100vw;
+}
+
 button,
 input,
 select,
@@ -92,103 +97,102 @@ textarea {
   transform: translate(-50%, -50%);
 }
 
-#progressBarContainer {
-  display: none;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80%;
-  max-width: 600px;
-  height: 25px;
-  background-color: #eee;
-  border-radius: 10px;
-  border: var(--border-color);
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+@scope (#progressBarContainer) {
+  :scope {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 600px;
+    height: 25px;
+    background-color: #eee;
+    border-radius: 10px;
+    border: var(--border-color);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+  :scope > div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 100%;
+    background-color: #888;
+    border-radius: 5px;
+  }
 }
 
-#progressBar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 0%;
-  height: 100%;
-  background-color: #888;
-  border-radius: 5px;
-}
+@scope (#dialog) {
+  :scope {
+    background: var(--sidebar-color);
+    color: var(--text-color);
+    border: var(--border-color);
+    border-radius: 10px;
+    padding: 10px 25px;
+    width: 480px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  }
+  .button-group {
+    display: flex;
+    justify-content: center;
+  }
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 160px;
+    height: 40px;
+    padding: 10px;
+    border-radius: 6px;
+    outline: none;
+    border: var(--border-color);
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
+    text-shadow: var(--text-shadow);
+    font-size: 14px;
+    margin: 10px 0;
+  }
+  button:hover {
+    background-color: #555;
+  }
+  hr {
+    border: 0;
+    height: 1px;
+    background-color: #999;
+  }
 
-#dialog {
-  background: var(--sidebar-color);
-  color: var(--text-color);
-  border: var(--border-color);
-  border-radius: 10px;
-  padding: 10px 25px;
-  width: 480px;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-}
-
-.button-group {
-  display: flex;
-  justify-content: center;
-}
-
-#dialog button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  width: 160px;
-  height: 40px;
-  padding: 10px;
-  border-radius: 6px;
-  outline: none;
-  border: var(--border-color);
-  background-color: var(--sidebar-color);
-  color: var(--text-color);
-  text-shadow: var(--text-shadow);
-  font-size: 14px;
-  margin: 10px 0;
-}
-
-#dialog button:hover {
-  background-color: #555;
-}
-
-#dialog hr {
-  border: 0;
-  height: 1px;
-  background-color: #999;
-}
-
-#dialog .input-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-#dialog .input-row label {
-  flex-basis: 140px;
-  flex-shrink: 0;
-}
-
-#dialog .input-row input[type="number"],
-#dialog .input-row input[type="text"] {
-  text-indent: 6px;
-  border-radius: 6px;
-  height: 35px;
-  width: 100%;
-  outline: none;
-  color: var(--text-color);
-  border: var(--border-color);
-  background-color: #0006;
-  font-size: 15px;
-}
-
-#dialog input[type="checkbox"] {
-  position: relative;
-  top: 1px;
-  margin-bottom: 20px;
+  input[type="checkbox"] {
+    position: relative;
+    top: 1px;
+    margin-bottom: 20px;
+  }
+  @scope (.input-row) {
+    :scope {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    label,
+    span {
+      flex-basis: 140px;
+      flex-shrink: 0;
+    }
+    input[type="number"],
+    input[type="text"] {
+      text-indent: 6px;
+      border-radius: 6px;
+      height: 35px;
+      width: 100%;
+      outline: none;
+      color: var(--text-color);
+      border: var(--border-color);
+      background-color: #0006;
+      font-size: 15px;
+    }
+  }
 }
 
 #sidebar {

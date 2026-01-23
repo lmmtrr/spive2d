@@ -1,20 +1,24 @@
-import { exportImage, exportAnimation } from "./export.js";
 import { animationStates, skeletons, spine } from "./spine-loader.js";
-import {
-  dispose,
-  dirFiles,
-  init,
-  isInit,
-  isProcessing,
-  modelType,
-  processPath,
-} from "./main.js";
 import { currentModel } from "./live2d-loader.js";
+import { resetSettingUI, createAttachmentUI } from "./ui.js";
 import {
-  createSceneSelector,
-  resetSettingUI,
-  createAttachmentUI,
-} from "./ui.js";
+  isProcessing,
+  getFile,
+  populateSceneSelector,
+  processPath,
+  dispose,
+  init,
+} from "../utils";
+import {
+  setGlobalSetting,
+  getSelectorCurrentState,
+  isInitialized,
+  isModelType,
+  setSelectorState,
+  getGlobalSetting,
+  setCurrentSetting,
+  getCurrentSetting,
+} from "../store";
 const { convertFileSrc } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
 const { openPath } = window.__TAURI__.opener;
@@ -35,48 +39,21 @@ let mouseDown = false;
 let isMove = false;
 export let isFirstRender = true;
 export let premultipliedAlpha = false;
-export let setting = "parameters";
 export let attachmentsCache = {};
 let opacities;
 
 const rootStyles = getComputedStyle(document.documentElement);
+// TODO
 const sidebarWidth = Number(
   rootStyles.getPropertyValue("--sidebar-width").replace("px", ""),
 );
 
-const dialog = document.getElementById("dialog");
-const sidebar = document.getElementById("sidebar");
-const pmaCheckbox = document.getElementById("pmaCheckbox");
-export const dirSelector = document.getElementById("dirSelector");
-export const sceneSelector = document.getElementById("sceneSelector");
-export const animationSelector = document.getElementById("animationSelector");
-export const expressionSelector = document.getElementById("expressionSelector");
 const settingSelector = document.getElementById("settingSelector");
-const filterBox = document.getElementById("filterBox");
 const settingDiv = document.getElementById("setting");
 const skin = document.getElementById("skin");
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
-const languageSelector = document.getElementById("languageSelector");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
-const openArchiveButton = document.getElementById("openArchiveButton");
-const openCurrentDirectoryButton = document.getElementById(
-  "openCurrentDirectoryButton",
-);
-const openExportDirectoryButton = document.getElementById(
-  "openExportDirectoryButton",
-);
-const openImageButton = document.getElementById("openImageButton");
-const removeImageButton = document.getElementById("removeImageButton");
-const bgColorPicker = document.getElementById("bgColorPicker");
-const windowWidthInput = document.getElementById("windowWidth");
-const windowHeightInput = document.getElementById("windowHeight");
-const aspectRatioToggle = document.getElementById("aspectRatioToggle");
-const originalWidthInput = document.getElementById("originalWidth");
-const originalHeightInput = document.getElementById("originalHeight");
-const setOriginalSizeButton = document.getElementById("setOriginalSizeButton");
-const resetStateButton = document.getElementById("resetStateButton");
-setupEventListeners();
 
 export function setOpacities(value) {
   opacities = value;
@@ -88,11 +65,11 @@ export function setFirstRenderFlag(flag) {
 
 export function resetConfiguration() {
   isFirstRender = true;
-  if (modelType === "live2d") {
-    setting = "parameters";
+  if (isModelType("live2d")) {
+    setCurrentSetting("parameters");
     settingSelector.value = "parameters";
   } else {
-    setting = "attachments";
+    setCurrentSetting("attachments");
     settingSelector.value = "attachments";
   }
   settingSelector.disabled = false;
@@ -103,8 +80,8 @@ export function resetModelState() {
   moveX = 0;
   moveY = 0;
   rotate = 0;
-  if (!isInit) return;
-  if (modelType === "live2d") {
+  if (!isInitialized()) return;
+  if (isModelType("live2d")) {
     const { innerWidth: w, innerHeight: h } = window;
     let _scale = Math.min(
       w / currentModel.internalModel.originalWidth,
@@ -124,47 +101,17 @@ export function setModelState(_scale, _moveX, _moveY, _rotate) {
   rotate = _rotate;
 }
 
-function setupEventListeners() {
+export function setupEventListeners() {
   window.addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("resize", handleResize);
-  document.addEventListener("keydown", handleKeyboardInput);
   document.addEventListener("mouseout", handleMouseOut);
   document.addEventListener("mousedown", handleMouseDown);
   document.addEventListener("mousemove", handleMouseMove);
   document.addEventListener("mouseup", handleMouseUp);
   document.addEventListener("wheel", handleWheel);
-  pmaCheckbox.addEventListener("change", handlePMACheckboxChange);
-  dirSelector.addEventListener("change", handleDirChange);
-  sceneSelector.addEventListener("change", handleSceneChange);
-  animationSelector.addEventListener("change", handleAnimationChange);
-  expressionSelector.addEventListener("change", handleExpressionChange);
-  settingSelector.addEventListener("change", handleSettingSelectorChange);
-  languageSelector.addEventListener("change", handleLanguageSelectorChange);
-  filterBox.addEventListener("input", handleFilterInput);
-  settingDiv.addEventListener("input", handleSettingChange);
-  openDirectoryButton.addEventListener("click", handleOpenDirectory);
-  openArchiveButton.addEventListener("click", handleOpenArchiveFile);
-  openCurrentDirectoryButton.addEventListener(
-    "click",
-    handleOpenCurrentDirectory,
-  );
-  openExportDirectoryButton.addEventListener(
-    "click",
-    handleOpenExportDirectory,
-  );
-  openImageButton.addEventListener("click", handleOpenImage);
-  removeImageButton.addEventListener("click", handleRemoveImage);
-  bgColorPicker.addEventListener("input", handleColorPickerChange);
-  windowWidthInput.addEventListener("change", handleWindowWidthChange);
-  windowHeightInput.addEventListener("change", handleWindowHeightChange);
-  setOriginalSizeButton.addEventListener("click", handleSetOriginalSize);
-  resetStateButton.addEventListener("click", resetModelState);
 }
 
-const savedLang = localStorage.getItem("spive2d_language") || "en";
-handleLanguageSelectorChange({ target: { value: savedLang } });
-
-function navigateAndTriggerChange(selector, delta) {
+export function navigateAndTriggerChange(selector, delta) {
   const optionsLength = selector.options.length;
   if (optionsLength === 1) return;
   let newIndex =
@@ -173,200 +120,11 @@ function navigateAndTriggerChange(selector, delta) {
   selector.dispatchEvent(new Event("change"));
 }
 
-function previousDir() {
-  navigateAndTriggerChange(dirSelector, -1);
-}
-
-function nextDir() {
-  navigateAndTriggerChange(dirSelector, 1);
-}
-
-function previousScene() {
-  navigateAndTriggerChange(sceneSelector, -1);
-}
-
-function nextScene() {
-  navigateAndTriggerChange(sceneSelector, 1);
-}
-
-function previousAnimation() {
-  navigateAndTriggerChange(animationSelector, -1);
-}
-
-function nextAnimation() {
-  navigateAndTriggerChange(animationSelector, 1);
-}
-
-function toggleDialog() {
-  if (dialog.open) {
-    dialog.close();
-  } else {
-    dialog.showModal();
-    if (!isInit) return;
-    if (modelType === "live2d") {
-      originalWidthInput.value = currentModel.internalModel.originalWidth;
-      originalHeightInput.value = currentModel.internalModel.originalHeight;
-    } else if (modelType === "spine") {
-      originalWidthInput.value = skeletons["0"].skeleton.data.width;
-      originalHeightInput.value = skeletons["0"].skeleton.data.height;
-    }
-  }
-}
-
-async function handleOpenDirectory() {
-  const file = await open({
-    multiple: false,
-    directory: true,
-  });
-  if (file) processPath([file]);
-}
-
-async function handleOpenArchiveFile() {
-  const file = await open({
-    multiple: false,
-    filters: [
-      {
-        name: "Archive",
-        extensions: ["zip", "7z"],
-      },
-    ],
-  });
-  if (file) processPath([file]);
-}
-
-async function handleOpenCurrentDirectory() {
-  if (!isInit) return;
-  const isWindows = navigator.userAgent.includes("Windows");
-  const currentDir = dirSelector[dirSelector.selectedIndex].value;
-  const sceneId = sceneSelector[sceneSelector.selectedIndex].value;
-  const path = await window.__TAURI__.path.join(currentDir, sceneId);
-  const dir = await window.__TAURI__.path.dirname(path);
-  if (isWindows) await openPath(dir.replace(/\//g, "\\"));
-  else await openPath(dir);
-}
-
-async function handleOpenExportDirectory() {
-  const isWindows = navigator.userAgent.includes("Windows");
-  const { downloadDir } = window.__TAURI__.path;
-  const dir = await downloadDir();
-  if (isWindows) await openPath(dir.replace(/\//g, "\\"));
-  else await openPath(dir);
-}
-
-async function handleOpenImage() {
-  const file = await open({
-    multiple: false,
-    filters: [
-      { name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
-    ],
-  });
-  if (!file) return;
-  document.body.style.backgroundColor = "";
-  document.body.style.backgroundImage = `url("${convertFileSrc(file)}")`;
-  document.body.style.backgroundSize = "cover";
-  document.body.style.backgroundPosition = "center";
-}
-
-async function handleRemoveImage() {
-  document.body.style.backgroundColor = "";
-  document.body.style.backgroundImage = `
-    linear-gradient(45deg, #fff 25%, transparent 0),
-    linear-gradient(45deg, transparent 75%, #fff 0),
-    linear-gradient(45deg, #fff 25%, transparent 0),
-    linear-gradient(45deg, transparent 75%, #fff 0)`;
-  document.body.style.backgroundSize = "32px 32px";
-  document.body.style.backgroundPosition =
-    "0 0, 16px 16px, 16px 16px, 32px 32px";
-}
-
-function handleColorPickerChange() {
-  document.body.style.backgroundColor = bgColorPicker.value;
-  document.body.style.backgroundImage = "none";
-}
-
-function handleWindowWidthChange() {
-  if (aspectRatioToggle.checked) {
-    const newWidth = Number(windowWidthInput.value);
-    const aspectRatio = Number(aspectRatioToggle.value);
-    windowHeightInput.value = Math.round(newWidth * aspectRatio);
-  }
-  if (windowWidthInput.value < 100) windowWidthInput.value = 100;
-  if (windowWidthInput.value > 10000) windowWidthInput.value = 10000;
-  if (windowHeightInput.value < 100) windowHeightInput.value = 100;
-  if (windowHeightInput.value > 10000) windowHeightInput.value = 10000;
-  const newWidth = Math.round(Number(windowWidthInput.value));
-  const newHeight = Math.round(Number(windowHeightInput.value));
-  getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
-  aspectRatioToggle.value = newHeight / newWidth;
-}
-
-function handleWindowHeightChange() {
-  if (aspectRatioToggle.checked) {
-    const newHeight = Number(windowHeightInput.value);
-    const aspectRatio = Number(aspectRatioToggle.value);
-    windowWidthInput.value = Math.round(newHeight / aspectRatio);
-  }
-  if (windowWidthInput.value < 100) windowWidthInput.value = 100;
-  if (windowWidthInput.value > 10000) windowWidthInput.value = 10000;
-  if (windowHeightInput.value < 100) windowHeightInput.value = 100;
-  if (windowHeightInput.value > 10000) windowHeightInput.value = 10000;
-  const newWidth = Math.round(Number(windowWidthInput.value));
-  const newHeight = Math.round(Number(windowHeightInput.value));
-  getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
-  aspectRatioToggle.value = newHeight / newWidth;
-}
-
-async function handleSetOriginalSize() {
-  if (!isInit) return;
-  const originalWidth = Math.round(Number(originalWidthInput.value));
-  const originalHeight = Math.round(Number(originalHeightInput.value));
-  await getCurrentWindow().setSize(
-    new PhysicalSize(originalWidth, originalHeight),
-  );
-  resetModelState();
-}
-
 function focusBody() {
   if (document.activeElement !== document.body) {
     document.activeElement.blur();
     document.body.focus();
   }
-}
-
-function handleKeyboardInput(e) {
-  const isInputFocused = document.activeElement.matches("input");
-  if (isInputFocused) return;
-  if (e.key !== "e" && !isInit) return;
-  switch (e.key) {
-    case "q":
-      previousDir();
-      break;
-    case "w":
-      nextDir();
-      break;
-    case "a":
-      previousScene();
-      break;
-    case "s":
-      nextScene();
-      break;
-    case "z":
-      previousAnimation();
-      break;
-    case "x":
-      nextAnimation();
-      break;
-    case "e":
-      toggleDialog();
-      break;
-    case "d":
-      exportImage();
-      break;
-    case "c":
-      exportAnimation();
-      break;
-  }
-  focusBody();
 }
 
 export function handleResize() {
@@ -379,11 +137,11 @@ export function handleResize() {
   spineCanvas.height = h;
   spineCanvas.style.width = `${w}px`;
   spineCanvas.style.height = `${h}px`;
-  windowWidthInput.value = w;
-  windowHeightInput.value = h;
-  aspectRatioToggle.value = h / w;
-  if (!isInit) return;
-  if (modelType === "live2d") {
+  setGlobalSetting("windowWidth", w);
+  setGlobalSetting("windowHeight", h);
+  setGlobalSetting("aspectRatio", h / w);
+  if (!isInitialized()) return;
+  if (isModelType("live2d")) {
     currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
   }
 }
@@ -393,20 +151,15 @@ function handleMouseOut() {
 }
 
 function handleMouseDown(e) {
-  if (dialog.open) return;
-  if (!isInit) return;
-  if (isProcessing) return;
+  if (getGlobalSetting("settingDialogOpen")) return;
+  if (!isInitialized()) return;
+  if (isProcessing()) return;
   if (e.button === 2) return;
   startX = e.clientX;
   startY = e.clientY;
   mouseDown = true;
   isMove =
     e.clientX < live2dCanvas.width - sidebarWidth && e.clientX > sidebarWidth;
-}
-
-function updateSidebarStyle(e) {
-  if (e.clientX <= sidebarWidth) sidebar.style.visibility = "visible";
-  else sidebar.style.visibility = "hidden";
 }
 
 function updateCursorStyle(e) {
@@ -416,13 +169,12 @@ function updateCursorStyle(e) {
 }
 
 function handleMouseMove(e) {
-  updateSidebarStyle(e);
   updateCursorStyle(e);
   if (!mouseDown) return;
   if (isMove) {
     moveX += e.clientX - startX;
     moveY += e.clientY - startY;
-    if (modelType === "live2d") {
+    if (isModelType("live2d")) {
       const { innerWidth: w, innerHeight: h } = window;
       currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
     }
@@ -431,7 +183,7 @@ function handleMouseMove(e) {
       (e.clientY - startY) *
       rotateStep *
       (e.clientX >= live2dCanvas.width - sidebarWidth ? 1 : -1);
-    if (modelType === "live2d") currentModel.rotation = rotate;
+    if (isModelType("live2d")) currentModel.rotation = rotate;
   }
   startX = e.clientX;
   startY = e.clientY;
@@ -443,7 +195,7 @@ function handleMouseUp() {
 }
 
 function handleWheel(e) {
-  if (!isInit) return;
+  if (!isInitialized()) return;
   if (e.clientX < sidebarWidth) return;
   const baseScaleStep = 0.1;
   const scaleFactor = 0.1;
@@ -452,7 +204,7 @@ function handleWheel(e) {
     scaleMax,
     Math.max(scaleMin, scale - Math.sign(e.deltaY) * scaleStep),
   );
-  if (modelType === "live2d") {
+  if (isModelType("live2d")) {
     const { innerWidth: w, innerHeight: h } = window;
     let _scale = Math.min(
       w / currentModel.internalModel.originalWidth,
@@ -463,8 +215,8 @@ function handleWheel(e) {
   }
 }
 
-function handlePMACheckboxChange() {
-  premultipliedAlpha = pmaCheckbox.checked;
+export function handlePMACheckboxChange(e) {
+  premultipliedAlpha = e.target.checked;
   focusBody();
 }
 
@@ -476,18 +228,20 @@ function findMaxNumberInString(inputString) {
   return maxNumber;
 }
 
-function setSceneIndex() {
-  const sceneIds = dirFiles[dirSelector[dirSelector.selectedIndex].value];
-  const maxNumber = findMaxNumberInString(sceneSelector.value);
-  createSceneSelector(sceneIds);
+function setSceneIndex(e) {
+  if (!(e.target instanceof HTMLSelectElement)) return;
+
+  const sceneIds = getFile(e.target.options[e.selectedIndex].value);
+  const maxNumber = findMaxNumberInString(e.target.value);
+  populateSceneSelector(sceneIds);
   let index = sceneIds.findIndex((item) => item.includes(maxNumber));
   index = index === -1 ? 0 : index;
   sceneIndex = index;
-  sceneSelector.selectedIndex = index;
+  setSelectorState("scene", { selectedIndex: index });
 }
 
-function handleDirChange() {
-  setSceneIndex();
+export function handleDirChange(e) {
+  setSceneIndex(e);
   dispose();
   init();
 }
@@ -497,7 +251,7 @@ function _handleSceneChange() {
   init();
 }
 
-function handleSceneChange(e) {
+export function handleSceneChange(e) {
   sceneIndex = e.target.selectedIndex;
   _handleSceneChange();
 }
@@ -522,8 +276,8 @@ function handleSpineAnimationChange(index) {
   }
 }
 
-function handleAnimationChange(e) {
-  if (modelType === "live2d") {
+export function handleAnimationChange(e) {
+  if (isModelType("live2d")) {
     const [motion, index] = e.target.value.split(",");
     handleLive2DAnimationChange(motion, index);
   } else {
@@ -532,11 +286,13 @@ function handleAnimationChange(e) {
   }
 }
 
+// FIXME: escaped selector
 export function restoreAnimation(animationName) {
-  const optionExists = Array.from(animationSelector.options).some(
-    (option) => option.value === animationName,
-  );
+  const optionExists = Array.from(
+    getSelectorCurrentState("animate").options,
+  ).some((option) => option.value === animationName);
   if (optionExists) {
+    const animationSelector = document.getElementById("animationSelector");
     animationSelector.value = animationName;
     animationSelector.dispatchEvent(new Event("change"));
   }
@@ -596,43 +352,8 @@ export function restoreSkins(skinFlags) {
   handleSkinCheckboxChange();
 }
 
-function handleSettingSelectorChange(e) {
-  setting = e.target.value;
-  resetSettingUI();
-}
-
-async function loadTranslations(lang) {
-  const response = await fetch(`../locales/${lang}.json`);
-  return await response.json();
-}
-
-function applyTranslations(translations) {
-  document.querySelectorAll("[data-i18n]").forEach((element) => {
-    const key = element.getAttribute("data-i18n");
-    if (translations[key]) {
-      element.textContent = translations[key];
-    }
-  });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
-    const key = element.getAttribute("data-i18n-placeholder");
-    if (translations[key]) {
-      element.placeholder = translations[key];
-    }
-  });
-}
-
-async function handleLanguageSelectorChange(e) {
-  const lang = e.target.value;
-  const translations = await loadTranslations(lang);
-  applyTranslations(translations);
-  localStorage.setItem("spive2d_language", lang);
-  if (languageSelector) {
-    languageSelector.value = lang;
-  }
-}
-
-export function handleFilterInput() {
-  const filterValue = filterBox.value.toLowerCase();
+export function handleFilterInput(e) {
+  const filterValue = e.target.value.toLowerCase();
   settingDiv.querySelectorAll(".item").forEach((item) => {
     const label = item.querySelector("label");
     const title = label.getAttribute("title").toLowerCase() || "";
@@ -718,8 +439,8 @@ function handleSkinCheckboxChange() {
   skeleton.setToSetupPose();
 }
 
-function handleSettingChange(e) {
-  switch (setting) {
+export function handleSettingChange(e) {
+  switch (getCurrentSetting()) {
     case "parameters":
       handleParameterSliderChange(e);
       break;

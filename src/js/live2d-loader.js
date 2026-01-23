@@ -1,10 +1,11 @@
-import { animationSelector, handleLive2DAnimationChange } from "./events.js";
+import { getSelectorCurrentState } from "../store.js";
 import {
-  createAnimationSelector,
-  createExpressionSelector,
-  resetUI,
-} from "./ui.js";
-const { convertFileSrc } = window.__TAURI__.core;
+  populateAnimateSelector,
+  populateExpressionSelector,
+} from "../utils.js";
+import { handleLive2DAnimationChange } from "./events.js";
+import { resetUI } from "./ui.js";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 const live2dCanvas = document.getElementById("live2dCanvas");
 let app = new PIXI.Application({
@@ -37,11 +38,12 @@ export async function loadLive2DModel(dirName, fileNames) {
   currentModel.position.set(w * 0.5, h * 0.5);
   app.stage.addChild(currentModel);
   const motions = currentModel.internalModel.motionManager.definitions;
-  if (motions) createAnimationSelector(motions);
+  if (motions) populateAnimateSelector(motions);
   const expressions =
     currentModel.internalModel.motionManager.expressionManager?.definitions;
-  if (expressions) createExpressionSelector(expressions);
-  const [motion, index] = animationSelector.value.split(",");
+  if (expressions) populateExpressionSelector(expressions);
+  const [motion, index] =
+    getSelectorCurrentState("animate").selected.value.split(",");
   handleLive2DAnimationChange(motion, index);
   resetUI();
 }

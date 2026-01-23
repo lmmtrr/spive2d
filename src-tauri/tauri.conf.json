@@ -4,7 +4,10 @@
   "version": "0.0.11",
   "identifier": "com.spive2d",
   "build": {
-    "frontendDist": "../src"
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,
