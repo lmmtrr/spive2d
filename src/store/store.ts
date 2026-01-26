@@ -1,6 +1,6 @@
+import { getDefaultStore } from "jotai";
 import type { Store } from "jotai/vanilla/store";
 import type { SetStateAction, WritableAtom } from "jotai";
-import { getDefaultStore } from "jotai";
 
 export const useSimpleAtom = <T>(
   atom: WritableAtom<T, [SetStateAction<T>], void>,
@@ -12,3 +12,5 @@ export const useSimpleAtom = <T>(
     atom,
   ] as const;
 };
+
+export const jotaiStore = getDefaultStore();

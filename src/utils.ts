@@ -1,55 +1,24 @@
-import {
-  resetAttachmentsCache,
-  resetConfiguration,
-  resetModelState,
-} from "./js/events";
+import { resetAttachmentsCache, resetConfiguration } from "./js/events";
 import { disposeLive2D, loadLive2DModel } from "./js/live2d-loader";
 import { disposeSpine, loadSpineModel } from "./js/spine-loader";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  getSelectorCurrentState,
-  getSelectorState,
+  getFile,
   isModelType,
-  setGlobalSetting,
+  isProcessing,
+  setFiles,
   setInitialize,
   setModelType,
-  setSelectorOptions,
   setSpinnerVisible,
 } from "./store";
-import { getSortableKey, sortByText } from "./sort";
-
-export const SpineVersions = [
-  "3.6",
-  "3.7",
-  "3.8",
-  "4.0",
-  "4.1",
-  "4.2",
-] as const;
-
-type Spine = (typeof SpineVersions)[number];
-
-const spines: Map<Spine, any> = new Map();
-export const getSpine = (version: Spine) => {
-  return spines.get(version);
-};
-export const setSpine = (version: Spine, spine: any) => {
-  spines.set(version, spine);
-};
-
-let _isProcessing = false;
-export const setProcessing = (status: boolean) => {
-  _isProcessing = status;
-};
-export const isProcessing = () => _isProcessing;
-
-let dirFiles: Record<string, any> = {};
-export const setFiles = (files: any) => {
-  dirFiles = files;
-};
-export const getFile = (dirname: string) => {
-  return dirFiles[dirname];
-};
+import { setGlobalSetting } from "./store/settings";
+import {
+  setSelectorOptions,
+  getSelectorCurrentState,
+  getSelectorState,
+} from "./store/selectors";
+import { resetModelState } from "./model-transform";
+import { getSortableKey, sortByText } from "./utils/sort";
 
 export const populateDirSelector = (dirs: string[]) => {
   setSelectorOptions(

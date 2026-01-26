@@ -1,7 +1,5 @@
-import {
-  isInitialized,
-  getSelectorCurrentState,
-} from "./store";
+import { isInitialized } from "./store";
+import { getSelectorCurrentState } from "./store/selectors";
 import { processPath } from "./utils.js";
 import { open } from "@tauri-apps/plugin-dialog";
 import { join, dirname, downloadDir } from "@tauri-apps/api/path";

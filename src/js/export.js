@@ -1,22 +1,20 @@
-import {
-  scale,
-  moveX,
-  moveY,
-  rotate,
-  resetModelState,
-  setModelState,
-  handleResize,
-  handleLive2DAnimationChange,
-} from "./events.js";
+import { handleLive2DAnimationChange } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { animationStates, skeletons } from "./spine-loader.js";
-import { setProcessing, isProcessing } from "../utils";
 import {
   getModelType,
-  getSelectorCurrentState,
   isModelType,
-  getGlobalSetting,
+  setProcessing,
+  isProcessing,
 } from "../store";
+import { getSelectorCurrentState } from "../store/selectors";
+import { getGlobalSetting } from "../store/settings";
+import { handleResize } from "../mouse";
+import {
+  setModelState,
+  resetModelState,
+  getModelState,
+} from "../model-transform";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
@@ -36,11 +34,12 @@ async function changeToOriginalSize(
   currentModel,
   skeletons,
 ) {
+  const modelState = getModelState();
   const prevActiveCanvasState = {
-    scale: scale,
-    moveX: moveX,
-    moveY: moveY,
-    rotate: rotate,
+    scale: modelState.scale,
+    moveX: modelState.movement.x,
+    moveY: modelState.movement.y,
+    rotate: modelState.rotate,
     width: activeCanvas.width,
     height: activeCanvas.height,
     styleWidth: activeCanvas.style.width,

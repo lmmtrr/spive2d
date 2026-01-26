@@ -11,13 +11,12 @@ import {
   navigateAndTriggerChange,
 } from "./js/events";
 import { useAtom } from "jotai";
+import { setCurrentSetting, settingAtom } from "./store";
 import {
   selectorOptionsAtom,
   selectorStatesAtom,
-  setCurrentSetting,
   setSelectorState,
-  settingAtom,
-} from "./store";
+} from "./store/selectors";
 import { addKeyboardListener } from "./keyboard";
 import { resetSettingUI } from "./js/ui";
 

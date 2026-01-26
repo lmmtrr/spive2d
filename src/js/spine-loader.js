@@ -1,20 +1,18 @@
 import {
   isFirstRender,
-  moveX,
-  moveY,
   premultipliedAlpha,
   removeAttachments,
   restoreAnimation,
   restoreSkins,
-  rotate,
   saveSkins,
-  scale,
   setFirstRenderFlag,
 } from "./events.js";
 import { resetUI } from "./ui.js";
-import { getSpine, populateAnimateSelector } from "../utils";
+import { populateAnimateSelector } from "../utils";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { getSelectorCurrentState } from "../store.js";
+import { getSpine } from "../store";
+import { getSelectorCurrentState } from "../store/selectors";
+import { getModelState } from "../model-transform";
 
 export let spine;
 let ctx;
@@ -195,18 +193,20 @@ export function resize() {
   const centerY = bounds.offset.y + bounds.size.y * 0.5;
   const scaleX = bounds.size.x / spineCanvas.width;
   const scaleY = bounds.size.y / spineCanvas.height;
+  const modelState = getModelState();
+
   let _scale = Math.max(scaleX, scaleY);
-  _scale /= scale;
+  _scale /= modelState.scale;
   const width = spineCanvas.width * _scale;
   const height = spineCanvas.height * _scale;
   mvp.ortho2d(
-    centerX - width * 0.5 - moveX * _scale,
-    centerY - height * 0.5 + moveY * _scale,
+    centerX - width * 0.5 - modelState.movement.x * _scale,
+    centerY - height * 0.5 + modelState.movement.y * _scale,
     width,
     height,
   );
-  const c = Math.cos(Math.PI * rotate);
-  const s = Math.sin(Math.PI * rotate);
+  const c = Math.cos(Math.PI * modelState.rotate);
+  const s = Math.sin(Math.PI * modelState.rotate);
   const rotateMatrix = new spine.Matrix4();
   rotateMatrix.set([c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   mvp.multiply(rotateMatrix);

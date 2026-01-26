@@ -1,4 +1,4 @@
-import { getSelectorCurrentState } from "../store.js";
+import { getSelectorCurrentState } from "../store/selectors";
 import {
   populateAnimateSelector,
   populateExpressionSelector,

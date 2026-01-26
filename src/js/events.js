@@ -1,52 +1,28 @@
 import { animationStates, skeletons, spine } from "./spine-loader.js";
 import { currentModel } from "./live2d-loader.js";
 import { resetSettingUI, createAttachmentUI } from "./ui.js";
+import { populateSceneSelector, processPath, dispose, init } from "../utils";
 import {
-  isProcessing,
   getFile,
-  populateSceneSelector,
-  processPath,
-  dispose,
-  init,
-} from "../utils";
-import {
-  setGlobalSetting,
-  getSelectorCurrentState,
+  isProcessing,
   isInitialized,
   isModelType,
-  setSelectorState,
-  getGlobalSetting,
   setCurrentSetting,
   getCurrentSetting,
 } from "../store";
+import { getGlobalSetting, setGlobalSetting } from "../store/settings";
+import { setSelectorState, getSelectorCurrentState } from "../store/selectors";
 const { convertFileSrc } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
 const { openPath } = window.__TAURI__.opener;
 const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
 
-const scaleMax = 8;
-const scaleMin = 0.5;
-const rotateStep = 0.001;
-export let scale = 1;
-export let moveX = 0;
-export let moveY = 0;
-export let rotate = 0;
 export let dirIndex = 0;
 export let sceneIndex = 0;
-let startX = 0;
-let startY = 0;
-let mouseDown = false;
-let isMove = false;
 export let isFirstRender = true;
 export let premultipliedAlpha = false;
 export let attachmentsCache = {};
 let opacities;
-
-const rootStyles = getComputedStyle(document.documentElement);
-// TODO
-const sidebarWidth = Number(
-  rootStyles.getPropertyValue("--sidebar-width").replace("px", ""),
-);
 
 const settingSelector = document.getElementById("settingSelector");
 const settingDiv = document.getElementById("setting");
@@ -75,42 +51,6 @@ export function resetConfiguration() {
   settingSelector.disabled = false;
 }
 
-export function resetModelState() {
-  scale = 1;
-  moveX = 0;
-  moveY = 0;
-  rotate = 0;
-  if (!isInitialized()) return;
-  if (isModelType("live2d")) {
-    const { innerWidth: w, innerHeight: h } = window;
-    let _scale = Math.min(
-      w / currentModel.internalModel.originalWidth,
-      h / currentModel.internalModel.originalHeight,
-    );
-    _scale *= scale;
-    currentModel.scale.set(_scale);
-    currentModel.position.set(w * 0.5, h * 0.5);
-    currentModel.rotation = 0;
-  }
-}
-
-export function setModelState(_scale, _moveX, _moveY, _rotate) {
-  scale = _scale;
-  moveX = _moveX;
-  moveY = _moveY;
-  rotate = _rotate;
-}
-
-export function setupEventListeners() {
-  window.addEventListener("contextmenu", (e) => e.preventDefault());
-  window.addEventListener("resize", handleResize);
-  document.addEventListener("mouseout", handleMouseOut);
-  document.addEventListener("mousedown", handleMouseDown);
-  document.addEventListener("mousemove", handleMouseMove);
-  document.addEventListener("mouseup", handleMouseUp);
-  document.addEventListener("wheel", handleWheel);
-}
-
 export function navigateAndTriggerChange(selector, delta) {
   const optionsLength = selector.options.length;
   if (optionsLength === 1) return;
@@ -124,94 +64,6 @@ function focusBody() {
   if (document.activeElement !== document.body) {
     document.activeElement.blur();
     document.body.focus();
-  }
-}
-
-export function handleResize() {
-  const { innerWidth: w, innerHeight: h } = window;
-  live2dCanvas.width = w;
-  live2dCanvas.height = h;
-  live2dCanvas.style.width = `${w}px`;
-  live2dCanvas.style.height = `${h}px`;
-  spineCanvas.width = w;
-  spineCanvas.height = h;
-  spineCanvas.style.width = `${w}px`;
-  spineCanvas.style.height = `${h}px`;
-  setGlobalSetting("windowWidth", w);
-  setGlobalSetting("windowHeight", h);
-  setGlobalSetting("aspectRatio", h / w);
-  if (!isInitialized()) return;
-  if (isModelType("live2d")) {
-    currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
-  }
-}
-
-function handleMouseOut() {
-  handleMouseUp();
-}
-
-function handleMouseDown(e) {
-  if (getGlobalSetting("settingDialogOpen")) return;
-  if (!isInitialized()) return;
-  if (isProcessing()) return;
-  if (e.button === 2) return;
-  startX = e.clientX;
-  startY = e.clientY;
-  mouseDown = true;
-  isMove =
-    e.clientX < live2dCanvas.width - sidebarWidth && e.clientX > sidebarWidth;
-}
-
-function updateCursorStyle(e) {
-  document.body.style.cursor = "default";
-  if (e.clientX >= live2dCanvas.width - sidebarWidth)
-    document.body.style.cursor = `url("../cursors/rotate_right.svg"), auto`;
-}
-
-function handleMouseMove(e) {
-  updateCursorStyle(e);
-  if (!mouseDown) return;
-  if (isMove) {
-    moveX += e.clientX - startX;
-    moveY += e.clientY - startY;
-    if (isModelType("live2d")) {
-      const { innerWidth: w, innerHeight: h } = window;
-      currentModel.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
-    }
-  } else if (e.clientX >= live2dCanvas.width - sidebarWidth) {
-    rotate +=
-      (e.clientY - startY) *
-      rotateStep *
-      (e.clientX >= live2dCanvas.width - sidebarWidth ? 1 : -1);
-    if (isModelType("live2d")) currentModel.rotation = rotate;
-  }
-  startX = e.clientX;
-  startY = e.clientY;
-}
-
-function handleMouseUp() {
-  mouseDown = false;
-  isMove = false;
-}
-
-function handleWheel(e) {
-  if (!isInitialized()) return;
-  if (e.clientX < sidebarWidth) return;
-  const baseScaleStep = 0.1;
-  const scaleFactor = 0.1;
-  const scaleStep = baseScaleStep + Math.abs(scale - 1) * scaleFactor;
-  scale = Math.min(
-    scaleMax,
-    Math.max(scaleMin, scale - Math.sign(e.deltaY) * scaleStep),
-  );
-  if (isModelType("live2d")) {
-    const { innerWidth: w, innerHeight: h } = window;
-    let _scale = Math.min(
-      w / currentModel.internalModel.originalWidth,
-      h / currentModel.internalModel.originalHeight,
-    );
-    _scale *= scale;
-    currentModel.scale.set(_scale);
   }
 }
 

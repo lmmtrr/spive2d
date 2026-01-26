@@ -1,16 +1,14 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { resetModelState } from "./js/events";
+import { resetModelState } from "./model-transform";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
+import { isInitialized, isModelType, subscribe } from "./store";
 import {
-  isInitialized,
-  setGlobalSetting,
   globalSettingsAtom,
   getGlobalSetting,
-  isModelType,
-  jotaiStore,
-} from "./store";
+  setGlobalSetting,
+} from "./store/settings";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import {
   handleOpenArchiveFile,
@@ -99,7 +97,7 @@ const Dialog: React.FC = () => {
         if (!ref) return;
 
         ref.showModal();
-        jotaiStore.sub(globalSettingsAtom, () => {
+        subscribe(globalSettingsAtom, () => {
           if (getGlobalSetting("settingDialogOpen")) {
             ref.showModal();
           } else {

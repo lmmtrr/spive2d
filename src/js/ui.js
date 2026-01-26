@@ -2,7 +2,7 @@ import { attachmentsCache, handleFilterInput, setOpacities } from "./events.js";
 import { currentModel } from "./live2d-loader.js";
 import { skeletons } from "./spine-loader.js";
 import { getCurrentSetting, isModelType } from "../store";
-import { sortByName, sortById } from "../sort";
+import { sortByName, sortById } from "../utils/sort";
 
 const UIElements = {
   parameters: document.getElementById("parameters"),
