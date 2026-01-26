@@ -4,21 +4,20 @@ import {
   handleAnimationChange,
   handleDirChange,
   handleExpressionChange,
-  handleFilterInput,
-  handlePMACheckboxChange,
   handleSceneChange,
-  handleSettingChange,
   navigateAndTriggerChange,
 } from "./js/events";
 import { useAtom } from "jotai";
-import { setCurrentSetting, settingAtom } from "./store";
+import { modelTypeAtom, setCurrentSetting, settingAtom } from "./store";
 import {
   selectorOptionsAtom,
   selectorStatesAtom,
   setSelectorState,
 } from "./store/selectors";
 import { addKeyboardListener } from "./keyboard";
-import { resetSettingUI } from "./js/ui";
+import { resetSettingUI } from "./utils";
+import SpineSettings from "./SpineSettings";
+import Live2dSetting from "./Live2dSetting";
 
 const Sidebar: React.FC = () => {
   const { t } = useTranslation();
@@ -26,6 +25,7 @@ const Sidebar: React.FC = () => {
   const [selectorOptions] = useAtom(selectorOptionsAtom);
   const [selectorStates] = useAtom(selectorStatesAtom);
   const [setting] = useAtom(settingAtom);
+  const [modelType] = useAtom(modelTypeAtom);
 
   React.useEffect(() => {
     const rootStyles = getComputedStyle(document.documentElement);
@@ -44,6 +44,10 @@ const Sidebar: React.FC = () => {
 
     return () => document.removeEventListener("mousemove", onMouseMove);
   }, []);
+
+  React.useEffect(() => {
+    resetSettingUI();
+  }, [setting]);
 
   return (
     <div id="sidebar" ref={rootRef}>
@@ -147,58 +151,40 @@ const Sidebar: React.FC = () => {
         id="settingSelector"
         onChange={(e) => {
           setCurrentSetting(e.target.value);
-          resetSettingUI();
         }}
         value={setting}
+        ref={(ref) => {
+          if (!ref) return;
+          if (!setting) {
+            setCurrentSetting(ref.options[0].value);
+          }
+        }}
       >
-        <option id="parameters" value="parameters">
-          {t("parameters")}
-        </option>
-        <option id="parts" value="parts">
-          {t("parts")}
-        </option>
-        <option id="drawables" value="drawables">
-          {t("drawables")}
-        </option>
-        <option id="attachments" value="attachments">
-          {t("attachments")}
-        </option>
-        <option id="skins" value="skins">
-          {t("skins")}
-        </option>
+        {modelType === "live2d" ? (
+          <>
+            <option id="parameters" value="parameters">
+              {t("parameters")}
+            </option>
+            <option id="parts" value="parts">
+              {t("parts")}
+            </option>
+            <option id="drawables" value="drawables">
+              {t("drawables")}
+            </option>
+          </>
+        ) : (
+          <>
+            <option id="attachments" value="attachments">
+              {t("attachments")}
+            </option>
+            <option id="skins" value="skins">
+              {t("skins")}
+            </option>
+          </>
+        )}
       </select>
-      <div className="item" id="pmaDiv">
-        <label title="premultipliedAlpha">
-          <span>{t("premultipliedAlpha")}</span>
-          <input
-            type="checkbox"
-            onChange={(e) => {
-              handlePMACheckboxChange(e);
-            }}
-          />
-        </label>
-      </div>
-      <input
-        type="text"
-        id="filterBox"
-        placeholder={t("filter")}
-        autoComplete="off"
-        onChange={(e) => {
-          handleFilterInput(e);
-        }}
-      />
-      <div
-        id="setting"
-        onInput={(e) => {
-          handleSettingChange(e);
-        }}
-      >
-        <div id="parameter"></div>
-        <div id="part"></div>
-        <div id="drawable"></div>
-        <div id="attachment"></div>
-        <div id="skin"></div>
-      </div>
+      {modelType === "live2d" && <Live2dSetting />}
+      {modelType === "spine" && <SpineSettings />}
     </div>
   );
 };

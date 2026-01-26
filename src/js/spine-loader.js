@@ -1,16 +1,13 @@
 import {
-  isFirstRender,
   premultipliedAlpha,
   removeAttachments,
   restoreAnimation,
   restoreSkins,
   saveSkins,
-  setFirstRenderFlag,
 } from "./events.js";
-import { resetUI } from "./ui.js";
-import { populateAnimateSelector } from "../utils";
+import { resetUI, populateAnimateSelector } from "../utils";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { getSpine } from "../store";
+import { getSpine, isFirstRender, setFirstRenderFlag } from "../store";
 import { getSelectorCurrentState } from "../store/selectors";
 import { getModelState } from "../model-transform";
 
@@ -174,7 +171,7 @@ function render() {
     batcher.end();
     shader.unbind();
   }
-  if (isFirstRender) {
+  if (isFirstRender()) {
     const animationName = getSelectorCurrentState("animate").selected.value;
     const skinFlags = saveSkins();
     resetUI();

@@ -1,9 +1,48 @@
-import { isInitialized } from "./store";
+import { isInitialized, isProcessing, setFiles, setInitialize, setSpinnerVisible } from "./store";
 import { getSelectorCurrentState } from "./store/selectors";
-import { processPath } from "./utils.js";
 import { open } from "@tauri-apps/plugin-dialog";
 import { join, dirname, downloadDir } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { invoke } from "@tauri-apps/api/core";
+import { getSortableKey } from "./utils/sort";
+import { dispose, init, populateDirSelector, populateSceneSelector } from "./utils";
+import { resetAttachmentsCache } from "./js/events";
+import { setGlobalSetting } from "./store/settings";
+
+export async function processPath(paths: string[]) {
+  if (isProcessing()) return;
+  setInitialize(false);
+  if (paths.length === 1) {
+    const path = paths[0];
+    try {
+      const _dirFiles = await invoke<any>("handle_dropped_path", {
+        path: path,
+      });
+      const dirs = Object.keys(_dirFiles);
+      dirs.sort((a, b) => {
+        const keyA = getSortableKey(a);
+        const keyB = getSortableKey(b);
+        if (keyA < keyB) return -1;
+        if (keyA > keyB) return 1;
+        return 0;
+      });
+      setFiles(_dirFiles);
+      const sceneIds = _dirFiles[dirs[0]];
+      if (dirs.length > 0) {
+        populateDirSelector(dirs);
+        populateSceneSelector(sceneIds);
+        resetAttachmentsCache();
+        dispose();
+        init();
+        setInitialize(true);
+        setGlobalSetting("settingDialogOpen", false);
+      }
+    } catch (error) {
+      console.error("Error handling dropped path:", error);
+      setSpinnerVisible(false);
+    }
+  }
+}
 
 export async function handleOpenDirectory() {
   const file = await open({

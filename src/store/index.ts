@@ -9,7 +9,7 @@ export const [isInitialized, setInitialize, isInitAtom] = useSimpleAtom(
   jotaiStore,
 );
 
-export const [getModelType, setModelType] = useSimpleAtom(
+export const [getModelType, setModelType, modelTypeAtom] = useSimpleAtom(
   atom<"live2d" | "spine">("live2d"),
   jotaiStore,
 );
@@ -52,3 +52,9 @@ export const setFiles = (files: any) => {
 export const getFile = (dirname: string) => {
   return dirFiles[dirname];
 };
+
+let firstRender = true;
+export const isFirstRender = () => firstRender;
+export function setFirstRenderFlag(flag: boolean) {
+  firstRender = flag;
+}

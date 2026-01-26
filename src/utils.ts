@@ -1,24 +1,23 @@
-import { resetAttachmentsCache, resetConfiguration } from "./js/events";
+import { handleFilterInput } from "./js/events";
 import { disposeLive2D, loadLive2DModel } from "./js/live2d-loader";
 import { disposeSpine, loadSpineModel } from "./js/spine-loader";
-import { invoke } from "@tauri-apps/api/core";
 import {
+  getCurrentSetting,
   getFile,
   isModelType,
-  isProcessing,
-  setFiles,
-  setInitialize,
+  setCurrentSetting,
+  setFirstRenderFlag,
   setModelType,
-  setSpinnerVisible,
 } from "./store";
-import { setGlobalSetting } from "./store/settings";
 import {
   setSelectorOptions,
   getSelectorCurrentState,
   getSelectorState,
 } from "./store/selectors";
 import { resetModelState } from "./model-transform";
-import { getSortableKey, sortByText } from "./utils/sort";
+import { sortByText } from "./utils/sort";
+import { createDrawables, createParameters, createParts } from "./store/live2d";
+import { createAttachments, createSkins } from "./store/spine";
 
 export const populateDirSelector = (dirs: string[]) => {
   setSelectorOptions(
@@ -84,6 +83,20 @@ export function dispose() {
   else disposeSpine();
 }
 
+function resetConfiguration() {
+  const settingSelector = document.getElementById(
+    "settingSelector",
+  )! as HTMLSelectElement;
+
+  setFirstRenderFlag(true);
+  if (isModelType("live2d")) {
+    setCurrentSetting("parameters");
+  } else {
+    setCurrentSetting("attachments");
+  }
+  settingSelector.disabled = false;
+}
+
 export function init() {
   const dirName = getSelectorCurrentState("dir").selected.value;
   const fileNames = getFile(dirName)[getSelectorState("scene").selectedIndex];
@@ -99,37 +112,33 @@ export function init() {
   resetModelState();
 }
 
-export async function processPath(paths: string[]) {
-  if (isProcessing()) return;
-  setInitialize(false);
-  if (paths.length === 1) {
-    const path = paths[0];
-    try {
-      const _dirFiles = await invoke<any>("handle_dropped_path", {
-        path: path,
-      });
-      const dirs = Object.keys(_dirFiles);
-      dirs.sort((a, b) => {
-        const keyA = getSortableKey(a);
-        const keyB = getSortableKey(b);
-        if (keyA < keyB) return -1;
-        if (keyA > keyB) return 1;
-        return 0;
-      });
-      setFiles(_dirFiles);
-      const sceneIds = _dirFiles[dirs[0]];
-      if (dirs.length > 0) {
-        populateDirSelector(dirs);
-        populateSceneSelector(sceneIds);
-        resetAttachmentsCache();
-        dispose();
-        init();
-        setInitialize(true);
-        setGlobalSetting("settingDialogOpen", false);
-      }
-    } catch (error) {
-      console.error("Error handling dropped path:", error);
-      setSpinnerVisible(false);
-    }
+export function resetUI() {
+  if (isModelType("live2d")) {
+    createParameters();
+    createParts();
+    createDrawables();
+  } else if (isModelType("spine")) {
+    createAttachments();
+    createSkins();
   }
+  const settingElement = document.getElementById("setting");
+  if (settingElement) {
+    settingElement.scrollTop = 0;
+  }
+  handleFilterInput();
+}
+
+export function resetSettingUI() {
+  const panelMap = {
+    parameters: document.getElementById("parameter"),
+    parts: document.getElementById("part"),
+    drawables: document.getElementById("drawable"),
+    attachments: document.getElementById("attachment"),
+    skins: document.getElementById("skin"),
+  };
+  Object.entries(panelMap).forEach(([pk, panel]) => {
+    if (!panel) return;
+    if (pk === getCurrentSetting()) panel.style.display = "block";
+    else panel.style.display = "none";
+  });
 }

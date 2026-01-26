@@ -1,4 +1,3 @@
-import { processPath } from "./utils";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import en from "./locales/en.json";
@@ -14,6 +13,7 @@ import {
   handleResize,
   handleWheel,
 } from "./mouse";
+import { processPath } from "./path";
 
 const SpineVersions = ["3.6", "3.7", "3.8", "4.0", "4.1", "4.2"] as const;
 

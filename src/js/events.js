@@ -1,7 +1,6 @@
 import { animationStates, skeletons, spine } from "./spine-loader.js";
 import { currentModel } from "./live2d-loader.js";
-import { resetSettingUI, createAttachmentUI } from "./ui.js";
-import { populateSceneSelector, processPath, dispose, init } from "../utils";
+import { populateSceneSelector, dispose, init } from "../utils";
 import {
   getFile,
   isProcessing,
@@ -12,10 +11,11 @@ import {
 } from "../store";
 import { getGlobalSetting, setGlobalSetting } from "../store/settings";
 import { setSelectorState, getSelectorCurrentState } from "../store/selectors";
-const { convertFileSrc } = window.__TAURI__.core;
-const { open } = window.__TAURI__.dialog;
-const { openPath } = window.__TAURI__.opener;
-const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
+import { createAttachments } from "../store/spine";
 
 export let dirIndex = 0;
 export let sceneIndex = 0;
@@ -24,8 +24,6 @@ export let premultipliedAlpha = false;
 export let attachmentsCache = {};
 let opacities;
 
-const settingSelector = document.getElementById("settingSelector");
-const settingDiv = document.getElementById("setting");
 const skin = document.getElementById("skin");
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
@@ -33,22 +31,6 @@ const openDirectoryButton = document.getElementById("openDirectoryButton");
 
 export function setOpacities(value) {
   opacities = value;
-}
-
-export function setFirstRenderFlag(flag) {
-  isFirstRender = flag;
-}
-
-export function resetConfiguration() {
-  isFirstRender = true;
-  if (isModelType("live2d")) {
-    setCurrentSetting("parameters");
-    settingSelector.value = "parameters";
-  } else {
-    setCurrentSetting("attachments");
-    settingSelector.value = "attachments";
-  }
-  settingSelector.disabled = false;
 }
 
 export function navigateAndTriggerChange(selector, delta) {
@@ -134,7 +116,7 @@ export function handleAnimationChange(e) {
     handleLive2DAnimationChange(motion, index);
   } else {
     handleSpineAnimationChange(e.target.selectedIndex);
-    createAttachmentUI();
+    createAttachments();
   }
 }
 
@@ -204,8 +186,9 @@ export function restoreSkins(skinFlags) {
   handleSkinCheckboxChange();
 }
 
-export function handleFilterInput(e) {
-  const filterValue = e.target.value.toLowerCase();
+export function handleFilterInput(value) {
+  const filterValue = value?.toLowerCase() ?? "";
+  const settingDiv = document.getElementById("setting");
   settingDiv.querySelectorAll(".item").forEach((item) => {
     const label = item.querySelector("label");
     const title = label.getAttribute("title").toLowerCase() || "";
@@ -214,31 +197,13 @@ export function handleFilterInput(e) {
   });
 }
 
-function handleParameterSliderChange(e) {
-  const inputs = Array.from(
-    document
-      .getElementById("parameter")
-      .querySelectorAll('input[type="range"]'),
-  );
-  const index = inputs.indexOf(e.target);
-  const parameterValues = currentModel.internalModel.coreModel._parameterValues;
-  parameterValues[index] = e.target.value;
-}
-
-function handlePartCheckboxChange(e) {
-  currentModel.internalModel.coreModel.setPartOpacityById(
-    e.target.previousSibling.textContent,
-    +e.target.checked,
-  );
-}
-
-function handleDrawableCheckboxChange(e) {
+export function handleDrawableCheckboxChange(e) {
   opacities[Number(e.target.getAttribute("data-old-index"))] =
     +e.target.checked;
   currentModel.internalModel.coreModel._model.drawables.opacities = opacities;
 }
 
-function handleAttachmentCheckboxChange(e) {
+export function handleAttachmentCheckboxChange(e) {
   const skeleton = skeletons["0"].skeleton;
   const targetCheckbox = e.target.closest('input[type="checkbox"]');
   const name = targetCheckbox.closest("label").getAttribute("title");
@@ -289,25 +254,4 @@ function handleSkinCheckboxChange() {
   });
   skeleton.setSkin(newSkin);
   skeleton.setToSetupPose();
-}
-
-export function handleSettingChange(e) {
-  switch (getCurrentSetting()) {
-    case "parameters":
-      handleParameterSliderChange(e);
-      break;
-    case "parts":
-      handlePartCheckboxChange(e);
-      break;
-    case "drawables":
-      handleDrawableCheckboxChange(e);
-      break;
-    case "attachments":
-      handleAttachmentCheckboxChange(e);
-      break;
-    case "skins":
-      handleSkinCheckboxChange();
-      break;
-  }
-  focusBody();
 }

@@ -2,9 +2,9 @@ import { getSelectorCurrentState } from "../store/selectors";
 import {
   populateAnimateSelector,
   populateExpressionSelector,
-} from "../utils.js";
+  resetUI,
+} from "../utils";
 import { handleLive2DAnimationChange } from "./events.js";
-import { resetUI } from "./ui.js";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 const live2dCanvas = document.getElementById("live2dCanvas");
