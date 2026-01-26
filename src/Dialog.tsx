@@ -54,7 +54,7 @@ const Dialog: React.FC = () => {
   }
 
   function toggleDialog() {
-    if (settings.settingDialogOpen) {
+    if (getGlobalSetting('settingDialogOpen')) {
       setGlobalSetting("settingDialogOpen", false);
     } else {
       setGlobalSetting("settingDialogOpen", true);
@@ -80,6 +80,7 @@ const Dialog: React.FC = () => {
   React.useEffect(() => {
     addKeyboardListener("e", toggleDialog);
 
+    toggleDialog();
     const savedLang = localStorage.getItem("spive2d_language") || "en";
     handleLanguageSelectorChange({ target: { value: savedLang } });
 
@@ -96,7 +97,6 @@ const Dialog: React.FC = () => {
       ref={(ref) => {
         if (!ref) return;
 
-        ref.showModal();
         subscribe(globalSettingsAtom, () => {
           if (getGlobalSetting("settingDialogOpen")) {
             ref.showModal();

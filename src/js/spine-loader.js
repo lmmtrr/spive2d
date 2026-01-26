@@ -1,4 +1,5 @@
 import {
+  handleFilterInput,
   premultipliedAlpha,
   removeAttachments,
   restoreAnimation,
@@ -76,6 +77,7 @@ export async function loadSpineModel(dirName, fileNames) {
   ctx = new spine.ManagedWebGLRenderingContext(spineCanvas, {
     preserveDrawingBuffer: true,
   });
+  ctx.gl.pixelStorei(ctx.gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultipliedAlpha);
   shader = spine.Shader.newTwoColoredTextured(ctx);
   batcher = new spine.PolygonBatcher(ctx);
   skeletonRenderer = new spine.SkeletonRenderer(ctx);
@@ -133,8 +135,17 @@ function loadSkeleton(fileName) {
     assetManager.get(`${_dirName}${fileName}${skelExt}`),
   );
   const skeleton = new spine.Skeleton(skeletonData);
-  if (skeleton.data.skins.length > 1)
+
+  if (
+    skeleton.data.skins[0].name === "default" &&
+    skeleton.data.skins.length > 1
+  )
     skeleton.setSkinByName(skeleton.data.skins[1].name);
+  else skeleton.setSkinByName(skeleton.data.skins[0].name);
+
+  if (!skeleton.data.defaultSkin)
+    skeleton.data.defaultSkin = new spine.Skin("default");
+
   const bounds = calculateSetupPoseBounds(skeleton);
   const animationStateData = new spine.AnimationStateData(skeleton.data);
   const animationState = new spine.AnimationState(animationStateData);
@@ -172,14 +183,15 @@ function render() {
     shader.unbind();
   }
   if (isFirstRender()) {
-    const animationName = getSelectorCurrentState("animate").selected.value;
     const skinFlags = saveSkins();
     resetUI();
     populateAnimateSelector(skeletons["0"].skeleton.data.animations);
+    const animationName = getSelectorCurrentState("animate").selected.value;
     restoreAnimation(animationName);
     restoreSkins(skinFlags);
     removeAttachments();
     setFirstRenderFlag(false);
+    handleFilterInput();
   }
   requestId = requestAnimationFrame(render);
 }
@@ -208,6 +220,13 @@ export function resize() {
   rotateMatrix.set([c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   mvp.multiply(rotateMatrix);
   ctx.gl.viewport(0, 0, spineCanvas.width, spineCanvas.height);
+}
+
+export async function reloadSpine() {
+  if (_dirName && _fileNames) {
+    disposeSpine();
+    await loadSpineModel(_dirName, _fileNames);
+  }
 }
 
 export function disposeSpine() {

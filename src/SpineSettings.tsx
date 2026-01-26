@@ -16,6 +16,11 @@ const SpineSettings: React.FC = ({}) => {
   const [skins] = useAtom(skinsAtom);
   const { t } = useTranslation();
 
+  let defaultIndex = 0;
+  if (skins.length > 1 && skins[0].name === "default") {
+    defaultIndex = 1;
+  }
+
   return (
     <>
       <div className="item" id="pmaDiv">
@@ -43,7 +48,7 @@ const SpineSettings: React.FC = ({}) => {
                   <input
                     type="checkbox"
                     data-old-index={index}
-                    checked={isChecked}
+                    defaultChecked={isChecked}
                     onChange={handleAttachmentCheckboxChange}
                   />
                 </label>
@@ -52,13 +57,14 @@ const SpineSettings: React.FC = ({}) => {
           })}
         </div>
         <div id="skin">
-          {skins.map(([name]) => (
+          {skins.map(([name], index) => (
             // FIXME state
             <div className="item" key={name}>
               <label title={name}>
                 {name}
                 <input
                   type="checkbox"
+                  defaultChecked={defaultIndex === index}
                   onChange={(e) => {
                     // @ts-ignore
                     const skeleton = skeletons["0"].skeleton;

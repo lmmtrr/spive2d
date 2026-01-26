@@ -24,7 +24,6 @@ export let premultipliedAlpha = false;
 export let attachmentsCache = {};
 let opacities;
 
-const skin = document.getElementById("skin");
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
 const openDirectoryButton = document.getElementById("openDirectoryButton");
@@ -136,6 +135,23 @@ export function resetAttachmentsCache() {
   attachmentsCache = {};
 }
 
+function getSkinAttachment(slotIndex, name, defaultSkin, skeleton) {
+  let attachment = defaultSkin.getAttachment(slotIndex, name);
+  let key = name;
+  if (!attachment) {
+    const slot = skeleton.slots[slotIndex];
+    if (slot && slot.data.attachmentName) {
+      const altKey = slot.data.attachmentName;
+      const altAtt = defaultSkin.getAttachment(slotIndex, altKey);
+      if (altAtt && altAtt.name === name) {
+        attachment = altAtt;
+        key = altKey;
+      }
+    }
+  }
+  return { attachment, key };
+}
+
 export function removeAttachments() {
   const attachmentNames = Object.keys(attachmentsCache);
   if (attachmentNames.length > 0) {
@@ -149,17 +165,48 @@ export function removeAttachments() {
           checkbox.checked = false;
           const defaultSkin = skeleton.data.defaultSkin;
           const slotIndex = Number(checkbox.getAttribute("data-old-index"));
-          const currentAttachment = defaultSkin.getAttachment(slotIndex, name);
-          attachmentsCache[name] = [slotIndex, currentAttachment];
-          defaultSkin.removeAttachment(slotIndex, name);
+          const { attachment: currentAttachment, key: skinKey } =
+            getSkinAttachment(slotIndex, name, defaultSkin, skeleton);
+          if (currentAttachment) {
+            attachmentsCache[name] = [
+              slotIndex,
+              currentAttachment,
+              true,
+              skinKey,
+            ];
+            defaultSkin.removeAttachment(slotIndex, skinKey);
+          } else {
+            const slot = skeleton.slots[slotIndex];
+            if (slot && slot.attachment && slot.attachment.name === name) {
+              attachmentsCache[name] = [
+                slotIndex,
+                slot.attachment,
+                false,
+                null,
+              ];
+              slot.attachment = null;
+            }
+          }
         }
       });
     });
     skeleton.setToSetupPose();
+    syncHiddenAttachments();
   }
 }
 
+function syncHiddenAttachments() {
+  const skeleton = skeletons["0"].skeleton;
+  Object.values(attachmentsCache).forEach(([slotIndex, , wasFromSkin]) => {
+    if (!wasFromSkin) {
+      const slot = skeleton.slots[slotIndex];
+      if (slot) slot.attachment = null;
+    }
+  });
+}
+
 function getCheckedSkinNames() {
+  const skin = document.getElementById("skin");
   const checkboxes = skin.querySelectorAll("input[type='checkbox']:checked");
   return Array.from(checkboxes).map(
     (checkbox) => checkbox.parentElement.textContent,
@@ -167,6 +214,7 @@ function getCheckedSkinNames() {
 }
 
 export function saveSkins() {
+  const skin = document.getElementById("skin");
   const skinFlags = [];
   const checkedSkinNames = getCheckedSkinNames();
   const allCheckboxes = skin.querySelectorAll("input[type='checkbox']");
@@ -179,9 +227,12 @@ export function saveSkins() {
 }
 
 export function restoreSkins(skinFlags) {
+  const skin = document.getElementById("skin");
   const checkboxes = skin.querySelectorAll('input[type="checkbox"]');
   checkboxes.forEach((checkbox, index) => {
-    checkbox.checked = skinFlags[index];
+    if (skinFlags[index] !== undefined) {
+      checkbox.checked = skinFlags[index];
+    }
   });
   handleSkinCheckboxChange();
 }
@@ -211,10 +262,14 @@ export function handleAttachmentCheckboxChange(e) {
   const defaultSkin = skeleton.data.defaultSkin;
   if (targetCheckbox.checked) {
     if (attachmentsCache[name]) {
-      const [cachedSlotIndex, cachedAttachment, wasFromSkin] =
+      const [cachedSlotIndex, cachedAttachment, wasFromSkin, savedSkinKey] =
         attachmentsCache[name];
       if (wasFromSkin) {
-        defaultSkin.setAttachment(cachedSlotIndex, name, cachedAttachment);
+        defaultSkin.setAttachment(
+          cachedSlotIndex,
+          savedSkinKey || name,
+          cachedAttachment,
+        );
         skeleton.setToSetupPose();
       } else {
         const slot = skeleton.slots[cachedSlotIndex];
@@ -225,22 +280,29 @@ export function handleAttachmentCheckboxChange(e) {
       delete attachmentsCache[name];
     }
   } else {
-    const currentAttachment = defaultSkin.getAttachment(slotIndex, name);
+    const { attachment: currentAttachment, key: skinKey } = getSkinAttachment(
+      slotIndex,
+      name,
+      defaultSkin,
+      skeleton
+    );
     if (currentAttachment) {
-      attachmentsCache[name] = [slotIndex, currentAttachment, true];
+      attachmentsCache[name] = [slotIndex, currentAttachment, true, skinKey];
       defaultSkin.removeAttachment(slotIndex, name);
       skeleton.setToSetupPose();
     } else {
       const slot = skeleton.slots[slotIndex];
       if (slot && slot.attachment && slot.attachment.name === name) {
-        attachmentsCache[name] = [slotIndex, slot.attachment, false];
+        attachmentsCache[name] = [slotIndex, slot.attachment, false, null];
         slot.attachment = null;
       }
     }
   }
+  syncHiddenAttachments();
 }
 
 function handleSkinCheckboxChange() {
+  const skin = document.getElementById("skin");
   const skeleton = skeletons["0"].skeleton;
   const newSkin = new spine.Skin("_");
   const checkboxes = skin.querySelectorAll("input[type='checkbox']");
@@ -254,4 +316,5 @@ function handleSkinCheckboxChange() {
   });
   skeleton.setSkin(newSkin);
   skeleton.setToSetupPose();
+  syncHiddenAttachments();
 }

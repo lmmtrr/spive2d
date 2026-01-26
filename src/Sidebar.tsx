@@ -130,23 +130,25 @@ const Sidebar: React.FC = () => {
           </option>
         ))}
       </select>
-      <select
-        id="expressionSelector"
-        value={selectorStates["expression"]?.value}
-        onChange={(e) => {
-          handleExpressionChange(e);
-          setSelectorState("expression", {
-            selectedIndex: Number(e.target.selectedIndex),
-            value: e.target.value,
-          });
-        }}
-      >
-        {selectorOptions["expression"]?.map((dir) => (
-          <option value={dir.value} key={dir.value}>
-            {dir.label}
-          </option>
-        ))}
-      </select>
+      {modelType === "spine" && (
+        <select
+          id="expressionSelector"
+          value={selectorStates["expression"]?.value}
+          onChange={(e) => {
+            handleExpressionChange(e);
+            setSelectorState("expression", {
+              selectedIndex: Number(e.target.selectedIndex),
+              value: e.target.value,
+            });
+          }}
+        >
+          {selectorOptions["expression"]?.map((dir) => (
+            <option value={dir.value} key={dir.value}>
+              {dir.label}
+            </option>
+          ))}
+        </select>
+      )}
       <select
         id="settingSelector"
         onChange={(e) => {

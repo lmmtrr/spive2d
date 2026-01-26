@@ -24,6 +24,13 @@ export const setSelectorOptions = <T>(
     ...jotaiStore.get(selectorOptionsAtom),
     [selector]: initialOptions.concat(options),
   });
+  jotaiStore.set(selectorStatesAtom, {
+    ...jotaiStore.get(selectorStatesAtom),
+    [selector]: {
+      selectedIndex: 0,
+      value: options[0].value,
+    },
+  });
 };
 
 export const setSelectorState = <S extends string>(
@@ -58,6 +65,8 @@ export const getSelectorState = (selector: string) =>
 export const getSelectorCurrentState = (selector: string) => {
   const options = jotaiStore.get(selectorOptionsAtom)[selector];
   const states = getSelectorState(selector);
+
+  console.log(selector, options, states);
 
   return {
     selected: options[states.selectedIndex ?? 0],

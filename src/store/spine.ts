@@ -13,12 +13,12 @@ export function createSkins() {
   )! as HTMLSelectElement;
   // @ts-ignore
   const skins: any[] = skeletons["0"].skeleton.data.skins;
-  if (skins.length <= 1) {
+  if (skins.length === 1) {
     settingSelector.disabled = true;
     return;
   }
   settingSelector.disabled = false;
-  const skinData = skins.slice(1).map((skin) => [skin.name, -1]);
+  const skinData = skins.map(skin => [skin.name, -1]);
   jotaiStore.set(skinsAtom, skinData);
 }
 

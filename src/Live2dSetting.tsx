@@ -25,7 +25,7 @@ const Live2dSetting: React.FC = ({}) => {
                 max={max}
                 min={min}
                 step={(max - min) / 100}
-                value={value}
+                defaultValue={value}
                 onChange={(e) => {
                   const parameterValues =
                     currentModel.internalModel.coreModel._parameterValues;

@@ -29,7 +29,7 @@ export function createParts() {
   const partIds: any[] = currentModel.internalModel.coreModel?._partIds;
   jotaiStore.set(
     partsAtom,
-    partIds.map((value, index) => [value, index]),
+    partIds.map((value, index) => [value, index]).sort(sortByName),
   );
 }
 
