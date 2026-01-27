@@ -9,7 +9,6 @@ import {
   setRotate,
   setScale,
 } from "./model-transform";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 const live2dCanvas = document.getElementById(
   "live2dCanvas",
