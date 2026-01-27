@@ -278,7 +278,7 @@ const Dialog: React.FC = () => {
         >
           {t("setOriginalSize")}
         </button>
-        <button onClick={resetModelState}>{t("resetState")}</button>
+        <button onClick={() => resetModelState()}>{t("resetState")}</button>
       </div>
       <label>
         <input

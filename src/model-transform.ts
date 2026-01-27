@@ -45,21 +45,23 @@ export function setModelState(
   rotate = _rotate;
 }
 
-export function resetModelState() {
+export function resetModelState(
+  width = window.innerWidth,
+  height = window.innerHeight,
+) {
   scale = 1;
   movement.x = 0;
   movement.y = 0;
   rotate = 0;
   if (!isInitialized()) return;
   if (isModelType("live2d")) {
-    const { innerWidth: w, innerHeight: h } = window;
     let _scale = Math.min(
-      w / currentModel.internalModel.originalWidth,
-      h / currentModel.internalModel.originalHeight,
+      width / currentModel.internalModel.originalWidth,
+      height / currentModel.internalModel.originalHeight,
     );
     _scale *= scale;
     currentModel.scale.set(_scale);
-    currentModel.position.set(w * 0.5, h * 0.5);
+    currentModel.position.set(width * 0.5, height * 0.5);
     currentModel.rotation = 0;
   }
 }

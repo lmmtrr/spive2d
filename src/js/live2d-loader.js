@@ -52,3 +52,35 @@ export function disposeLive2D() {
   live2dCanvas.style.display = "none";
   app.stage.removeChildren();
 }
+
+export function resizeLive2D(width, height) {
+  app.renderer.resize(width, height);
+}
+
+export function setLive2DResizeTo(target) {
+  app.resizeTo = target;
+}
+
+export function renderLive2D() {
+  app.render();
+}
+
+export function captureFrame(width, height) {
+  width = Math.round(width);
+  height = Math.round(height);
+  const originalScale = currentModel.scale.clone();
+  const originalPosition = currentModel.position.clone();
+  const scale = Math.min(
+    width / currentModel.internalModel.originalWidth,
+    height / currentModel.internalModel.originalHeight,
+  );
+  currentModel.scale.set(scale);
+  currentModel.position.set(width * 0.5, height * 0.5);
+  const renderTexture = PIXI.RenderTexture.create({ width, height });
+  app.renderer.render(currentModel, { renderTexture });
+  const canvas = app.renderer.extract.canvas(renderTexture);
+  currentModel.scale.copyFrom(originalScale);
+  currentModel.position.copyFrom(originalPosition);
+  renderTexture.destroy(true);
+  return canvas;
+}

@@ -120,6 +120,12 @@ function calculateSetupPoseBounds(skeleton) {
   const offset = new spine.Vector2();
   const size = new spine.Vector2();
   skeleton.getBounds(offset, size, []);
+  if (size.x === -Infinity || size.y === -Infinity) {
+    size.x = 2048;
+    size.y = 2048;
+    offset.x = -1024;
+    offset.y = -1024;
+  }
   return { offset: offset, size: size };
 }
 
@@ -147,6 +153,12 @@ function loadSkeleton(fileName) {
     skeleton.data.defaultSkin = new spine.Skin("default");
 
   const bounds = calculateSetupPoseBounds(skeleton);
+  if (skeleton.data.width === 0 || skeleton.data.height === 0) {
+    skeleton.data.width = bounds.size.x;
+    skeleton.data.height = bounds.size.y;
+  }
+  skeleton.setToSetupPose();
+  skeleton.updateWorldTransform(2);
   const animationStateData = new spine.AnimationStateData(skeleton.data);
   const animationState = new spine.AnimationState(animationStateData);
   animationStates.push(animationState);
@@ -236,4 +248,101 @@ export function disposeSpine() {
   if (assetManager) assetManager.dispose();
   animationStates = [];
   skeletons = {};
+}
+
+export function captureFrame(width, height) {
+  width = Math.round(width);
+  height = Math.round(height);
+  const gl = ctx.gl;
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    width,
+    height,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    null,
+  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    texture,
+    0,
+  );
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    console.error("Framebuffer incomplete");
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return null;
+  }
+  const oldViewport = gl.getParameter(gl.VIEWPORT);
+  gl.viewport(0, 0, width, height);
+  const originalMvpValues = new Float32Array(mvp.values);
+  const bounds = skeletons["0"].bounds;
+  const centerX = bounds.offset.x + bounds.size.x * 0.5;
+  const centerY = bounds.offset.y + bounds.size.y * 0.5;
+  const scaleX = bounds.size.x / width;
+  const scaleY = bounds.size.y / height;
+  let _scale = Math.max(scaleX, scaleY);
+  _scale /= scale;
+  const targetWidth = width * _scale;
+  const targetHeight = height * _scale;
+  mvp.ortho2d(
+    centerX - targetWidth * 0.5 - moveX * _scale,
+    centerY - targetHeight * 0.5 + moveY * _scale,
+    targetWidth,
+    targetHeight,
+  );
+  const c = Math.cos(Math.PI * rotate);
+  const s = Math.sin(Math.PI * rotate);
+  const rotateMatrix = new spine.Matrix4();
+  rotateMatrix.set([c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  mvp.multiply(rotateMatrix);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  shader.bind();
+  shader.setUniformi(spine.Shader.SAMPLER, 0);
+  shader.setUniform4x4f(spine.Shader.MVP_MATRIX, mvp.values);
+  batcher.begin(shader);
+  for (const fileName of Object.keys(skeletons).reverse()) {
+    const skeleton = skeletons[fileName].skeleton;
+    skeletonRenderer.vertexEffect = null;
+    skeletonRenderer.premultipliedAlpha = premultipliedAlpha;
+    skeletonRenderer.draw(batcher, skeleton);
+  }
+  batcher.end();
+  shader.unbind();
+  const pixels = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.deleteFramebuffer(framebuffer);
+  gl.deleteTexture(texture);
+  gl.viewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+  mvp.set(originalMvpValues);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx2d = canvas.getContext("2d");
+  const imgData = ctx2d.createImageData(width, height);
+  const rowBytes = width * 4;
+  for (let y = 0; y < height; y++) {
+    const srcRowStart = y * rowBytes;
+    const dstRowStart = (height - 1 - y) * rowBytes;
+    imgData.data.set(
+      pixels.subarray(srcRowStart, srcRowStart + rowBytes),
+      dstRowStart,
+    );
+  }
+  ctx2d.putImageData(imgData, 0, 0);
+  return canvas;
 }

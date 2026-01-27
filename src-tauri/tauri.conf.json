@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Spive2dR",
+        "title": "Spive2d",
         "width": 1200,
         "height": 800
       }
