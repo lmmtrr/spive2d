@@ -11,7 +11,7 @@ export const globalSettingsAtom = atom<{
   originalHeight?: number;
   exportAsOriginalSize: boolean;
 }>({
-  settingDialogOpen: false,
+  settingDialogOpen: true,
   windowWidth: window.innerWidth,
   windowHeight: window.innerHeight,
   aspectRatioEnabled: false,

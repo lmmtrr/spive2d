@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { resetModelState } from "./model-transform";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
-import { isInitialized, isModelType, subscribe } from "./store";
+import { isInitialized, isModelType } from "./store";
 import {
   globalSettingsAtom,
   getGlobalSetting,
@@ -54,7 +54,7 @@ const Dialog: React.FC = () => {
   }
 
   function toggleDialog() {
-    if (getGlobalSetting('settingDialogOpen')) {
+    if (getGlobalSetting("settingDialogOpen")) {
       setGlobalSetting("settingDialogOpen", false);
     } else {
       setGlobalSetting("settingDialogOpen", true);
@@ -80,7 +80,6 @@ const Dialog: React.FC = () => {
   React.useEffect(() => {
     addKeyboardListener("e", toggleDialog);
 
-    toggleDialog();
     const savedLang = localStorage.getItem("spive2d_language") || "en";
     handleLanguageSelectorChange({ target: { value: savedLang } });
 
@@ -89,21 +88,22 @@ const Dialog: React.FC = () => {
     };
   }, []);
 
+  React.useEffect(() => {
+    const dialog = document.getElementById("dialog")! as HTMLDialogElement;
+    if (settings.settingDialogOpen) {
+      dialog.showModal();
+    } else {
+      dialog.close();
+    }
+  }, [settings.settingDialogOpen]);
+
   return (
     <dialog
       id="dialog"
       closedby="any"
       autoFocus
-      ref={(ref) => {
-        if (!ref) return;
-
-        subscribe(globalSettingsAtom, () => {
-          if (getGlobalSetting("settingDialogOpen")) {
-            ref.showModal();
-          } else {
-            ref.close();
-          }
-        });
+      onClose={() => {
+        setGlobalSetting("settingDialogOpen", false);
       }}
     >
       <label className="input-row">

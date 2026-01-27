@@ -50,7 +50,7 @@ export function handleResize() {
 function updateCursorStyle(e: MouseEvent) {
   document.body.style.cursor = "default";
   if (e.clientX >= live2dCanvas.width - sidebarWidth)
-    document.body.style.cursor = `url("../cursors/rotate_right.svg"), auto`;
+    document.body.style.cursor = `url("/cursors/rotate_right.svg"), auto`;
 }
 
 export function handleMouseUp() {
