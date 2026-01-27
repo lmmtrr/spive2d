@@ -1,5 +1,5 @@
 [package]
-name = "spive2dr"
+name = "spive2d"
 version = "0.0.13"
 description = ""
 authors = ["lmmtrr", "cangSDARM"]
