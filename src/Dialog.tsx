@@ -77,6 +77,43 @@ const Dialog: React.FC = () => {
     }
   }
 
+  function onWindowWidthChange() {
+    let newWidth = settings.windowWidth;
+    if (settings.aspectRatioEnabled) {
+      setGlobalSetting(
+        "windowHeight",
+        Math.round(newWidth * settings.aspectRatio),
+      );
+    }
+    if (newWidth < 100) newWidth = 100;
+    if (newWidth > 10000) newWidth = 10000;
+    if (settings.windowHeight < 100) setGlobalSetting("windowHeight", 100);
+    if (settings.windowHeight > 10000) setGlobalSetting("windowHeight", 10000);
+
+    newWidth = Math.round(newWidth);
+    const newHeight = Math.round(settings.windowHeight);
+    getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
+    setGlobalSetting("aspectRatio", newHeight / newWidth);
+  }
+
+  function onWindowHeightChange() {
+    let newHeight = settings.windowHeight;
+    if (settings.aspectRatioEnabled) {
+      setGlobalSetting(
+        "windowWidth",
+        Math.round(newHeight / settings.aspectRatio),
+      );
+    }
+    if (settings.windowWidth < 100) setGlobalSetting("windowWidth", 100);
+    if (settings.windowWidth > 10000) setGlobalSetting("windowWidth", 10000);
+    if (newHeight < 100) newHeight = 100;
+    if (newHeight > 10000) newHeight = 10000;
+    const newWidth = Math.round(settings.windowWidth);
+    newHeight = Math.round(newHeight);
+    getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
+    setGlobalSetting("aspectRatio", newHeight / newWidth);
+  }
+
   React.useEffect(() => {
     addKeyboardListener("e", toggleDialog);
 
@@ -185,26 +222,11 @@ const Dialog: React.FC = () => {
           min="100"
           max="10000"
           value={settings.windowWidth}
-          onChange={(e) => {
-            let newWidth = Number(e.target.value);
-            if (settings.aspectRatioEnabled) {
-              setGlobalSetting(
-                "windowHeight",
-                Math.round(newWidth * settings.aspectRatio),
-              );
-            }
-            if (newWidth < 100) newWidth = 100;
-            if (newWidth > 10000) newWidth = 10000;
-            if (settings.windowHeight < 100)
-              setGlobalSetting("windowHeight", 100);
-            if (settings.windowHeight > 10000)
-              setGlobalSetting("windowHeight", 10000);
-
-            newWidth = Math.round(newWidth);
-            const newHeight = Math.round(settings.windowHeight);
-            getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
-            setGlobalSetting("aspectRatio", newHeight / newWidth);
-          }}
+          onChange={(e) =>
+            setGlobalSetting("windowWidth", Number(e.target.value))
+          }
+          onKeyDown={(e) => e.key === "Enter" && onWindowWidthChange()}
+          onBlur={onWindowWidthChange}
         />
       </label>
       <label className="input-row">
@@ -215,25 +237,13 @@ const Dialog: React.FC = () => {
           min="100"
           max="10000"
           value={settings.windowHeight}
-          onChange={(e) => {
-            let newHeight = Number(e.target.value);
-            if (settings.aspectRatioEnabled) {
-              setGlobalSetting(
-                "windowWidth",
-                Math.round(newHeight / settings.aspectRatio),
-              );
-            }
-            if (settings.windowWidth < 100)
-              setGlobalSetting("windowWidth", 100);
-            if (settings.windowWidth > 10000)
-              setGlobalSetting("windowWidth", 10000);
-            if (newHeight < 100) newHeight = 100;
-            if (newHeight > 10000) newHeight = 10000;
-            const newWidth = Math.round(settings.windowWidth);
-            newHeight = Math.round(newHeight);
-            getCurrentWindow().setSize(new PhysicalSize(newWidth, newHeight));
-            setGlobalSetting("aspectRatio", newHeight / newWidth);
+          onChange={(e) =>
+            setGlobalSetting("windowHeight", Number(e.target.value))
+          }
+          onKeyDown={(e) => {
+            e.key === "Enter" && onWindowHeightChange();
           }}
+          onBlur={onWindowHeightChange}
         />
       </label>
       <label className="input-row">
@@ -242,7 +252,7 @@ const Dialog: React.FC = () => {
           type="text"
           name="originalWidth"
           readOnly
-          value={settings.originalWidth}
+          value={settings.originalWidth ?? ""}
         />
       </label>
       <label className="input-row">
@@ -251,7 +261,7 @@ const Dialog: React.FC = () => {
           type="text"
           name="originalHeight"
           readOnly
-          value={settings.originalHeight}
+          value={settings.originalHeight ?? ""}
         />
       </label>
       <div className="button-group">

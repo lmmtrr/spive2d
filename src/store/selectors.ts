@@ -66,8 +66,6 @@ export const getSelectorCurrentState = (selector: string) => {
   const options = jotaiStore.get(selectorOptionsAtom)[selector];
   const states = getSelectorState(selector);
 
-  console.log(selector, options, states);
-
   return {
     selected: options[states.selectedIndex ?? 0],
     options,

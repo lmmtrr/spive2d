@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "spive2d",
+  "productName": "spive2dr",
   "version": "0.0.13",
-  "identifier": "com.spive2d",
+  "identifier": "com.spive2dr",
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Spive2D",
+        "title": "Spive2dR",
         "width": 1200,
         "height": 800
       }

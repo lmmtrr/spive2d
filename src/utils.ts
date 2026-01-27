@@ -18,6 +18,23 @@ import { resetModelState } from "./model-transform";
 import { sortByText } from "./utils/sort";
 import { createDrawables, createParameters, createParts } from "./store/live2d";
 import { createAttachments, createSkins } from "./store/spine";
+import { toast } from "react-toastify";
+// @ts-ignore no type definitions
+import format from "format";
+
+const NotifyLevels = ["error", "info"] as const;
+export const notify = NotifyLevels.reduce<
+  Record<(typeof NotifyLevels)[number], (...params: any[]) => () => void>
+>(
+  (acc, level) => ({
+    ...acc,
+    [level]: (...params: any[]) => {
+      const id = toast[level](format(...params));
+      return () => toast.dismiss(id);
+    },
+  }),
+  {} as any,
+);
 
 export const populateDirSelector = (dirs: string[]) => {
   setSelectorOptions(

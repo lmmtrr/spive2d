@@ -196,6 +196,13 @@ textarea {
   }
 }
 
+@scope (.Toastify) {
+  :scope {
+    user-select: none;
+    --toastify-toast-width: 420px;
+  }
+}
+
 #sidebar {
   position: fixed;
   top: 0;

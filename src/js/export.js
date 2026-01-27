@@ -16,6 +16,7 @@ import {
   getModelState,
 } from "../model-transform";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
+import { notify } from "../utils";
 
 const RECORDING_MIME_TYPE = "video/webm;codecs=vp8";
 const RECORDING_BITRATE = 12000000;
@@ -252,7 +253,7 @@ async function startRecording(animationName) {
   let streamSource = activeCanvas;
   const cleanup = (error) => {
     if (error) {
-      console.error("Recording failed:", error);
+      notify.error("Recording failed:", error);
     }
     if (exportAsOriginalSize && _prevActiveCanvasState) {
       restorePreviousSize(_prevActiveCanvasState, getModelType(), currentModel);
@@ -320,7 +321,7 @@ async function startRecording(animationName) {
     }
   }
   if (typeof MediaRecorder === "undefined") {
-    console.error("Video recording is not supported on this platform.");
+    notify.error("Video recording is not supported on this platform.");
     cleanup();
     return;
   }

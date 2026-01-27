@@ -9,6 +9,7 @@ import {
   setRotate,
   setScale,
 } from "./model-transform";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 const live2dCanvas = document.getElementById(
   "live2dCanvas",
@@ -40,6 +41,7 @@ export function handleResize() {
   setGlobalSetting("windowWidth", w);
   setGlobalSetting("windowHeight", h);
   setGlobalSetting("aspectRatio", h / w);
+
   if (!isInitialized()) return;
   if (isModelType("live2d")) {
     const movement = getMovement();
@@ -76,7 +78,7 @@ export function handleMouseDown(e: MouseEvent) {
 }
 
 export function handleMouseMove(e: MouseEvent) {
-  updateCursorStyle(e);
+  if (isInitialized()) updateCursorStyle(e);
   if (!mouseDown) return;
   if (isMouseMove) {
     increaseMovement(
