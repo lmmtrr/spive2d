@@ -52,7 +52,7 @@ jobs:
       matrix:
         include:
           - platform: 'windows-latest'
-            args: ''
+            args: '--no-bundle'
 
     runs-on: ${{ matrix.platform }}
     steps:
