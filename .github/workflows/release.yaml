@@ -52,7 +52,7 @@ jobs:
       matrix:
         include:
           - platform: 'windows-latest'
-            args: '--no-bundle'
+            args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -84,6 +84,7 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+          uploadPlainBinary: true
 
   publish-release:
     permissions:
