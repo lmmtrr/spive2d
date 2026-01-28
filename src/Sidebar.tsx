@@ -2,10 +2,10 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import {
   handleAnimationChange,
-  handleDirChange,
   handleExpressionChange,
   handleSceneChange,
   navigateAndTriggerChange,
+  setSceneIndex,
 } from "./js/events";
 import { useAtom } from "jotai";
 import { modelTypeAtom, setCurrentSetting, settingAtom } from "./store";
@@ -15,7 +15,7 @@ import {
   setSelectorState,
 } from "./store/selectors";
 import { addKeyboardListener } from "./keyboard";
-import { resetSettingUI } from "./utils";
+import { dispose, init, resetSettingUI } from "./utils";
 import SpineSettings from "./SpineSettings";
 import Live2dSetting from "./Live2dSetting";
 
@@ -54,11 +54,14 @@ const Sidebar: React.FC = () => {
       <select
         value={selectorStates["dir"]?.value}
         onChange={(e) => {
-          handleDirChange(e);
-          setSelectorState("dir", {
+          const selected = {
             selectedIndex: Number(e.target.selectedIndex),
             value: e.target.value,
-          });
+          };
+          setSelectorState("dir", selected);
+          setSceneIndex(selected);
+          dispose();
+          init();
         }}
         ref={(ref) => {
           if (!ref) return;
@@ -80,11 +83,12 @@ const Sidebar: React.FC = () => {
       <select
         value={selectorStates["scene"]?.value}
         onChange={(e) => {
-          handleSceneChange(e);
-          setSelectorState("scene", {
+          const selected = {
             selectedIndex: Number(e.target.selectedIndex),
             value: e.target.value,
-          });
+          };
+          handleSceneChange(selected);
+          setSelectorState("scene", selected);
         }}
         ref={(ref) => {
           if (!ref) return;
@@ -103,34 +107,36 @@ const Sidebar: React.FC = () => {
           </option>
         ))}
       </select>
-      <select
-        id="animationSelector"
-        value={selectorStates["animate"]?.value}
-        onChange={(e) => {
-          handleAnimationChange(e);
-          setSelectorState("animate", {
-            selectedIndex: Number(e.target.selectedIndex),
-            value: e.target.value,
-          });
-        }}
-        ref={(ref) => {
-          if (!ref) return;
+      {selectorOptions["animate"]?.length > 0 && (
+        <select
+          id="animationSelector"
+          value={selectorStates["animate"]?.value}
+          onChange={(e) => {
+            handleAnimationChange(e);
+            setSelectorState("animate", {
+              selectedIndex: Number(e.target.selectedIndex),
+              value: e.target.value,
+            });
+          }}
+          ref={(ref) => {
+            if (!ref) return;
 
-          addKeyboardListener("z", function () {
-            navigateAndTriggerChange(ref, -1);
-          });
-          addKeyboardListener("x", function () {
-            navigateAndTriggerChange(ref, 1);
-          });
-        }}
-      >
-        {selectorOptions["animate"]?.map((dir) => (
-          <option value={dir.value} key={dir.value}>
-            {dir.label}
-          </option>
-        ))}
-      </select>
-      {modelType === "spine" && (
+            addKeyboardListener("z", function () {
+              navigateAndTriggerChange(ref, -1);
+            });
+            addKeyboardListener("x", function () {
+              navigateAndTriggerChange(ref, 1);
+            });
+          }}
+        >
+          {selectorOptions["animate"]?.map((dir) => (
+            <option value={dir.value} key={dir.value}>
+              {dir.label}
+            </option>
+          ))}
+        </select>
+      )}
+      {modelType === "live2d" && selectorOptions["expression"]?.length > 0 && (
         <select
           id="expressionSelector"
           value={selectorStates["expression"]?.value}

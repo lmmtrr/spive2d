@@ -61,11 +61,9 @@ function findMaxNumberInString(inputString) {
   return maxNumber;
 }
 
-function setSceneIndex(e) {
-  if (!(e.target instanceof HTMLSelectElement)) return;
-
-  const sceneIds = getFile(e.target.options[e.selectedIndex].value);
-  const maxNumber = findMaxNumberInString(e.target.value);
+export function setSceneIndex(selected) {
+  const sceneIds = getFile(selected.value);
+  const maxNumber = findMaxNumberInString(selected.value);
   populateSceneSelector(sceneIds);
   let index = sceneIds.findIndex((item) => item.includes(maxNumber));
   index = index === -1 ? 0 : index;
@@ -73,20 +71,10 @@ function setSceneIndex(e) {
   setSelectorState("scene", { selectedIndex: index });
 }
 
-export function handleDirChange(e) {
-  setSceneIndex(e);
+export function handleSceneChange(selected) {
+  sceneIndex = selected.selectedIndex;
   dispose();
   init();
-}
-
-function _handleSceneChange() {
-  dispose();
-  init();
-}
-
-export function handleSceneChange(e) {
-  sceneIndex = e.target.selectedIndex;
-  _handleSceneChange();
 }
 
 export function handleLive2DAnimationChange(motion, index) {
