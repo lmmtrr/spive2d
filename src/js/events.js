@@ -1,24 +1,11 @@
 import { animationStates, skeletons, spine } from "./spine-loader.js";
 import { currentModel } from "./live2d-loader.js";
-import { populateSceneSelector, dispose, init } from "../utils";
-import {
-  getFile,
-  isProcessing,
-  isInitialized,
-  isModelType,
-  setCurrentSetting,
-  getCurrentSetting,
-} from "../store";
+import { isModelType } from "../store";
 import { getGlobalSetting, setGlobalSetting } from "../store/settings";
-import { setSelectorState, getSelectorCurrentState } from "../store/selectors";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { getSelectorCurrentState } from "../store/selectors";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
-import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import { createAttachments } from "../store/spine";
 
-export let dirIndex = 0;
-export let sceneIndex = 0;
 export let isFirstRender = true;
 export let premultipliedAlpha = false;
 export let attachmentsCache = {};
@@ -26,7 +13,6 @@ let opacities;
 
 const live2dCanvas = document.getElementById("live2dCanvas");
 const spineCanvas = document.getElementById("spineCanvas");
-const openDirectoryButton = document.getElementById("openDirectoryButton");
 
 export function setOpacities(value) {
   opacities = value;
@@ -53,7 +39,7 @@ export function handlePMACheckboxChange(e) {
   focusBody();
 }
 
-function findMaxNumberInString(inputString) {
+export function findMaxNumberInString(inputString) {
   const numbers = inputString.match(/d+/g);
   if (numbers === null) return null;
   const numArray = numbers.map(Number);
@@ -61,53 +47,18 @@ function findMaxNumberInString(inputString) {
   return maxNumber;
 }
 
-export function setSceneIndex(selected) {
-  const sceneIds = getFile(selected.value);
-  const maxNumber = findMaxNumberInString(selected.value);
-  populateSceneSelector(sceneIds);
-  let index = sceneIds.findIndex((item) => item.includes(maxNumber));
-  index = index === -1 ? 0 : index;
-  sceneIndex = index;
-  setSelectorState("scene", { selectedIndex: index });
-}
-
-export function handleSceneChange(selected) {
-  sceneIndex = selected.selectedIndex;
-  dispose();
-  init();
-}
-
 export function handleLive2DAnimationChange(motion, index) {
   currentModel.motion(motion, Number(index), 3);
 }
 
-export function handleExpressionChange(e) {
-  currentModel.expression(
-    "" === e.target.value
-      ? currentModel.internalModel.motionManager.ExpressionManager
-          ?.defaultExpression
-      : Number(e.target.value),
-  );
-}
-
-function handleSpineAnimationChange(index) {
+export function handleSpineAnimationChange(index) {
   const animationName = skeletons["0"].skeleton.data.animations[index].name;
   for (const animationState of animationStates) {
     animationState.setAnimation(0, animationName, true);
   }
 }
 
-export function handleAnimationChange(e) {
-  if (isModelType("live2d")) {
-    const [motion, index] = e.target.value.split(",");
-    handleLive2DAnimationChange(motion, index);
-  } else {
-    handleSpineAnimationChange(e.target.selectedIndex);
-    createAttachments();
-  }
-}
-
-// FIXME: escaped selector
+// FIXME: escaped querySelectors
 export function restoreAnimation(animationName) {
   const optionExists = Array.from(
     getSelectorCurrentState("animate").options,
@@ -193,6 +144,7 @@ function syncHiddenAttachments() {
   });
 }
 
+// FIXME: escaped querySelectors
 function getCheckedSkinNames() {
   const skin = document.getElementById("skin");
   const checkboxes = skin.querySelectorAll("input[type='checkbox']:checked");
@@ -201,6 +153,7 @@ function getCheckedSkinNames() {
   );
 }
 
+// FIXME: escaped querySelectors
 export function saveSkins() {
   const skin = document.getElementById("skin");
   const skinFlags = [];
@@ -214,6 +167,7 @@ export function saveSkins() {
   return skinFlags;
 }
 
+// FIXME: escaped querySelectors
 export function restoreSkins(skinFlags) {
   const skin = document.getElementById("skin");
   const checkboxes = skin.querySelectorAll('input[type="checkbox"]');
@@ -225,6 +179,7 @@ export function restoreSkins(skinFlags) {
   handleSkinCheckboxChange();
 }
 
+// FIXME: escaped querySelectors
 export function handleFilterInput(value) {
   const filterValue = value?.toLowerCase() ?? "";
   const settingDiv = document.getElementById("setting");
@@ -272,7 +227,7 @@ export function handleAttachmentCheckboxChange(e) {
       slotIndex,
       name,
       defaultSkin,
-      skeleton
+      skeleton,
     );
     if (currentAttachment) {
       attachmentsCache[name] = [slotIndex, currentAttachment, true, skinKey];
@@ -289,6 +244,7 @@ export function handleAttachmentCheckboxChange(e) {
   syncHiddenAttachments();
 }
 
+// FIXME: escaped querySelectors
 function handleSkinCheckboxChange() {
   const skin = document.getElementById("skin");
   const skeleton = skeletons["0"].skeleton;

@@ -100,6 +100,7 @@ export function dispose() {
   else disposeSpine();
 }
 
+// FIXME: escaped querySelectors
 function resetConfiguration() {
   const settingSelector = document.getElementById(
     "settingSelector",
@@ -129,6 +130,7 @@ export function init() {
   resetModelState();
 }
 
+// FIXME: escaped querySelectors
 export function resetUI() {
   if (isModelType("live2d")) {
     createParameters();
@@ -145,6 +147,7 @@ export function resetUI() {
   handleFilterInput();
 }
 
+// FIXME: escaped querySelectors
 export function resetSettingUI() {
   const panelMap = {
     parameters: document.getElementById("parameter"),

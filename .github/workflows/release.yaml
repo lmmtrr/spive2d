@@ -25,7 +25,7 @@ jobs:
           node-version: lts/*
 
       - name: get version
-        run:
+        run: |
           echo "PACKAGE_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
           echo "PACKAGE_NAME=$(node -p "require('./package.json').name")" >> $GITHUB_ENV
 

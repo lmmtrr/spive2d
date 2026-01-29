@@ -1,23 +1,76 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
-  handleAnimationChange,
-  handleExpressionChange,
-  handleSceneChange,
+  findMaxNumberInString,
+  handleLive2DAnimationChange,
+  handleSpineAnimationChange,
   navigateAndTriggerChange,
-  setSceneIndex,
 } from "./js/events";
 import { useAtom } from "jotai";
-import { modelTypeAtom, setCurrentSetting, settingAtom } from "./store";
+import {
+  getFile,
+  isModelType,
+  modelTypeAtom,
+  setCurrentSetting,
+  settingAtom,
+} from "./store";
 import {
   selectorOptionsAtom,
   selectorStatesAtom,
   setSelectorState,
 } from "./store/selectors";
 import { addKeyboardListener } from "./keyboard";
-import { dispose, init, resetSettingUI } from "./utils";
+import { dispose, init, populateSceneSelector, resetSettingUI } from "./utils";
 import SpineSettings from "./SpineSettings";
 import Live2dSetting from "./Live2dSetting";
+import { currentModel } from "./js/live2d-loader";
+import { createAttachments } from "./store/spine";
+
+type Selected = {
+  selectedIndex: number;
+  value: string;
+};
+
+function handleAnimationChange(selected: Selected) {
+  setSelectorState("animate", selected);
+
+  if (isModelType("live2d")) {
+    const [motion, index] = selected.value.split(",");
+    handleLive2DAnimationChange(motion, index);
+  } else {
+    handleSpineAnimationChange(selected.selectedIndex);
+    createAttachments();
+  }
+}
+
+function handleExpressionChange(selected: Selected) {
+  setSelectorState("expression", selected);
+
+  currentModel.expression(
+    "" === selected.value
+      ? currentModel.internalModel.motionManager.ExpressionManager
+          ?.defaultExpression
+      : Number(selected.value),
+  );
+}
+
+function handleSceneChange(selected: Selected) {
+  setSelectorState("scene", selected);
+  dispose();
+  init();
+}
+
+function handleDirChange(selected: Selected) {
+  setSelectorState("dir", selected);
+
+  // change related scene
+  const sceneIds = getFile(selected.value);
+  const maxNumber = findMaxNumberInString(selected.value);
+  populateSceneSelector(sceneIds);
+  let index = sceneIds.findIndex((item: any) => item.includes(maxNumber));
+  index = index === -1 ? 0 : index;
+  handleSceneChange(selected);
+}
 
 const Sidebar: React.FC = () => {
   const { t } = useTranslation();
@@ -54,14 +107,10 @@ const Sidebar: React.FC = () => {
       <select
         value={selectorStates["dir"]?.value}
         onChange={(e) => {
-          const selected = {
+          handleDirChange({
             selectedIndex: Number(e.target.selectedIndex),
             value: e.target.value,
-          };
-          setSelectorState("dir", selected);
-          setSceneIndex(selected);
-          dispose();
-          init();
+          });
         }}
         ref={(ref) => {
           if (!ref) return;
@@ -83,12 +132,10 @@ const Sidebar: React.FC = () => {
       <select
         value={selectorStates["scene"]?.value}
         onChange={(e) => {
-          const selected = {
+          handleSceneChange({
             selectedIndex: Number(e.target.selectedIndex),
             value: e.target.value,
-          };
-          handleSceneChange(selected);
-          setSelectorState("scene", selected);
+          });
         }}
         ref={(ref) => {
           if (!ref) return;
@@ -112,8 +159,7 @@ const Sidebar: React.FC = () => {
           id="animationSelector"
           value={selectorStates["animate"]?.value}
           onChange={(e) => {
-            handleAnimationChange(e);
-            setSelectorState("animate", {
+            handleAnimationChange({
               selectedIndex: Number(e.target.selectedIndex),
               value: e.target.value,
             });
@@ -138,11 +184,9 @@ const Sidebar: React.FC = () => {
       )}
       {modelType === "live2d" && selectorOptions["expression"]?.length > 0 && (
         <select
-          id="expressionSelector"
           value={selectorStates["expression"]?.value}
           onChange={(e) => {
-            handleExpressionChange(e);
-            setSelectorState("expression", {
+            handleExpressionChange({
               selectedIndex: Number(e.target.selectedIndex),
               value: e.target.value,
             });

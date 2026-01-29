@@ -7,6 +7,7 @@ import { sortByName } from "../utils/sort";
 export const skinsAtom = atom<any[]>([]);
 export const attachmentsAtom = atom<any[]>([]);
 
+// FIXME: escaped querySelectors
 export function createSkins() {
   const settingSelector = document.getElementById(
     "settingSelector",

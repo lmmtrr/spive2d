@@ -222,9 +222,9 @@ export function exportImage() {
   }
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
-  const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
+  const exportAsOriginalSize = getGlobalSetting("exportAsOriginalSize");
   activeCanvas = isModelType("live2d") ? live2dCanvas : spineCanvas;
-  if (originalSizeCheckbox.checked) exportImageOriginalSize(animationName);
+  if (exportAsOriginalSize) exportImageOriginalSize(animationName);
   else exportImageWindowSize(animationName);
 }
 
@@ -247,16 +247,17 @@ async function startRecording(animationName) {
   const chunks = [];
   const live2dCanvas = document.getElementById("live2dCanvas");
   const spineCanvas = document.getElementById("spineCanvas");
-  const originalSizeCheckbox = document.getElementById("originalSizeCheckbox");
+  const exportAsOriginalSize = getGlobalSetting("exportAsOriginalSize");
   activeCanvas = isModelType("live2d") ? live2dCanvas : spineCanvas;
   const originalVisibility = activeCanvas.style.visibility;
   activeCanvas.style.visibility = "hidden";
 
   let compositingCanvas = null;
   let streamSource = activeCanvas;
+
   const cleanup = (error) => {
     if (error) notify.error("Recording failed:", error);
-    if (originalSizeCheckbox.checked && _prevActiveCanvasState) {
+    if (exportAsOriginalSize && _prevActiveCanvasState) {
       restorePreviousSize(_prevActiveCanvasState);
     }
     activeCanvas.style.visibility = originalVisibility;
@@ -277,7 +278,8 @@ async function startRecording(animationName) {
     compositingCanvas = document.createElement("canvas");
     streamSource = compositingCanvas;
   }
-  if (originalSizeCheckbox.checked) {
+
+  if (exportAsOriginalSize) {
     if (!compositingCanvas)
       compositingCanvas = document.createElement("canvas");
     const result = await changeToOriginalSize(compositingCanvas);
