@@ -21,6 +21,19 @@ import {
 import { resetAttachmentsCache } from "./js/events";
 import { setGlobalSetting } from "./store/settings";
 
+/**
+ * find all files with associated extensions .skel/.json/.atlas/moc3
+ * 
+ * XXX: Change it to recursively read all subfolders only, to support "web" version in the future.
+ *
+ * @returns like `{ dir1: [['file1', '.skel', '.atlas']], dir2: [['file2', '.json', '.atlas']] }`
+ */
+async function findAllAssociationsInPath(path: string) {
+  return await invoke<Record<string, string[][]>>("handle_dropped_path", {
+    path: path,
+  });
+}
+
 export async function processPath(paths: string[]) {
   if (isProcessing()) return;
 
@@ -28,10 +41,7 @@ export async function processPath(paths: string[]) {
   if (paths.length === 1) {
     const path = paths[0];
     try {
-      // XXX: this will find all files with associated extensions .skel/.json/.atlas/moc3
-      const _dirFiles = await invoke<any>("handle_dropped_path", {
-        path: path,
-      });
+      const _dirFiles = await findAllAssociationsInPath(path);
 
       const dirs = Object.keys(_dirFiles).sort((a, b) => {
         const keyA = getSortableKey(a);

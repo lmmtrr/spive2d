@@ -45,8 +45,8 @@ export const setSpine = (version: Spine, spine: any) => {
   spines.set(version, spine);
 };
 
-let dirFiles: Record<string, any> = {};
-export const setFiles = (files: any) => {
+let dirFiles: Record<string, string[][]> = {};
+export const setFiles = (files: typeof dirFiles) => {
   dirFiles = files;
 };
 export const getFile = (dirname: string) => {

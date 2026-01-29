@@ -54,7 +54,7 @@ function handleExpressionChange(selected: Selected) {
   );
 }
 
-function handleSceneChange(selected: Selected) {
+function handleSceneChange(selected: Partial<Selected>) {
   setSelectorState("scene", selected);
   dispose();
   init();
@@ -67,9 +67,11 @@ function handleDirChange(selected: Selected) {
   const sceneIds = getFile(selected.value);
   const maxNumber = findMaxNumberInString(selected.value);
   populateSceneSelector(sceneIds);
-  let index = sceneIds.findIndex((item: any) => item.includes(maxNumber));
-  index = index === -1 ? 0 : index;
-  handleSceneChange(selected);
+  const index = Math.max(
+    sceneIds.findIndex((item) => item.includes(maxNumber as any)),
+    0,
+  );
+  handleSceneChange({ selectedIndex: index });
 }
 
 const Sidebar: React.FC = () => {

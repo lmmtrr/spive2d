@@ -44,7 +44,7 @@ export const populateDirSelector = (dirs: string[]) => {
     (dir) => dir.split("/").filter(Boolean).pop(),
   );
 };
-export function populateSceneSelector(sceneIds: string[]) {
+export function populateSceneSelector(sceneIds: string[][]) {
   setSelectorOptions(
     "scene",
     sceneIds,
