@@ -1,7 +1,7 @@
 [package]
 name = "spive2d"
-version = "0.1.0"
-description = "A Tauri App"
+version = "0.1.1"
+description = ""
 authors = ["lmmtrr"]
 edition = "2024"
 
