@@ -256,7 +256,7 @@ export class SpineRenderer {
         const entry = state.tracks[0];
         entry.trackTime = entry.animation.duration * progress;
         state.apply(skel);
-        skel.updateWorldTransform();
+        skel.updateWorldTransform(2);
       }
     }
   }
