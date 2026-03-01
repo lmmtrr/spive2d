@@ -1,6 +1,6 @@
 # Spive2D
 
-[English](README.md) | 简体中文
+[English](README.md) | [日本語](README.ja.md) | 中文
 
 https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 
@@ -9,7 +9,6 @@ https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 **主要功能**:
 
 - 📂 拖放加载模型（单个文件夹或单个压缩文件：仅限 zip 或 7z）
-  - **注意：从压缩文件加载速度较慢，不推荐使用。**
 - 🎭 同时支持 Spine 和 Live2D 模型
 - 🕹️ 实时参数控制
 - 🎨 动画/皮肤切换界面
@@ -27,8 +26,12 @@ https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 | ◀️ 上一个动画    | `Z`    |
 | ▶️ 下一个动画    | `X`    |
 | ⚙️ 打开/关闭设置 | `E`    |
-| 📷 截图          | `D`    |
+| 📷 导出图像      | `R`    |
 | 💾 导出动画      | `C`    |
+| 🖼️ 导出 PNG 序列 | `D`    |
+| 📝 添加到列表    | `V`    |
+
+- **添加到列表**: 将当前场景文本保存到列表中。请参考 [`py/copy_by_list.py`](py/copy_by_list.py) 来处理导出的列表。
 
 ## 🚀 开发
 
@@ -88,4 +91,3 @@ https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 ## 📄 许可证
 
 [MIT 许可证](https://github.com/lmmtrr/spive2d/blob/main/LICENSE)
-

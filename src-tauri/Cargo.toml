@@ -1,7 +1,7 @@
 [package]
 name = "spive2d"
-version = "0.0.17"
-description = ""
+version = "0.1.0"
+description = "A Tauri App"
 authors = ["lmmtrr"]
 edition = "2024"
 
@@ -18,11 +18,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.9.2", features = ["protocol-asset"] }
-tauri-plugin-dialog = "2.4.2"
-tauri-plugin-opener = "2.5.2"
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 zip = "2"
 sevenz-rust2 = "0"
+tauri-plugin-fs = "2.4.5"

@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -18,6 +20,78 @@ impl AppState {
 }
 
 fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String> {
+    let os_success = match ext {
+        "zip" => {
+            if cfg!(target_os = "windows") {
+                std::process::Command::new("tar")
+                    .arg("-xf")
+                    .arg(path)
+                    .arg("-C")
+                    .arg(temp_dir)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            } else {
+                let success = std::process::Command::new("unzip")
+                    .arg("-q")
+                    .arg(path)
+                    .arg("-d")
+                    .arg(temp_dir)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+                if !success {
+                    std::process::Command::new("tar")
+                        .arg("-xf")
+                        .arg(path)
+                        .arg("-C")
+                        .arg(temp_dir)
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                } else {
+                    true
+                }
+            }
+        }
+        "7z" => {
+            if cfg!(target_os = "windows") {
+                std::process::Command::new("tar")
+                    .arg("-xf")
+                    .arg(path)
+                    .arg("-C")
+                    .arg(temp_dir)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            } else {
+                let mut out_arg = std::ffi::OsString::from("-o");
+                out_arg.push(temp_dir.as_os_str());                
+                std::process::Command::new("7z")
+                    .arg("x")
+                    .arg(path)
+                    .arg(&out_arg)
+                    .arg("-y")
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            }
+        }
+        _ => false,
+    };
+    if os_success {
+        return Ok(());
+    }
     match ext {
         "zip" => {
             let file =
@@ -108,6 +182,21 @@ fn get_subdir_files(
     }
     app_handle.emit("progress", false).unwrap();
     Ok(dir_files_map)
+}
+
+#[tauri::command]
+fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
+    let download_dir = app_handle.path().download_dir().map_err(|e| e.to_string())?;
+    let export_dir = download_dir.join("spive2d_export");
+    fs::create_dir_all(&export_dir).map_err(|e| e.to_string())?;
+    let file_path = export_dir.join("spive_list.txt");
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)
+        .map_err(|e| e.to_string())?;
+    writeln!(file, "{}", text).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn process_directory_with_subdirs(
@@ -338,6 +427,7 @@ fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
             #[cfg(debug_assertions)]
@@ -355,7 +445,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_subdir_files,
-            handle_dropped_path
+            handle_dropped_path,
+            append_to_list
         ])
         .plugin(tauri_plugin_dialog::init())
         .run(tauri::generate_context!())

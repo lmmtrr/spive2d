@@ -1,6 +1,6 @@
 # Spive2D
 
-English | [简体中文](README.zh-cn.md)
+English | [日本語](README.ja.md) | [中文](README.zh-cn.md)
 
 https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 
@@ -9,7 +9,6 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 **Key Features**:
 
 - 📂 Drag-and-drop model loading (single folder or single compressed file: zip or 7z only)
-  - **Note: Loading from compressed files is slow and not recommended.**
 - 🎭 Dual support for Spine & Live2D models
 - 🕹️ Real-time parameter controls
 - 🎨 Animation/Skin switching UI
@@ -27,8 +26,12 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | ◀️ Previous Animation  | `Z`       |
 | ▶️ Next Animation      | `X`       |
 | ⚙️ Open/Close Settings | `E`       |
-| 📷 Screenshots         | `D`       |
+| 📷 Export Image        | `R`       |
 | 💾 Export Animation    | `C`       |
+| 🖼️ Export PNG Sequence | `D`       |
+| 📝 Append to List      | `V`       |
+
+- **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
 
 ## 🚀 Development
 
@@ -87,4 +90,3 @@ To set up a local development environment, you'll need to install the following 
 ## 📄 Licenses
 
 [MIT License](https://github.com/lmmtrr/spive2d/blob/main/LICENSE)
-

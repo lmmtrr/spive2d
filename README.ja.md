@@ -1,0 +1,92 @@
+# Spive2D
+
+[English](README.md) | 日本語 | [中文](README.zh-cn.md)
+
+https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
+
+Spine スケルタルアニメーションと Live2D モデルを表示・操作するための Tauri 製デスクトップアプリケーションです。
+
+**主な機能**:
+
+- 📂 ドラッグ＆ドロップでモデルを読み込み（単一フォルダまたは単一圧縮ファイル：zip・7z のみ）
+- 🎭 Spine と Live2D の両方に対応
+- 🕹️ リアルタイムパラメータ制御
+- 🎨 アニメーション/スキン切り替えUI
+- 🖱️ マウスインタラクション対応
+- 🖥️ クロスプラットフォーム (Windows/macOS/Linux)
+
+## ⌨️ キーボードショートカット
+
+| 操作                    | ショートカット |
+| ----------------------- | -------------- |
+| 📂 前のディレクトリ     | `Q`            |
+| 📁 次のディレクトリ     | `W`            |
+| ⏮️ 前のシーン           | `A`            |
+| ⏭️ 次のシーン           | `S`            |
+| ◀️ 前のアニメーション   | `Z`            |
+| ▶️ 次のアニメーション   | `X`            |
+| ⚙️ 設定を開く/閉じる    | `E`            |
+| 📷 画像を書出           | `R`            |
+| 💾 アニメーションを書出 | `C`            |
+| 🖼️ 連番画像を書出       | `D`            |
+| 📝 リストに追加         | `V`            |
+
+- **リストに追加**: 現在のシーンテキストをリストに保存します。エクスポートされたリストの処理については [`py/copy_by_list.py`](py/copy_by_list.py) を参照してください。
+
+## 🚀 開発
+
+ローカル開発環境を構築するには、以下のツールをインストールしてください。
+
+**前提条件:**
+
+- **Node.js & npm**: [ダウンロード＆インストール](https://nodejs.org/ja/download)
+  - _参考: [npm ドキュメント](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)_
+- **Rust**: [Rust のインストール](https://www.rust-lang.org/ja/tools/install)
+- **Tauri**: お使いのOSに合わせて [Tauri セットアップガイド](https://v2.tauri.app/start/prerequisites/) を参照してください。
+
+**セットアップ手順:**
+
+1.  **リポジトリをクローン:**
+
+    ```bash
+    git clone https://github.com/lmmtrr/spive2d.git
+    cd spive2d
+    ```
+
+2.  **依存関係をインストール:**
+
+    ```bash
+    npm install
+    ```
+
+3.  **開発サーバーを起動:**
+
+    ```bash
+    npm run tauri dev
+    ```
+
+4.  **アプリケーションをビルド:**
+    ```bash
+    npm run tauri build
+    ```
+
+## 🌐 対応バージョン
+
+**🦴 Spine ランタイム:**
+
+- Spine 3.6-4.2
+
+**🎭 Live2D Cubism:**
+
+- Cubism 2.1
+- Cubism 4.x
+
+## 📦 依存関係
+
+- [Tauri](https://github.com/tauri-apps/tauri) ([MIT](https://github.com/tauri-apps/tauri/blob/dev/LICENSE_MIT))
+- [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) ([LICENSE](https://github.com/EsotericSoftware/spine-runtimes/blob/master/LICENSE))
+- [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) ([MIT](https://github.com/guansss/pixi-live2d-display/blob/master/LICENSE))
+
+## 📄 ライセンス
+
+[MIT ライセンス](https://github.com/lmmtrr/spive2d/blob/main/LICENSE)

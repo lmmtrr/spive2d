@@ -1,0 +1,99 @@
+:root {
+  --sidebar-color: #0008;
+  --sidebar-width: 250px;
+  --text-color: #fff;
+  --text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  --border-color: 1px solid #999;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #ccc;
+  background-image:
+    linear-gradient(45deg, #fff 25%, transparent 0),
+    linear-gradient(45deg, transparent 75%, #fff 0),
+    linear-gradient(45deg, #fff 25%, transparent 0),
+    linear-gradient(45deg, transparent 75%, #fff 0);
+  background-size: 32px 32px;
+  background-position: 0 0, 16px 16px, 16px 16px, 32px 32px;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text-color);
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 100%;
+  margin: 0;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eee;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+::placeholder {
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+@keyframes spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border-radius: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  outline: none;
+  border: var(--border-color);
+  background-color: var(--sidebar-color);
+  color: var(--text-color);
+  text-shadow: var(--text-shadow);
+  background-image: url('data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white"><path d="M4.5 6L8 10l3.5-4h-7z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+
+select + select {
+  border-top: 0;
+}
+
+option {
+  color: var(--text-color);
+  background-color: #333;
+}
+
+canvas {
+  display: none;
+  vertical-align: top;
+}

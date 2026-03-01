@@ -1,0 +1,390 @@
+import { createSorter } from '../utils.js';
+import { convertFileSrc } from '@tauri-apps/api/core';
+
+const sortByText = createSorter(item => item.name);
+const sortById = createSorter(item => item.id);
+
+export class Live2DRenderer {
+  #canvas;
+  #app;
+  #model = null;
+  #hiddenDrawables = new Set();
+  #opacities = null;
+  #initialOpacities = null;
+  #currentMotion = { group: null, index: null };
+  #speed = 1.0;
+  constructor() {
+    this.#canvas = document.createElement('canvas');
+    this.#canvas.style.display = 'none';
+    this.#canvas.style.verticalAlign = 'top';
+    this.#app = new PIXI.Application({
+      view: this.#canvas,
+      resizeTo: window,
+      preserveDrawingBuffer: true,
+      transparent: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+    });
+  }
+  getCanvas() {
+    return this.#canvas;
+  }
+  async load(dirName, fileNames) {
+    this.#canvas.style.display = 'block';
+    let ext = '.model3.json';
+    if (fileNames[1].includes('.moc3')) ext = '.model3.json';
+    else if (fileNames[1].includes('.moc')) ext = '.json';
+    const rawUrl = `${dirName}${fileNames[0]}${ext}`;
+    const url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+      ? rawUrl
+      : convertFileSrc(rawUrl);
+    const { live2d: { Live2DModel } } = PIXI;
+    try {
+      const model = await Live2DModel.from(url, { autoInteract: false });
+      this.#model = model;
+      const { innerWidth: w, innerHeight: h } = window;
+      const s = Math.min(
+        w / model.internalModel.originalWidth,
+        h / model.internalModel.originalHeight
+      );
+      model.scale.set(s);
+      model.anchor.set(0.5, 0.5);
+      model.position.set(w * 0.5, h * 0.5);
+      this.#app.stage.addChild(model);
+      const animations = this.getAnimations();
+      if (animations.length > 0) {
+        this.setAnimation(animations[0].value);
+      }
+      this.#app.ticker.add(() => {
+        if (this.#model && this.#model.meshes && this.#hiddenDrawables.size > 0) {
+          for (const index of this.#hiddenDrawables) {
+            if (this.#model.meshes[index]) {
+              this.#model.meshes[index].renderable = false;
+            }
+          }
+        }
+      });
+      const originalUpdate = this.#model.update;
+      this.#model.update = function (dt) {
+        originalUpdate.call(this, dt * this._spive2dSpeed);
+      };
+      this.#model._spive2dSpeed = this.#speed;
+    } catch (err) {
+      alert("Live2DRenderer Error: " + (err.message || err));
+      console.error(err);
+    }
+  }
+  dispose() {
+    this.#canvas.style.display = 'none';
+    if (this.#model) {
+      this.#model.destroy();
+      this.#model = null;
+    }
+    if (this.#app) {
+      this.#app.destroy(false, { children: true });
+      this.#app = null;
+    }
+  }
+  resize(width, height) {
+    this.#app.renderer.resize(width, height);
+  }
+  getOriginalSize() {
+    if (!this.#model) return { width: 0, height: 0 };
+    return {
+      width: Math.round(this.#model.internalModel.originalWidth),
+      height: Math.round(this.#model.internalModel.originalHeight),
+    };
+  }
+  applyTransform(scale, moveX, moveY, rotate) {
+    if (!this.#model) return;
+    const { innerWidth: w, innerHeight: h } = window;
+    const baseScale = Math.min(
+      w / this.#model.internalModel.originalWidth,
+      h / this.#model.internalModel.originalHeight
+    );
+    this.#model.scale.set(baseScale * scale);
+    this.#model.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
+    this.#model.rotation = rotate;
+  }
+  resetTransform(width = window.innerWidth, height = window.innerHeight) {
+    if (!this.#model) return;
+    const s = Math.min(
+      width / this.#model.internalModel.originalWidth,
+      height / this.#model.internalModel.originalHeight
+    );
+    this.#model.scale.set(s);
+    this.#model.position.set(width * 0.5, height * 0.5);
+    this.#model.rotation = 0;
+  }
+  captureFrame(width, height) {
+    if (!this.#model) return null;
+    width = Math.round(width);
+    height = Math.round(height);
+    const originalScale = this.#model.scale.clone();
+    const originalPosition = this.#model.position.clone();
+    const s = Math.min(
+      width / this.#model.internalModel.originalWidth,
+      height / this.#model.internalModel.originalHeight
+    );
+    this.#model.scale.set(s);
+    this.#model.position.set(width * 0.5, height * 0.5);
+    const renderTexture = PIXI.RenderTexture.create({ width, height });
+    this.#app.renderer.render(this.#model, { renderTexture });
+    const canvas = this.#app.renderer.extract.canvas(renderTexture);
+    this.#model.scale.copyFrom(originalScale);
+    this.#model.position.copyFrom(originalPosition);
+    renderTexture.destroy(true);
+    return canvas;
+  }
+  getAnimations() {
+    if (!this.#model) return [];
+    const motions = this.#model.internalModel.motionManager.definitions;
+    if (!motions) return [];
+    return Object.entries(motions)
+      .flatMap(([groupName, anims]) =>
+        anims.map((anim, i) => ({
+          name: (anim.file || anim.File || '').split('/').pop(),
+          value: `${groupName},${i}`,
+        }))
+      )
+      .sort(sortByText);
+  }
+  setAnimation(value) {
+    if (!this.#model) return;
+    const [group, index] = value.split(',');
+    this.#currentMotion = { group, index: Number(index) };
+    this.#model.motion(group, Number(index), 3);
+  }
+  getExpressions() {
+    if (!this.#model) return null;
+    const expressions = this.#model.internalModel.motionManager.expressionManager?.definitions;
+    if (!expressions) return null;
+    return [
+      { name: 'Default', value: '' },
+      ...expressions
+        .map((expr, i) => ({
+          name: (expr.file || expr.File || '').split('/').pop(),
+          value: String(i),
+        }))
+        .sort(sortByText),
+    ];
+  }
+  setExpression(value) {
+    if (!this.#model) return;
+    if (value === '') {
+      this.#model.expression(
+        this.#model.internalModel.motionManager.ExpressionManager?.defaultExpression
+      );
+    } else {
+      this.#model.expression(Number(value));
+    }
+  }
+  getPropertyCategories() {
+    return ['parameters', 'parts', 'drawables'];
+  }
+  getPropertyItems(category) {
+    if (!this.#model) return [];
+    const coreModel = this.#model.internalModel.coreModel;
+    if (category === 'parameters') {
+      if (!coreModel._parameterIds) return [];
+      return coreModel._parameterIds
+        .map((id, index) => ({
+          name: id,
+          id,
+          index,
+          type: 'range',
+          max: coreModel._parameterMaximumValues[index],
+          min: coreModel._parameterMinimumValues[index],
+          value: coreModel._parameterValues[index],
+          step: (coreModel._parameterMaximumValues[index] - coreModel._parameterMinimumValues[index]) / 100,
+        }))
+        .sort(sortById);
+    }
+    if (category === 'parts') {
+      const partIds = coreModel?._partIds;
+      if (!partIds) return [];
+      return partIds
+        .map((name, index) => ({
+          name,
+          index,
+          type: 'checkbox',
+          checked: coreModel.getPartOpacityById(name) > 0,
+        }))
+        .sort(sortByText);
+    }
+    if (category === 'drawables') {
+      if (!coreModel?._drawableIds) return [];
+      if (!this.#opacities) {
+        this.#opacities = new Float32Array(coreModel._drawableIds.length);
+        this.#opacities.set(coreModel._model.drawables.opacities);
+        this.#initialOpacities = new Float32Array(this.#opacities);
+      }
+      return coreModel._drawableIds
+        .map((name, index) => {
+          let isVisible = Math.round(this.#opacities[index]) > 0;
+          return {
+            name,
+            index,
+            type: 'checkbox',
+            checked: isVisible,
+          };
+        })
+        .filter(item => item.checked || this.#initialOpacities[item.index] > 0)
+        .sort(sortByText);
+    }
+    return [];
+  }
+  updatePropertyItem(category, name, index, value) {
+    if (!this.#model) return;
+    const coreModel = this.#model.internalModel.coreModel;
+    if (category === 'parameters') {
+      coreModel._parameterValues[index] = value;
+    } else if (category === 'parts') {
+      coreModel.setPartOpacityById(name, value ? 1 : 0);
+    } else if (category === 'drawables') {
+      if (this.#opacities) {
+        this.#opacities[index] = value ? 1 : 0;
+        coreModel._model.drawables.opacities = this.#opacities;
+      }
+      if (value) {
+        this.#hiddenDrawables.delete(index);
+      } else {
+        this.#hiddenDrawables.add(index);
+      }
+      this.render();
+    }
+  }
+  getAnimationDuration() {
+    if (!this.#model) return 0;
+    const mqm = this.#model.internalModel.motionManager?.queueManager;
+    if (mqm?._motions?.length > 0) {
+      const entry = mqm._motions[0];
+      const motion = entry._motion;
+      if (motion) {
+        return motion._loopDurationSeconds ||
+          (motion._motionData && motion._motionData.duration) ||
+          (motion.getDuration ? motion.getDuration() : 0);
+      }
+    }
+    return 0;
+  }
+  seekAnimation(progress) {
+    if (!this.#model) return;
+    const mm = this.#model.internalModel.motionManager;
+    const mqm = mm?.queueManager;
+    const entry = mqm?._motions?.[0];
+    if (entry?._motion) {
+      const motion = entry._motion;
+      const duration = motion._loopDurationSeconds ||
+        (motion._motionData && motion._motionData.duration) ||
+        (motion.getDuration ? motion.getDuration() : -1);
+      if (duration > 0) {
+        const targetTime = progress * duration;
+        const internalModel = this.#model.internalModel;
+        const savedStateTime = entry._stateTimeSeconds;
+        entry._startTimeSeconds = savedStateTime - targetTime;
+        mm.update(internalModel.coreModel, savedStateTime);
+        entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
+        internalModel.coreModel.update();
+        this.render();
+        if (this.#app && !this.#model.autoUpdate) {
+          this.#app.render();
+        }
+      }
+    }
+  }
+  getCurrentTime() {
+    if (!this.#model) return 0;
+    const mqm = this.#model.internalModel.motionManager?.queueManager;
+    if (mqm?._motions?.length > 0) {
+      const entry = mqm._motions[0];
+      const duration = this.getAnimationDuration();
+      if (duration > 0) {
+        let t = entry._stateTimeSeconds - entry._startTimeSeconds;
+        return ((t % duration) + duration) % duration;
+      }
+    }
+    return 0;
+  }
+  getFPS() {
+    if (!this.#model) return 30;
+    const mqm = this.#model.internalModel.motionManager?.queueManager;
+    if (mqm?._motions?.length > 0) {
+      const motion = mqm._motions[0]._motion;
+      if (motion) {
+        return motion._fps || (motion._motionData && motion._motionData.fps) || 30;
+      }
+    }
+    return 30;
+  }
+  setSpeed(speed) {
+    this.#speed = speed;
+    if (this.#model) {
+      this.#model._spive2dSpeed = speed;
+    }
+  }
+  setPaused(paused) {
+    if (!this.#model) return;
+    if (paused) {
+      this.#model.autoUpdate = false;
+    } else {
+      const { group, index } = this.#currentMotion;
+      if (group !== null && index !== null) {
+        this.#model.motion(group, index, 3).then(() => {
+          if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
+        });
+      } else {
+        if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
+      }
+    }
+  }
+  resumeFromProgress(progress) {
+    if (!this.#model) return;
+    const { group, index } = this.#currentMotion;
+    if (group !== null && index !== null) {
+      this.#model.motion(group, index, 3).then(() => {
+        const mqm = this.#model.internalModel?.motionManager?.queueManager;
+        const entry = mqm?._motions?.[0];
+        if (entry?._motion) {
+          const motion = entry._motion;
+          const duration = motion._loopDurationSeconds ||
+            (motion._motionData && motion._motionData.duration) ||
+            (motion.getDuration ? motion.getDuration() : 0);
+          if (duration > 0) {
+            const targetTime = progress * duration;
+            entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
+          }
+        }
+        if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
+      });
+    } else {
+      if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
+    }
+  }
+  render() {
+    if (this.#model) {
+      this.#model.internalModel.coreModel.update();
+    }
+    this.#app.render();
+  }
+  stepAnimation(deltaSeconds) {
+    if (!this.#model) return;
+    const dtMs = deltaSeconds * 1000.0;
+    this.#model.update(dtMs);
+    this.render();
+    if (this.#app && !this.#model.autoUpdate) {
+      this.#app.render();
+    }
+  }
+  async setAlphaMode(_alphaMode) {
+  }
+  setResizeTo(target) {
+    this.#app.resizeTo = target;
+  }
+  getModel() {
+    return this.#model;
+  }
+  getCurrentMotion() {
+    return { ...this.#currentMotion };
+  }
+}
