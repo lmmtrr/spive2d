@@ -14,11 +14,11 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin --bundles app'
           - platform: 'ubuntu-22.04'
-            args: ''
+            args: '--bundles appimage'
           - platform: 'windows-latest'
-            args: ''
+            args: '--bundles none'
 
     runs-on: ${{ matrix.platform }}
     steps:
