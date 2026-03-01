@@ -17,8 +17,7 @@
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-opener": "^2",
-    "mediabunny": "^1.35.0",
-    "pixi-live2d-display": "^0.4.0"
+    "mediabunny": "^1.35.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
@@ -31,3 +30,4 @@
     "vite": "^6.0.3"
   }
 }
+
