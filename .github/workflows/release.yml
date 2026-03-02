@@ -43,7 +43,9 @@ jobs:
       - name: install app dependencies
         run: npm install
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build & Release (macOS / Linux)
+        if: matrix.platform != 'windows-latest'
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -54,6 +56,10 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
           uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' }}
+
+      - name: Build (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: npx tauri build --no-bundle
 
       - name: Zip Windows Binary
         if: matrix.platform == 'windows-latest'
