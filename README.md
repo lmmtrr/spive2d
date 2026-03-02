@@ -2,7 +2,7 @@
 
 English | [日本語](README.ja.md) | [中文](README.zh-cn.md)
 
-https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
+https://github.com/user-attachments/assets/1a2d61f0-bc33-490c-80c2-3cdf962f2d84
 
 A desktop application built with Tauri for viewing and interacting with Spine skeletal animations and Live2D models.
 
@@ -17,21 +17,42 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 ## ⌨️ Keyboard Shortcuts
 
-| Action                 | Shortcuts |
-| ---------------------- | --------- |
-| 📂 Previous Directory  | `Q`       |
-| 📁 Next Directory      | `W`       |
-| ⏮️ Previous Scene      | `A`       |
-| ⏭️ Next Scene          | `S`       |
-| ◀️ Previous Animation  | `Z`       |
-| ▶️ Next Animation      | `X`       |
-| ⚙️ Open/Close Settings | `E`       |
-| 📷 Export Image        | `R`       |
-| 💾 Export Animation    | `C`       |
-| 🖼️ Export PNG Sequence | `D`       |
-| 📝 Append to List      | `V`       |
+| Action                   | Shortcuts |
+| ------------------------ | --------- |
+| 📂 Previous Directory    | `Q`       |
+| 📁 Next Directory        | `W`       |
+| ⏮️ Previous Scene        | `A`       |
+| ⏭️ Next Scene            | `S`       |
+| ◀️ Previous Animation    | `Z`       |
+| ▶️ Next Animation        | `X`       |
+| ⚙️ Open/Close Settings   | `E`       |
+| 📷 Export Image          | `R`       |
+| 🖼️ Export Image Sequence | `D`       |
+| 💾 Export Animation      | `C`       |
+| 📝 Append to List        | `V`       |
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
+
+## 🍎 Note for macOS Users
+
+If the application displays a message saying it is damaged and cannot be opened, you may need to remove the quarantine attribute. Run the following command in your terminal:
+
+```bash
+xattr -dr com.apple.quarantine /path/to/spive2d_aarch64.app
+```
+
+## 🐧 Note for Linux Users
+
+**GUI Method**:
+To run the executable file, please turn on the **"Executable as Program"** toggle switch in the file properties and execute it with **"Run as a Program"**.
+
+**Terminal Method**:
+Alternatively, you can grant execution permission and run the application from the terminal:
+
+```bash
+chmod +x /path/to/spive2d_linux_x64
+./spive2d_linux_x64
+```
 
 ## 🚀 Development
 

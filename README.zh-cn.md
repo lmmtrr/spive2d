@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md) | 中文
 
-https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
+https://github.com/user-attachments/assets/1a2d61f0-bc33-490c-80c2-3cdf962f2d84
 
 一款使用 Tauri 构建的桌面应用程序，用于查看 Spine 骨骼动画和 Live2D 模型并与之交互。
 
@@ -27,11 +27,32 @@ https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
 | ▶️ 下一个动画    | `X`    |
 | ⚙️ 打开/关闭设置 | `E`    |
 | 📷 导出图像      | `R`    |
+| 🖼️ 导出图像序列  | `D`    |
 | 💾 导出动画      | `C`    |
-| 🖼️ 导出 PNG 序列 | `D`    |
 | 📝 添加到列表    | `V`    |
 
 - **添加到列表**: 将当前场景文本保存到列表中。请参考 [`py/copy_by_list.py`](py/copy_by_list.py) 来处理导出的列表。
+
+## 🍎 macOS 用户须知
+
+如果提示应用“已损坏，无法打开”，您可能需要移除隔离属性 (quarantine)。请在终端中运行以下命令：
+
+```bash
+xattr -dr com.apple.quarantine /path/to/spive2d_aarch64.app
+```
+
+## 🐧 Linux 用户须知
+
+**GUI 方法**:
+要运行可执行文件，请在文件属性中打开“**允许作为程序执行文件 (Executable as Program)**”的开关，然后选择“**作为程序运行 (Run as a Program)**”。
+
+**终端方法**:
+或者，您可以通过终端授予执行权限并运行该应用程序：
+
+```bash
+chmod +x /path/to/spive2d_linux_x64
+./spive2d_linux_x64
+```
 
 ## 🚀 开发
 

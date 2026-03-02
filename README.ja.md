@@ -2,7 +2,7 @@
 
 [English](README.md) | 日本語 | [中文](README.zh-cn.md)
 
-https://github.com/user-attachments/assets/dda2be5c-39dd-4b9f-8b2c-52a32a364b27
+https://github.com/user-attachments/assets/1a2d61f0-bc33-490c-80c2-3cdf962f2d84
 
 Spine スケルタルアニメーションと Live2D モデルを表示・操作するための Tauri 製デスクトップアプリケーションです。
 
@@ -27,11 +27,32 @@ Spine スケルタルアニメーションと Live2D モデルを表示・操作
 | ▶️ 次のアニメーション   | `X`            |
 | ⚙️ 設定を開く/閉じる    | `E`            |
 | 📷 画像を書出           | `R`            |
-| 💾 アニメーションを書出 | `C`            |
 | 🖼️ 連番画像を書出       | `D`            |
+| 💾 アニメーションを書出 | `C`            |
 | 📝 リストに追加         | `V`            |
 
 - **リストに追加**: 現在のシーンテキストをリストに保存します。エクスポートされたリストの処理については [`py/copy_by_list.py`](py/copy_by_list.py) を参照してください。
+
+## 🍎 macOSユーザー向け
+
+「アプリが壊れているため開けません」等のメッセージが表示されて起動できない場合は、ターミナルで以下のコマンドを実行してquarantine（隔離）属性を解除してください。
+
+```bash
+xattr -dr com.apple.quarantine /path/to/spive2d_aarch64.app
+```
+
+## 🐧 Linuxユーザー向け
+
+**GUIでの実行**:
+実行ファイルを実行するには、ファイルのプロパティ等で「**プログラムとして実行可能 (Executable as Program)**」のトグルスイッチをオンにして、「**プログラムとして実行 (Run as a Program)**」から実行してください。
+
+**ターミナルでの実行**:
+または、ターミナルから実行権限を付与して起動することもできます。
+
+```bash
+chmod +x /path/to/spive2d_linux_x64
+./spive2d_linux_x64
+```
 
 ## 🚀 開発
 
