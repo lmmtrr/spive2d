@@ -18,7 +18,7 @@ jobs:
           - platform: 'ubuntu-22.04'
             args: '--bundles appimage'
           - platform: 'windows-latest'
-            args: ''
+            args: '--bundles ""'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -53,5 +53,14 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          uploadPlainBinary: true
+          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' }}
 
+      - name: Zip Windows Binary
+        if: matrix.platform == 'windows-latest'
+        run: Compress-Archive -Path src-tauri/target/release/spive2d.exe -DestinationPath spive2d-windows.zip
+
+      - name: Upload Windows Zip
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} spive2d-windows.zip --clobber
