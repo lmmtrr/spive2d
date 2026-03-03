@@ -164,6 +164,7 @@ export class SpineRenderer {
     this.#batcher.begin(this.#shader);
     for (const key of Object.keys(this.#skeletons).reverse()) {
       const skel = this.#skeletons[key].skeleton;
+      this.#syncHiddenAttachments();
       this.#skeletonRenderer.vertexEffect = null;
       this.#skeletonRenderer.premultipliedAlpha = (this.#alphaMode === 'unpack' || this.#alphaMode === 'pma');
       this.#skeletonRenderer.draw(this.#batcher, skel);
@@ -371,10 +372,15 @@ export class SpineRenderer {
       this.#assetManager.get(makePath(fileName, skelExt))
     );
     const skeleton = new this.#spine.Skeleton(skeletonData);
+    let initialSkinName;
     if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1)
-      skeleton.setSkinByName(skeleton.data.skins[1].name);
+      initialSkinName = skeleton.data.skins[1].name;
     else
-      skeleton.setSkinByName(skeleton.data.skins[0].name);
+      initialSkinName = skeleton.data.skins[0].name;
+    const newSkin = new this.#spine.Skin('_');
+    const initialSkin = skeleton.data.findSkin(initialSkinName);
+    if (initialSkin) newSkin.addSkin(initialSkin);
+    skeleton.setSkin(newSkin);
     if (!skeleton.data.defaultSkin)
       skeleton.data.defaultSkin = new this.#spine.Skin('default');
     const bounds = this.#calculateBounds(skeleton);
@@ -487,6 +493,7 @@ export class SpineRenderer {
       }
       state.apply(skel);
       skel.updateWorldTransform(2);
+      this.#syncHiddenAttachments();
       this.#shader.bind();
       this.#shader.setUniformi(this.#spine.Shader.SAMPLER, 0);
       this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
@@ -520,27 +527,13 @@ export class SpineRenderer {
       }
       attachmentNames.forEach(name => {
         const compositeKey = `${name}##${index}`;
-        if (this.#attachmentsCache[compositeKey]) {
-          if (slot.attachment && slot.attachment.name === name) {
-            this.#attachmentsCache[compositeKey] = [index, slot.attachment, false, null, this.#getModelId()];
-            slot.attachment = null;
-          }
-        }
         attachmentMap.set(compositeKey, index);
       });
     });
     for (const compositeKey in this.#attachmentsCache) {
       if (!attachmentMap.has(compositeKey)) {
-        const [index, , wasFromSkin, skinKey, cachedModelId] = this.#attachmentsCache[compositeKey];
-        const [name] = compositeKey.split('##');
-        const slot = skeleton.slots[index];
-        const lookupName = skinKey || (slot && slot.data.attachmentName) || name;
-        const foundAtt = skeleton.getAttachment(index, lookupName);
-        const isCurrentModel = cachedModelId === this.#getModelId();
-        if ((wasFromSkin && isCurrentModel) || (foundAtt && foundAtt.name === name)) {
-          if (foundAtt) this.#attachmentsCache[compositeKey][1] = foundAtt;
-          attachmentMap.set(compositeKey, index);
-        }
+        const [index] = this.#attachmentsCache[compositeKey];
+        attachmentMap.set(compositeKey, index);
       }
     }
     return Array.from(attachmentMap.entries())
@@ -563,7 +556,7 @@ export class SpineRenderer {
     const activeSkinNames = new Set();
     if (this.#activeSkins) {
       this.#activeSkins.forEach(name => activeSkinNames.add(name));
-    } else if (skel.skin) {
+    } else if (skel.skin && skel.skin.name !== '_') {
       activeSkinNames.add(skel.skin.name);
     } else {
       let defaultName = 'default';
@@ -581,47 +574,32 @@ export class SpineRenderer {
   #toggleAttachment(name, slotIndex, checked) {
     const skeleton = this.#skeletons['0'].skeleton;
     const compositeKey = `${name}##${slotIndex}`;
-    const defaultSkin = skeleton.data.defaultSkin;
     if (checked) {
       if (this.#attachmentsCache[compositeKey]) {
-        const [cachedSlotIndex, cachedAttachment, wasFromSkin, savedSkinKey, , isDefault] =
-          this.#attachmentsCache[compositeKey];
-        if (wasFromSkin) {
-          if (isDefault)
-            defaultSkin.setAttachment(cachedSlotIndex, savedSkinKey || name, cachedAttachment);
-          else if (skeleton.skin)
-            skeleton.skin.setAttachment(cachedSlotIndex, savedSkinKey || name, cachedAttachment);
-          skeleton.setToSetupPose();
-        } else {
-          const slot = skeleton.slots[cachedSlotIndex];
-          if (slot) slot.attachment = cachedAttachment;
-        }
         delete this.#attachmentsCache[compositeKey];
+        skeleton.setToSetupPose();
+        const state = this.#skeletons['0'].state;
+        if (state) state.apply(skeleton);
       }
     } else {
-      const { attachment, key: skinKey, isDefault } = this.#getSkinAttachment(
-        slotIndex, name, defaultSkin, skeleton
-      );
-      if (attachment) {
-        this.#attachmentsCache[compositeKey] = [slotIndex, attachment, true, skinKey, this.#getModelId(), isDefault];
-        if (isDefault) defaultSkin.removeAttachment(slotIndex, skinKey);
-        else if (skeleton.skin) skeleton.skin.removeAttachment(slotIndex, skinKey);
-        skeleton.setToSetupPose();
+      const slot = skeleton.slots[slotIndex];
+      let att = null;
+      if (slot && slot.attachment && slot.attachment.name === name) {
+        att = slot.attachment;
       } else {
-        const slot = skeleton.slots[slotIndex];
-        if (slot?.attachment?.name === name) {
-          this.#attachmentsCache[compositeKey] = [slotIndex, slot.attachment, false, null, this.#getModelId(), false];
-          slot.attachment = null;
-        }
+        att = { name: name };
+      }
+      this.#attachmentsCache[compositeKey] = [slotIndex, att];
+      if (slot && slot.attachment && slot.attachment.name === name) {
+        slot.attachment = null;
       }
     }
-    this.#syncHiddenAttachments();
   }
   #toggleSkin(name, checked) {
     if (!this.#activeSkins) {
       this.#activeSkins = new Set();
       const skel = this.#skeletons['0'].skeleton;
-      if (skel.skin) this.#activeSkins.add(skel.skin.name);
+      if (skel.skin && skel.skin.name !== '_') this.#activeSkins.add(skel.skin.name);
       else {
         let defaultName = 'default';
         const skins = skel.data.skins;
@@ -657,28 +635,14 @@ export class SpineRenderer {
   saveSkins(checkedNames) {
     return checkedNames;
   }
-  #getSkinAttachment(slotIndex, name, defaultSkin, skeleton) {
-    const checkSkin = (skin, isDefault) => {
-      if (!skin) return null;
-      let attachment = skin.getAttachment(slotIndex, name);
-      if (attachment) return { attachment, key: name, isDefault };
-      const slot = skeleton.slots[slotIndex];
-      if (slot?.data.attachmentName) {
-        const altKey = slot.data.attachmentName;
-        const altAtt = skin.getAttachment(slotIndex, altKey);
-        if (altAtt?.name === name) return { attachment: altAtt, key: altKey, isDefault };
-      }
-      return null;
-    };
-    return checkSkin(skeleton.skin, false) || checkSkin(defaultSkin, true) || { attachment: null, key: name, isDefault: false };
-  }
   #syncHiddenAttachments() {
-    const skeleton = this.#skeletons['0'].skeleton;
-    Object.values(this.#attachmentsCache).forEach(([slotIndex, , , skinKey]) => {
-      if (skeleton.data.defaultSkin) skeleton.data.defaultSkin.removeAttachment(slotIndex, skinKey);
-      if (skeleton.skin) skeleton.skin.removeAttachment(slotIndex, skinKey);
+    const skeleton = this.#skeletons['0']?.skeleton;
+    if (!skeleton) return;
+    Object.values(this.#attachmentsCache).forEach(([slotIndex, cachedAttachment]) => {
       const slot = skeleton.slots[slotIndex];
-      if (slot) slot.attachment = null;
+      if (slot && slot.attachment && (slot.attachment.name === cachedAttachment.name)) {
+        slot.attachment = null;
+      }
     });
   }
   #getModelId() {
