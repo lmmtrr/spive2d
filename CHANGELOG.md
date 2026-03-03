@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4] - 2026-03-03
+
+### Fixed
+
+- Prevent permanent loss of attachments when toggling skins
+- Prevent overlapping models on rapid scene changes
+
 ## [0.1.3] - 2026-03-03
 
 ### Added
