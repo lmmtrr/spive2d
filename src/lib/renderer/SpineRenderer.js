@@ -376,7 +376,7 @@ export class SpineRenderer {
     if (!skeleton.data.defaultSkin)
       skeleton.data.defaultSkin = new this.#spine.Skin('default');
     const bounds = this.#calculateBounds(skeleton);
-    if (skeleton.data.width === 0 || skeleton.data.height === 0) {
+    if (skeleton.data.width === 0 || skeleton.data.height === 0 || isNaN(skeleton.data.width) || isNaN(skeleton.data.height)) {
       skeleton.data.width = bounds.size.x;
       skeleton.data.height = bounds.size.y;
     }
