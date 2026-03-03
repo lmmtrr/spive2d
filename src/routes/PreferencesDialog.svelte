@@ -60,6 +60,15 @@
     }
   });
 
+  $effect(() => {
+    if (open && appState.initialized) {
+      appState.directories?.selectedScene;
+      appState.directories?.selectedDir;
+      appState.transform;
+      setTimeout(updateOriginalSize, 10);
+    }
+  });
+
   function updateOriginalSize() {
     const renderer = getRenderer();
     if (renderer && appState.initialized) {
@@ -251,8 +260,19 @@
     if (key === 'ArrowRight') return '→';
     return key.length === 1 ? key.toUpperCase() : key;
   }
+
+  function handleResize() {
+    if (open && dialogEl?.open) {
+      windowWidth = window.innerWidth;
+      windowHeight = window.innerHeight;
+      if (!keepAspectRatio) {
+        aspectRatio = windowHeight / windowWidth;
+      }
+    }
+  }
 </script>
 
+<svelte:window onresize={handleResize} />
 
 <dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja'} onclick={handleDialogClick}>
   <div class="tab-bar">
