@@ -35,6 +35,8 @@
   let animController = $state();
   let shortcuts = $state(getShortcuts());
   const transformAction = createTransformAction();
+  let currentLoadId = 0;
+  let loadingRenderers = [];
 
   function refreshShortcuts() {
     shortcuts = getShortcuts();
@@ -151,6 +153,8 @@
   }
 
   async function initModel(previousSkins = []) {
+    currentLoadId++;
+    const loadId = currentLoadId;
     const previousAnimationName = sidebar?.getSelectedAnimationText() || '';
     const { files, selectedDir, selectedScene } = appState.directories;
     if (!files || !selectedDir) return;
@@ -158,14 +162,31 @@
     if (!scenes || scenes.length === 0) return;
     const fileNames = scenes[selectedScene];
     const renderer = createRenderer(fileNames);
+    loadingRenderers.push(renderer);
     const canvas = renderer.getCanvas();
     if (canvasContainer && !canvasContainer.contains(canvas)) {
       canvasContainer.appendChild(canvas);
     }
     if (renderer.setAlphaMode) {
       renderer.setAlphaMode(appState.alphaMode);
+    }    
+    try {
+      await renderer.load(selectedDir, fileNames);
+    } catch (e) {
+      console.error(e);
+      loadingRenderers = loadingRenderers.filter(r => r !== renderer);
+      return;
     }
-    await renderer.load(selectedDir, fileNames);
+    if (loadId !== currentLoadId) {
+      loadingRenderers = loadingRenderers.filter(r => r !== renderer);
+      renderer.dispose();
+      const canvas = renderer.getCanvas();
+      if (canvasContainer?.contains(canvas)) {
+        canvasContainer.removeChild(canvas);
+      }
+      return;
+    }
+    loadingRenderers = loadingRenderers.filter(r => r !== renderer);
     setRenderer(renderer);
     const categories = renderer.getPropertyCategories();
     appState.propertyCategory = categories[0] || 'parameters';
@@ -194,6 +215,7 @@
   }
 
   function disposeModel() {
+    currentLoadId++;
     const renderer = getRenderer();
     if (renderer) {
       renderer.dispose();
@@ -203,6 +225,14 @@
       }
       setRenderer(null);
     }
+    for (const r of loadingRenderers) {
+      r.dispose();
+      const canvas = r.getCanvas();
+      if (canvasContainer?.contains(canvas)) {
+        canvasContainer.removeChild(canvas);
+      }
+    }
+    loadingRenderers = [];
   }
 
   function handleDirChange(e) {

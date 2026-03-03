@@ -41,6 +41,10 @@ export class Live2DRenderer {
     const { live2d: { Live2DModel } } = PIXI;
     try {
       const model = await Live2DModel.from(url, { autoInteract: false });
+      if (!this.#app) {
+        model.destroy();
+        return;
+      }
       this.#model = model;
       const { innerWidth: w, innerHeight: h } = window;
       const s = Math.min(

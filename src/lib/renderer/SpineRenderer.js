@@ -103,6 +103,7 @@ export class SpineRenderer {
     this.#requestId = undefined;
     this.#attachmentsCache = {};
     if (this.#assetManager) this.#assetManager.dispose();
+    this.#assetManager = null;
     this.#animationStates = [];
     this.#skeletons = {};
     this.#activeSkins = null;
@@ -324,6 +325,7 @@ export class SpineRenderer {
     throw new Error('Unknown skeleton extension');
   }
   #waitForAssets() {
+    if (!this.#assetManager) return;
     if (this.#assetManager.isLoadingComplete()) {
       const baseName = this.#fileNames[0];
       this.#skeletons['0'] = this.#loadSkeleton(baseName);
