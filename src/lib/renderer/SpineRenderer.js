@@ -493,15 +493,23 @@ export class SpineRenderer {
     if (!skeleton) return [];
     const attachmentMap = new Map();
     skeleton.slots.forEach((slot, index) => {
+      let attachmentNames = [];
       if (slot.attachment) {
-        const name = slot.attachment.name;
+        attachmentNames.push(slot.attachment.name);
+      }
+      if (slot.data.attachmentName && !attachmentNames.includes(slot.data.attachmentName)) {
+        attachmentNames.push(slot.data.attachmentName);
+      }
+      attachmentNames.forEach(name => {
         const compositeKey = `${name}##${index}`;
         if (this.#attachmentsCache[compositeKey]) {
-          this.#attachmentsCache[compositeKey] = [index, slot.attachment, false, null, this.#getModelId()];
-          slot.attachment = null;
+          if (slot.attachment && slot.attachment.name === name) {
+            this.#attachmentsCache[compositeKey] = [index, slot.attachment, false, null, this.#getModelId()];
+            slot.attachment = null;
+          }
         }
         attachmentMap.set(compositeKey, index);
-      }
+      });
     });
     for (const compositeKey in this.#attachmentsCache) {
       if (!attachmentMap.has(compositeKey)) {
