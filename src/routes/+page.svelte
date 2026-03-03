@@ -133,8 +133,9 @@
         selectedDir: dirs[0],
         selectedScene: 0,
       };
+      const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
       disposeModel();
-      await initModel();
+      await initModel(previousSkins);
       appState.initialized = true;
       dialogOpen = false;
     } catch (error) {
@@ -149,7 +150,7 @@
     }
   }
 
-  async function initModel() {
+  async function initModel(previousSkins = []) {
     const previousAnimationName = sidebar?.getSelectedAnimationText() || '';
     const { files, selectedDir, selectedScene } = appState.directories;
     if (!files || !selectedDir) return;
@@ -170,6 +171,13 @@
     appState.propertyCategory = categories[0] || 'parameters';
     appState.resetTransform();
     appState.resetAnimation();
+    if (previousSkins.length > 0 && renderer.getPropertyItems && renderer.applySkins) {
+      const availableSkins = renderer.getPropertyItems('skins') || [];
+      const matchingSkins = previousSkins.filter(skinName => availableSkins.some(s => s.name === skinName));
+      if (matchingSkins.length > 0) {
+        renderer.applySkins(matchingSkins);
+      }
+    }
     sidebar?.refreshProperties();
     const animations = renderer.getAnimations();
     if (animations.length > 0) {
@@ -199,30 +207,28 @@
 
   function handleDirChange(e) {
     const newDir = e.target.value;
-    
     const oldDir = appState.directories.selectedDir;
     const oldScenes = appState.directories.files[oldDir] || [];
     const currentSceneStr = oldScenes.length > 0 && appState.directories.selectedScene >= 0 && appState.directories.selectedScene < oldScenes.length ? oldScenes[appState.directories.selectedScene][0] : '';
     const maxNumber = findMaxNumber(currentSceneStr || '');
-
     appState.directories.selectedDir = newDir;
     const scenes = appState.directories.files[newDir] || [];    
-    
     let index = -1;
     if (maxNumber !== null) {
       index = scenes.findIndex(item => String(item[0]).includes(String(maxNumber)));
     }
-    
     appState.directories.selectedScene = index === -1 ? 0 : index;
+    const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
     disposeModel();
-    initModel();
+    initModel(previousSkins);
   }
 
   function handleSceneChange(e) {
     const idx = e.target.selectedIndex;
     appState.directories.selectedScene = idx;
+    const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
     disposeModel();
-    initModel();
+    initModel(previousSkins);
   }
 
   function handleAnimationChange(value) {
