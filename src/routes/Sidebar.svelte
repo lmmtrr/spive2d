@@ -174,8 +174,11 @@
     {/if}
   </select>
 
-  <select id="animationSelector" bind:value={selectedAnimation} onchange={(e) => onAnimationChange(e.currentTarget.value)}>
-    {#each animations as anim}
+  <select id="animationSelector" value={selectedAnimation} onchange={(e) => {
+    selectedAnimation = e.currentTarget.value;
+    onAnimationChange(selectedAnimation);
+  }}>
+    {#each animations as anim (anim.value)}
       <option value={anim.value}>{anim.name}</option>
     {/each}
   </select>

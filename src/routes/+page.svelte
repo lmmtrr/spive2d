@@ -150,6 +150,7 @@
   }
 
   async function initModel() {
+    const previousAnimationName = sidebar?.getSelectedAnimationText() || '';
     const { files, selectedDir, selectedScene } = appState.directories;
     if (!files || !selectedDir) return;
     const scenes = files[selectedDir];
@@ -172,7 +173,15 @@
     sidebar?.refreshProperties();
     const animations = renderer.getAnimations();
     if (animations.length > 0) {
-      sidebar?.setSelectedAnimation(animations[0].value);
+      let targetAnim = animations[0].value;
+      if (previousAnimationName) {
+        const match = animations.find(a => a.name === previousAnimationName);
+        if (match) {
+          targetAnim = match.value;
+        }
+      }
+      sidebar?.setSelectedAnimation(targetAnim);
+      handleAnimationChange(targetAnim);
     }
   }
 
