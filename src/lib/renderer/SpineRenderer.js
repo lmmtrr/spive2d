@@ -390,6 +390,15 @@ export class SpineRenderer {
     return { skeleton, state: animationState, bounds };
   }
   #calculateBounds(skeleton) {
+    const originalSkin = skeleton.skin;
+    const allSkins = skeleton.data.skins;
+    if (allSkins.length > 1) {
+      const combinedSkin = new this.#spine.Skin('_bounds');
+      for (const skin of allSkins) {
+        combinedSkin.addSkin(skin);
+      }
+      skeleton.setSkin(combinedSkin);
+    }
     skeleton.setToSetupPose();
     skeleton.updateWorldTransform(2);
     const offset = new this.#spine.Vector2();
@@ -402,7 +411,7 @@ export class SpineRenderer {
         skeleton.updateWorldTransform(2);
         skeleton.getBounds(offset, size, []);
         if (size.x !== -Infinity && size.y !== -Infinity) {
-          return { offset, size };
+          break;
         }
       }
     }
@@ -412,6 +421,13 @@ export class SpineRenderer {
       offset.x = -1024;
       offset.y = -1024;
     }
+    if (originalSkin) {
+      skeleton.setSkin(originalSkin);
+    } else {
+      skeleton.setSkin(null);
+    }
+    skeleton.setToSetupPose();
+    skeleton.updateWorldTransform(2);
     return { offset, size };
   }
   #updateMVP(canvasWidth = this.#canvas.width, canvasHeight = this.#canvas.height, dpr = 1) {
