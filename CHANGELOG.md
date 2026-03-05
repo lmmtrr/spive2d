@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] - 2026-03-05
+
+### Fixed
+
+- Prevent Drawables from disappearing when switching property categories
+
 ## [0.1.5] - 2026-03-05
 
 ### Fixed
