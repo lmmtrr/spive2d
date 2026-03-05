@@ -270,6 +270,7 @@
         renderer?.seekAnimation(0);
       });
     }
+    sidebar?.refreshProperties();
   }
 
   function handleExpressionChange(value) {

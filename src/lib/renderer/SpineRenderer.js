@@ -533,6 +533,25 @@ export class SpineRenderer {
         attachmentMap.set(compositeKey, index);
       });
     });
+
+    const state = this.#skeletons['0']?.state;
+    if (state?.tracks[0]) {
+      const animation = state.tracks[0].animation;
+      if (animation.timelines) {
+        for (const timeline of animation.timelines) {
+          if (timeline.attachmentNames) {
+            const slotIndex = timeline.slotIndex;
+            for (const name of timeline.attachmentNames) {
+              if (name) {
+                const compositeKey = `${name}##${slotIndex}`;
+                attachmentMap.set(compositeKey, slotIndex);
+              }
+            }
+          }
+        }
+      }
+    }
+
     for (const compositeKey in this.#attachmentsCache) {
       if (!attachmentMap.has(compositeKey)) {
         const [index] = this.#attachmentsCache[compositeKey];
