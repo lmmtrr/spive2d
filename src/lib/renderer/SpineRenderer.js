@@ -533,7 +533,6 @@ export class SpineRenderer {
         attachmentMap.set(compositeKey, index);
       });
     });
-
     const state = this.#skeletons['0']?.state;
     if (state?.tracks[0]) {
       const animation = state.tracks[0].animation;
@@ -549,13 +548,6 @@ export class SpineRenderer {
             }
           }
         }
-      }
-    }
-
-    for (const compositeKey in this.#attachmentsCache) {
-      if (!attachmentMap.has(compositeKey)) {
-        const [index] = this.#attachmentsCache[compositeKey];
-        attachmentMap.set(compositeKey, index);
       }
     }
     return Array.from(attachmentMap.entries())
