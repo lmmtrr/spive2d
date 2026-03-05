@@ -516,10 +516,51 @@ export class SpineRenderer {
     }
     this.#requestId = requestAnimationFrame(() => this.#renderLoop());
   }
+  #collectAttachmentsFromSkin(skin, attachmentMap) {
+    if (!skin || !skin.attachments) return;
+    if (Array.isArray(skin.attachments)) {
+      for (let i = 0; i < skin.attachments.length; i++) {
+        const entry = skin.attachments[i];
+        if (!entry) continue;
+        if (entry.name !== undefined && entry.slotIndex !== undefined) {
+          const compositeKey = `${entry.name}##${entry.slotIndex}`;
+          attachmentMap.set(compositeKey, entry.slotIndex);
+        } else {
+          for (const name in entry) {
+            const compositeKey = `${name}##${i}`;
+            attachmentMap.set(compositeKey, i);
+          }
+        }
+      }
+    } else if (typeof skin.attachments === 'object') {
+      for (const key of Object.keys(skin.attachments)) {
+        let slotIndex = parseInt(key, 10);
+        if (isNaN(slotIndex)) continue;
+        const dict = skin.attachments[key];
+        if (dict) {
+          if (dict instanceof Map) {
+            for (const name of dict.keys()) {
+              const compositeKey = `${name}##${slotIndex}`;
+              attachmentMap.set(compositeKey, slotIndex);
+            }
+          } else {
+            for (const name in dict) {
+              const compositeKey = `${name}##${slotIndex}`;
+              attachmentMap.set(compositeKey, slotIndex);
+            }
+          }
+        }
+      }
+    }
+  }
   #getAttachmentItems() {
     const skeleton = this.#skeletons['0']?.skeleton;
     if (!skeleton) return [];
-    const attachmentMap = new Map();
+    const skinAttachmentMap = new Map();
+    this.#collectAttachmentsFromSkin(skeleton.data.defaultSkin, skinAttachmentMap);
+    this.#collectAttachmentsFromSkin(skeleton.skin, skinAttachmentMap);
+    const animationAttachmentMap = new Map();
+    const state = this.#skeletons['0']?.state;
     skeleton.slots.forEach((slot, index) => {
       let attachmentNames = [];
       if (slot.attachment) {
@@ -530,10 +571,11 @@ export class SpineRenderer {
       }
       attachmentNames.forEach(name => {
         const compositeKey = `${name}##${index}`;
-        attachmentMap.set(compositeKey, index);
+        if (skinAttachmentMap.has(compositeKey)) {
+          animationAttachmentMap.set(compositeKey, index);
+        }
       });
     });
-    const state = this.#skeletons['0']?.state;
     if (state?.tracks[0]) {
       const animation = state.tracks[0].animation;
       if (animation.timelines) {
@@ -543,14 +585,16 @@ export class SpineRenderer {
             for (const name of timeline.attachmentNames) {
               if (name) {
                 const compositeKey = `${name}##${slotIndex}`;
-                attachmentMap.set(compositeKey, slotIndex);
+                if (skinAttachmentMap.has(compositeKey)) {
+                  animationAttachmentMap.set(compositeKey, slotIndex);
+                }
               }
             }
           }
         }
       }
     }
-    return Array.from(attachmentMap.entries())
+    return Array.from(animationAttachmentMap.entries())
       .map(([compositeKey, index]) => {
         const [name] = compositeKey.split('##');
         return {
