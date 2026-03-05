@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5] - 2026-03-05
+
+### Fixed
+
+- Prevent permanent loss of drawables when toggling parts
+- Reapply animation when changing alpha mode
+
 ## [0.1.4] - 2026-03-03
 
 ### Fixed
