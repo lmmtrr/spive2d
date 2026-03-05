@@ -59,15 +59,6 @@ export class Live2DRenderer {
       if (animations.length > 0) {
         this.setAnimation(animations[0].value);
       }
-      this.#app.ticker.add(() => {
-        if (this.#model && this.#model.meshes && this.#hiddenDrawables.size > 0) {
-          for (const index of this.#hiddenDrawables) {
-            if (this.#model.meshes[index]) {
-              this.#model.meshes[index].renderable = false;
-            }
-          }
-        }
-      });
       const originalUpdate = this.#model.update;
       this.#model.update = function (dt) {
         originalUpdate.call(this, dt * this._spive2dSpeed);
@@ -218,14 +209,12 @@ export class Live2DRenderer {
     }
     if (category === 'drawables') {
       if (!coreModel?._drawableIds) return [];
-      if (!this.#opacities) {
-        this.#opacities = new Float32Array(coreModel._drawableIds.length);
-        this.#opacities.set(coreModel._model.drawables.opacities);
-        this.#initialOpacities = new Float32Array(this.#opacities);
+      if (!this.#initialOpacities) {
+        this.#initialOpacities = new Float32Array(coreModel._model.drawables.opacities);
       }
       return coreModel._drawableIds
         .map((name, index) => {
-          let isVisible = Math.round(this.#opacities[index]) > 0;
+          let isVisible = !this.#hiddenDrawables.has(index);
           return {
             name,
             index,
@@ -246,14 +235,25 @@ export class Live2DRenderer {
     } else if (category === 'parts') {
       coreModel.setPartOpacityById(name, value ? 1 : 0);
     } else if (category === 'drawables') {
-      if (this.#opacities) {
-        this.#opacities[index] = value ? 1 : 0;
-        coreModel._model.drawables.opacities = this.#opacities;
-      }
       if (value) {
         this.#hiddenDrawables.delete(index);
       } else {
         this.#hiddenDrawables.add(index);
+      }
+      if (!this.#opacities && coreModel._model?.drawables?.opacities) {
+        const wasmOpacities = coreModel._model.drawables.opacities;
+        const renderer = this;
+        this.#opacities = new Proxy(wasmOpacities, {
+          get(target, prop) {
+            if (typeof prop === 'string') {
+              const idx = Number(prop);
+              if (!isNaN(idx) && renderer.#hiddenDrawables.has(idx)) return 0;
+            }
+            const val = target[prop];
+            return typeof val === 'function' ? val.bind(target) : val;
+          }
+        });
+        coreModel._model.drawables.opacities = this.#opacities;
       }
       this.render();
     }
