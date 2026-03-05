@@ -319,7 +319,8 @@ export class SpineRenderer {
       return `${String.fromCharCode(data[position - 1])}.${String.fromCharCode(data[position + 1])}`;
     } else if (ext.includes('.json')) {
       const content = await file.text();
-      const jsonData = JSON.parse(content);
+      const cleanedContent = content.replace(/,(\s*[}\]])/g, '$1');
+      const jsonData = JSON.parse(cleanedContent);
       if (!jsonData.skeleton?.spine) throw new Error('Invalid JSON structure');
       return jsonData.skeleton.spine.substring(0, 3);
     }
@@ -368,9 +369,11 @@ export class SpineRenderer {
     const skeletonLoader = skelExt.includes('.skel')
       ? new this.#spine.SkeletonBinary(atlasLoader)
       : new this.#spine.SkeletonJson(atlasLoader);
-    const skeletonData = skeletonLoader.readSkeletonData(
-      this.#assetManager.get(makePath(fileName, skelExt))
-    );
+    let skelDataOrText = this.#assetManager.get(makePath(fileName, skelExt));
+    if (typeof skelDataOrText === 'string' && skelExt.includes('.json')) {
+      skelDataOrText = skelDataOrText.replace(/,(\s*[}\]])/g, '$1');
+    }
+    const skeletonData = skeletonLoader.readSkeletonData(skelDataOrText);
     const skeleton = new this.#spine.Skeleton(skeletonData);
     let initialSkinName;
     if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1)
