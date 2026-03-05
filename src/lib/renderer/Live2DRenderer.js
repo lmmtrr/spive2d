@@ -10,7 +10,6 @@ export class Live2DRenderer {
   #model = null;
   #hiddenDrawables = new Set();
   #opacities = null;
-  #initialOpacities = null;
   #currentMotion = { group: null, index: null };
   #speed = 1.0;
   constructor() {
@@ -209,9 +208,6 @@ export class Live2DRenderer {
     }
     if (category === 'drawables') {
       if (!coreModel?._drawableIds) return [];
-      if (!this.#initialOpacities) {
-        this.#initialOpacities = new Float32Array(coreModel._model.drawables.opacities);
-      }
       return coreModel._drawableIds
         .map((name, index) => {
           let isVisible = !this.#hiddenDrawables.has(index);
@@ -222,7 +218,6 @@ export class Live2DRenderer {
             checked: isVisible,
           };
         })
-        .filter(item => item.checked || this.#initialOpacities[item.index] > 0)
         .sort(sortByText);
     }
     return [];
