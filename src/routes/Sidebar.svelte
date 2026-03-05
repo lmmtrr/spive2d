@@ -67,6 +67,12 @@
     if (renderer && renderer.setAlphaMode) {
       await renderer.setAlphaMode(appState.alphaMode);
       refreshProperties();
+      if (animations.length > 0) {
+        if (!animations.some(a => a.value === selectedAnimation)) {
+          selectedAnimation = animations[0].value;
+        }
+        onAnimationChange(selectedAnimation);
+      }
     }
   }
 
