@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7] - 2026-03-05
+
+### Fixed
+
+- Update and filter attachment checkboxes dynamically based on active skins and current animation
+- Allow trailing commas in Spine JSON data
+
 ## [0.1.6] - 2026-03-05
 
 ### Fixed
