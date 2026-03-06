@@ -5,17 +5,22 @@ const sortByName = createSorter(item => item[0] || item.name || '');
 const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
 const spineLibs = {};
 
-for (const version of SPINE_VERSIONS) {
-  const script = document.createElement('script');
-  script.src = `lib/spine-webgl-${version}.js`;
-  script.onload = () => {
-    if (version[0] === '3') Object.assign(window.spine, window.spine.webgl);
-    spineLibs[version] = window.spine;
-    window.spine = undefined;
-    script.remove();
-  };
-  document.head.appendChild(script);
-}
+(async () => {
+  for (const version of SPINE_VERSIONS) {
+    await new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = `lib/spine-webgl-${version}.js`;
+      script.onload = () => {
+        if (version[0] === '3') Object.assign(window.spine, window.spine.webgl);
+        spineLibs[version] = window.spine;
+        window.spine = undefined;
+        script.remove();
+        resolve();
+      };
+      document.head.appendChild(script);
+    });
+  }
+})();
 
 export class SpineRenderer {
   #canvas;
@@ -201,12 +206,12 @@ export class SpineRenderer {
     }));
   }
   setAnimation(value) {
-    const skel = this.#skeletons['0']?.skeleton;
-    if (!skel) return;
-    for (const animState of this.#animationStates) {
-      animState.clearTracks();
-      skel.setToSetupPose();
-      animState.setAnimation(0, value, true);
+    for (const key of Object.keys(this.#skeletons)) {
+      const { skeleton, state } = this.#skeletons[key];
+      if (!skeleton || !state) continue;
+      state.clearTracks();
+      skeleton.setToSetupPose();
+      state.setAnimation(0, value, true);
     }
   }
   getExpressions() {

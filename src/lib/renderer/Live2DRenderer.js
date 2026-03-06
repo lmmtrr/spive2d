@@ -364,7 +364,9 @@ export class Live2DRenderer {
     if (this.#model) {
       this.#model.internalModel.coreModel.update();
     }
-    this.#app.render();
+    if (this.#app) {
+      this.#app.render();
+    }
   }
   stepAnimation(deltaSeconds) {
     if (!this.#model) return;

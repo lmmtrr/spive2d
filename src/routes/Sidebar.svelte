@@ -114,9 +114,6 @@
     const names = propertyItems.filter(item => item.checked).map(item => item.name);
     const renderer = getRenderer();
     renderer?.applySkins?.(names);
-    if (appState.propertyCategory === 'attachments') {
-      propertyItems = renderer?.getPropertyItems('attachments') || [];
-    }
   }
 
   function getCheckboxFromEvent(e) {

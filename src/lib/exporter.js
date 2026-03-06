@@ -131,11 +131,6 @@ export async function exportAnimation(sceneText, animationName, onProgress) {
   const originalVisibility = activeCanvas.style.visibility;
   activeCanvas.style.visibility = 'hidden';
   const originalPausedState = appState.animation.paused;
-  const createOffscreenCanvas = (width = 1, height = 1) => {
-    return typeof OffscreenCanvas !== 'undefined'
-      ? new OffscreenCanvas(width, height)
-      : document.createElement('canvas');
-  };
   let compositingCanvas = null;
   let backgroundImageToRender = null;
   const backgroundColor = document.body.style.backgroundColor;

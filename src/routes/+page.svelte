@@ -44,16 +44,20 @@
 
   onMount(() => {
     initBackground();
-    listen('progress', (event) => {
+    const unlistenProgress = listen('progress', (event) => {
       appState.processing = event.payload;
       showSpinner = event.payload;
       if (showSpinner) {
         dialogOpen = false;
       }
     });
-    listen('tauri://drag-drop', async (event) => {
+    const unlistenDragDrop = listen('tauri://drag-drop', async (event) => {
       processPath(event.payload.paths);
     });
+    return async () => {
+      (await unlistenProgress)();
+      (await unlistenDragDrop)();
+    };
   });
 
   function initBackground() {

@@ -333,10 +333,13 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
             }
             let original_fn_lower = original_fn.to_lowercase();
             let target_pattern = format!("{}.skel", base_lower);
-            if original_fn_lower.contains(&target_pattern) {
-                let ext_part = &original_fn[base_lower.len()..];
-                main_file_info = Some((rp.clone(), ext_part.to_string(), "skel"));
-                break;
+            if let Some(pos) = original_fn_lower.find(&target_pattern) {
+                let ext_start = pos + base_lower.len();
+                if ext_start <= original_fn.len() {
+                    let ext_part = &original_fn[ext_start..];
+                    main_file_info = Some((rp.clone(), ext_part.to_string(), "skel"));
+                    break;
+                }
             }
         }
         if main_file_info.is_none() {
@@ -350,10 +353,13 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
                 }
                 let original_fn_lower = original_fn.to_lowercase();
                 let target_pattern = format!("{}.json", base_lower);
-                if original_fn_lower.contains(&target_pattern) {
-                    let ext_part = &original_fn[base_lower.len()..];
-                    main_file_info = Some((rp.clone(), ext_part.to_string(), "json"));
-                    break;
+                if let Some(pos) = original_fn_lower.find(&target_pattern) {
+                    let ext_start = pos + base_lower.len();
+                    if ext_start <= original_fn.len() {
+                        let ext_part = &original_fn[ext_start..];
+                        main_file_info = Some((rp.clone(), ext_part.to_string(), "json"));
+                        break;
+                    }
                 }
             }
         }
@@ -400,7 +406,9 @@ fn find_background_files(
                 } else {
                     path
                 };
-                bg_files.push(filename_part_original_case[base_name_lower.len()..].to_string());
+                if base_name_lower.len() <= filename_part_original_case.len() {
+                    bg_files.push(filename_part_original_case[base_name_lower.len()..].to_string());
+                }
             }
         }
     }
