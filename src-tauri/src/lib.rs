@@ -189,7 +189,7 @@ fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
     let download_dir = app_handle.path().download_dir().map_err(|e| e.to_string())?;
     let export_dir = download_dir.join("spive2d_export");
     fs::create_dir_all(&export_dir).map_err(|e| e.to_string())?;
-    let file_path = export_dir.join("spive_list.txt");
+    let file_path = export_dir.join("spive2d_list.txt");
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
