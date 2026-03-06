@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.8] - 2026-03-06
+
+### Fixed
+
+- Resolve memory leaks, race conditions, and potential crashes
+
 ## [0.1.7] - 2026-03-05
 
 ### Fixed
