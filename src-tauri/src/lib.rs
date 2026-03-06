@@ -323,7 +323,7 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
             .cloned()
             .unwrap_or_default();
         let mut main_file_info: Option<(String, String, &str)> = None;
-        for (_f_lc, rp) in &file_paths {
+        for rp in file_paths.values() {
             let original_fn = Path::new(rp)
                 .file_name()
                 .and_then(|f| f.to_str())
@@ -340,7 +340,7 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
             }
         }
         if main_file_info.is_none() {
-            for (_f_lc, rp) in &file_paths {
+            for rp in file_paths.values() {
                 let original_fn = Path::new(rp)
                     .file_name()
                     .and_then(|f| f.to_str())

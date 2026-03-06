@@ -192,7 +192,7 @@
     appState.propertyCategory = categories[0] || 'parameters';
     appState.resetTransform();
     appState.resetAnimation();
-    if (previousSkins.length > 0 && renderer.getPropertyItems && renderer.applySkins) {
+    if (previousSkins.length > 0 && renderer.getPropertyItems && 'applySkins' in renderer && typeof renderer.applySkins === 'function') {
       const availableSkins = renderer.getPropertyItems('skins') || [];
       const matchingSkins = previousSkins.filter(skinName => availableSkins.some(s => s.name === skinName));
       if (matchingSkins.length > 0) {
@@ -322,7 +322,9 @@
 
   function focusBody() {
     if (document.activeElement !== document.body) {
-      document.activeElement?.blur();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       document.body.focus();
     }
   }

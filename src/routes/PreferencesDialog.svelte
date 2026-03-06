@@ -348,7 +348,8 @@
   {/if}
 
   {#if activeTab === 'shortcuts'}
-    <div class="tab-content shortcut-tab" onkeydown={handleShortcutKeyDown}>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div class="tab-content shortcut-tab" role="application" tabindex="-1" onkeydown={handleShortcutKeyDown}>
       {#each shortcutActions as action}
         <div class="shortcut-row">
           <span class="shortcut-label">{t(shortcutLabelKeys[action])}</span>
