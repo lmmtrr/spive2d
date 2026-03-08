@@ -1,5 +1,6 @@
 import { createSorter } from '../utils.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { showNotification } from '../notificationStore.svelte.js';
 
 const sortByName = createSorter(item => item[0] || item.name || '');
 const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
@@ -337,11 +338,20 @@ export class SpineRenderer {
   #waitForAssets() {
     if (!this.#assetManager) return;
     if (this.#assetManager.isLoadingComplete()) {
+      const allSkipped = [];
       const baseName = this.#fileNames[0];
       this.#skeletons['0'] = this.#loadSkeleton(baseName);
+      allSkipped.push(...(this.#skeletons['0'].skippedAttachments || []));
       for (let i = 3; i < this.#fileNames.length; i++) {
         const name2 = `${baseName}${this.#fileNames[i].split('.')[0]}`;
         this.#skeletons[String(i - 2)] = this.#loadSkeleton(name2);
+        allSkipped.push(...(this.#skeletons[String(i - 2)].skippedAttachments || []));
+      }
+      if (allSkipped.length > 0) {
+        const names = allSkipped.length <= 5
+          ? allSkipped.join(', ')
+          : allSkipped.slice(0, 5).join(', ') + ` ... +${allSkipped.length - 5}`;
+        showNotification(`Region not found: ${names}`, 'error', 5000);
       }
       this.#lastFrameTime = Date.now() / 1000;
       requestAnimationFrame(() => this.#renderLoop());
@@ -374,6 +384,22 @@ export class SpineRenderer {
       }
     }
     const atlasLoader = new this.#spine.AtlasAttachmentLoader(atlas);
+    const skippedAttachments = [];
+    for (const method of ['newRegionAttachment', 'newMeshAttachment', 'newSequenceAttachment']) {
+      const original = atlasLoader[method];
+      if (original) {
+        atlasLoader[method] = function (...args) {
+          try {
+            return original.apply(this, args);
+          } catch (e) {
+            const name = args[1] || 'unknown';
+            skippedAttachments.push(name);
+            console.warn(`[SpineRenderer] Skipping attachment (${method}): ${e.message}`);
+            return null;
+          }
+        };
+      }
+    }
     const skeletonLoader = skelExt.includes('.skel')
       ? new this.#spine.SkeletonBinary(atlasLoader)
       : new this.#spine.SkeletonJson(atlasLoader);
@@ -406,7 +432,7 @@ export class SpineRenderer {
     this.#animationStates.push(animationState);
     const animations = skeleton.data.animations;
     animationState.setAnimation(0, animations[0].name, true);
-    return { skeleton, state: animationState, bounds };
+    return { skeleton, state: animationState, bounds, skippedAttachments };
   }
   #calculateBounds(skeleton) {
     const originalSkin = skeleton.skin;
