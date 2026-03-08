@@ -192,6 +192,10 @@
     }
     loadingRenderers = loadingRenderers.filter(r => r !== renderer);
     setRenderer(renderer);
+    const rendererCanvas = renderer.getCanvas();
+    requestAnimationFrame(() => {
+      rendererCanvas.style.opacity = '1';
+    });
     const categories = renderer.getPropertyCategories();
     appState.propertyCategory = categories[0] || 'parameters';
     appState.resetTransform();

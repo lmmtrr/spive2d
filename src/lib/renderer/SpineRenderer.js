@@ -49,6 +49,7 @@ export class SpineRenderer {
     this.#canvas = document.createElement('canvas');
     this.#canvas.style.display = 'none';
     this.#canvas.style.verticalAlign = 'top';
+    this.#canvas.style.opacity = '0';
   }
   getCanvas() {
     return this.#canvas;
@@ -63,6 +64,8 @@ export class SpineRenderer {
     const dpr = window.devicePixelRatio || 1;
     this.#canvas.width = Math.round(window.innerWidth * dpr);
     this.#canvas.height = Math.round(window.innerHeight * dpr);
+    this.#canvas.style.width = `${window.innerWidth}px`;
+    this.#canvas.style.height = `${window.innerHeight}px`;
     this.#ctx = new this.#spine.ManagedWebGLRenderingContext(this.#canvas, {
       preserveDrawingBuffer: true,
     });

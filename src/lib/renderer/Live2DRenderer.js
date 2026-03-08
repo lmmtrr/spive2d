@@ -16,6 +16,7 @@ export class Live2DRenderer {
     this.#canvas = document.createElement('canvas');
     this.#canvas.style.display = 'none';
     this.#canvas.style.verticalAlign = 'top';
+    this.#canvas.style.opacity = '0';
     this.#app = new PIXI.Application({
       view: this.#canvas,
       resizeTo: window,
