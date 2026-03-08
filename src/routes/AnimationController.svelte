@@ -161,7 +161,7 @@
     gap: 15px;
     z-index: 2000;
     backdrop-filter: blur(8px);
-    transition: bottom 0.2s;
+    min-width: fit-content;
   }
 
   #animationController.show {
