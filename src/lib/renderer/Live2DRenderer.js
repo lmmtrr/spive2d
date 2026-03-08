@@ -39,7 +39,7 @@ export class Live2DRenderer {
       : convertFileSrc(rawUrl);
     const { live2d: { Live2DModel } } = PIXI;
     try {
-      const model = await Live2DModel.from(url, { autoInteract: false });
+      const model = await Live2DModel.from(url, { autoInteract: false, idleMotionGroup: 'None' });
       if (!this.#app) {
         model.destroy();
         return;
@@ -54,6 +54,9 @@ export class Live2DRenderer {
       model.anchor.set(0.5, 0.5);
       model.position.set(w * 0.5, h * 0.5);
       this.#app.stage.addChild(model);
+      if (model.internalModel && model.internalModel.breath) {
+        model.internalModel.breath = null;
+      }
       const animations = this.getAnimations();
       if (animations.length > 0) {
         this.setAnimation(animations[0].value);
