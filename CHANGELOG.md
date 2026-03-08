@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9] - 2026-03-09
+
+### Fixed
+
+- Prevent animation controller from shrinking below its content size
+- Fix canvas flash on scene switch
+- Gracefully handle missing atlas regions in Spine skeleton loading
+
 ## [0.1.8] - 2026-03-06
 
 ### Fixed
