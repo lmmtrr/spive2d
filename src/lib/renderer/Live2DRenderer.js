@@ -4,6 +4,9 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 const sortByText = createSorter(item => item.name);
 const sortById = createSorter(item => item.id);
 
+let sharedApp = null;
+let sharedAppUsageCount = 0;
+
 export class Live2DRenderer {
   #canvas;
   #app;
@@ -12,32 +15,46 @@ export class Live2DRenderer {
   #opacities = null;
   #currentMotion = { group: null, index: null };
   #speed = 1.0;
-  constructor() {
-    this.#canvas = document.createElement('canvas');
-    this.#canvas.style.display = 'none';
-    this.#canvas.style.verticalAlign = 'top';
-    this.#canvas.style.opacity = '0';
-    this.#app = new PIXI.Application({
-      view: this.#canvas,
-      resizeTo: window,
-      preserveDrawingBuffer: true,
-      transparent: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-    });
+  #isExport = false;
+  constructor(isExport = false) {
+    this.#isExport = isExport;
+    if (!sharedApp) {
+      const cvs = document.createElement('canvas');
+      cvs.style.display = 'none';
+      cvs.style.verticalAlign = 'top';
+      cvs.style.opacity = '0';
+      sharedApp = new PIXI.Application({
+        view: cvs,
+        preserveDrawingBuffer: true,
+        transparent: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+      sharedApp.resizeTo = window;
+    }
+    this.#app = sharedApp;
+    sharedAppUsageCount++;
+    if (!isExport) {
+      this.#canvas = this.#app.view;
+    } else {
+      this.#canvas = null;
+    }
   }
   getCanvas() {
     return this.#canvas;
   }
   async load(dirName, fileNames) {
-    this.#canvas.style.display = 'block';
+    if (!this.#isExport && this.#canvas) {
+      this.#canvas.style.display = 'block';
+    }
     let ext = '.model3.json';
     if (fileNames[1].includes('.moc3')) ext = '.model3.json';
     else if (fileNames[1].includes('.moc')) ext = '.json';
     const rawUrl = `${dirName}${fileNames[0]}${ext}`;
-    const url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+    let url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
       ? rawUrl
       : convertFileSrc(rawUrl);
+    url += (url.includes('?') ? '&' : '?') + 't=' + Date.now();
     const { live2d: { Live2DModel } } = PIXI;
     try {
       const model = await Live2DModel.from(url, { autoInteract: false, idleMotionGroup: 'None' });
@@ -54,7 +71,9 @@ export class Live2DRenderer {
       model.scale.set(s);
       model.anchor.set(0.5, 0.5);
       model.position.set(w * 0.5, h * 0.5);
-      this.#app.stage.addChild(model);
+      if (!this.#isExport) {
+        this.#app.stage.addChild(model);
+      }
       if (model.internalModel && model.internalModel.breath) {
         model.internalModel.breath = null;
       }
@@ -73,17 +92,25 @@ export class Live2DRenderer {
     }
   }
   dispose() {
-    this.#canvas.style.display = 'none';
+    if (!this.#isExport && this.#canvas) {
+      this.#canvas.style.display = 'none';
+    }
     if (this.#model) {
+      if (!this.#isExport && this.#app) {
+        this.#app.stage.removeChild(this.#model);
+      }
       this.#model.destroy();
       this.#model = null;
     }
-    if (this.#app) {
-      this.#app.destroy(false, { children: true });
-      this.#app = null;
+    sharedAppUsageCount--;
+    if (sharedAppUsageCount === 0 && sharedApp) {
+      sharedApp.destroy(false, { children: true });
+      sharedApp = null;
     }
+    this.#app = null;
   }
   resize(width, height) {
+    if (this.#isExport || !this.#app) return;
     this.#app.renderer.resize(width, height);
   }
   getOriginalSize() {
@@ -147,11 +174,11 @@ export class Live2DRenderer {
       )
       .sort(sortByText);
   }
-  setAnimation(value) {
+  async setAnimation(value) {
     if (!this.#model) return;
     const [group, index] = value.split(',');
     this.#currentMotion = { group, index: Number(index) };
-    this.#model.motion(group, Number(index), 3);
+    await this.#model.motion(group, Number(index), 3);
   }
   getExpressions() {
     if (!this.#model) return null;
@@ -278,12 +305,17 @@ export class Live2DRenderer {
     const entry = mqm?._motions?.[0];
     if (entry?._motion) {
       const motion = entry._motion;
-      const duration = motion._loopDurationSeconds ||
+      let duration = motion._loopDurationSeconds ||
         (motion._motionData && motion._motionData.duration) ||
         (motion.getDuration ? motion.getDuration() : -1);
-      if (duration > 0) {
+      if (duration > 0 || duration === -1) {
+        if (duration === -1) duration = 3000; // static looping models
         const targetTime = progress * duration;
         const internalModel = this.#model.internalModel;
+        if (entry._motion) {
+          entry._motion._fadeInSeconds = 0;
+          entry._motion._fadeOutSeconds = 0;
+        }
         const savedStateTime = entry._stateTimeSeconds;
         entry._startTimeSeconds = savedStateTime - targetTime;
         mm.update(internalModel.coreModel, savedStateTime);
@@ -374,6 +406,12 @@ export class Live2DRenderer {
   }
   stepAnimation(deltaSeconds) {
     if (!this.#model) return;
+    const mqm = this.#model.internalModel?.motionManager?.queueManager;
+    const currentMotion = mqm?._motions?.[0]?._motion;
+    if (currentMotion) {
+      currentMotion._fadeInSeconds = 0;
+      currentMotion._fadeOutSeconds = 0;
+    }
     const dtMs = deltaSeconds * 1000.0;
     this.#model.update(dtMs);
     this.render();

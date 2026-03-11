@@ -1,25 +1,15 @@
 import { appState } from './appState.svelte.js';
 import { parseBackgroundImageUrl, loadImage } from './utils.js';
 import { getRenderer } from './rendererStore.js';
+import { createRenderer } from './renderer/createRenderer.js';
 import { showNotification } from './notificationStore.svelte.js';
 import { t } from './i18n.svelte.js';
 import { writeFile, mkdir, exists } from '@tauri-apps/plugin-fs';
 import { join, downloadDir } from '@tauri-apps/api/path';
+import { exportQueue } from './exportQueue.svelte.js';
 
 const RECORDING_BITRATE = 12000000;
 const RECORDING_FRAME_RATE = 60;
-
-function getSupportedMimeType() {
-  const types = [
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm;codecs=h264',
-  ];
-  for (const type of types) {
-    if (MediaRecorder.isTypeSupported(type)) return type;
-  }
-  return 'video/webm';
-}
 
 function createOffscreenCanvas(width = 1, height = 1) {
   return typeof OffscreenCanvas !== 'undefined'
@@ -99,7 +89,9 @@ async function exportImageOriginalSize(renderer, sceneText, animationName, backg
   } else {
     drawBackground(ctx, width, height, null, backgroundColor);
   }
-  ctx.drawImage(capturedCanvas, 0, 0, width, height);
+  if (ctx && 'drawImage' in ctx) {
+    ctx.drawImage(capturedCanvas, 0, 0, width, height);
+  }
   await downloadCanvas(tempCanvas, sceneText, animationName, '_original');
 }
 
@@ -110,27 +102,38 @@ async function exportImageWindowSize(activeCanvas, sceneText, animationName, bac
     const img = await loadImage(imageUrl);
     drawBackground(ctx, activeCanvas.width, activeCanvas.height, img, null);
   } else if (backgroundColor) {
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, activeCanvas.width, activeCanvas.height);
+    if (ctx && 'fillStyle' in ctx) ctx.fillStyle = backgroundColor;
+    if (ctx && 'fillRect' in ctx) ctx.fillRect(0, 0, activeCanvas.width, activeCanvas.height);
   }
-  ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
+  if (ctx && 'drawImage' in ctx) {
+    ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
+  }
   await downloadCanvas(tempCanvas, sceneText, animationName);
 }
-import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 
-export async function exportAnimation(sceneText, animationName, onProgress) {
-  if (appState.processing) return;
-  const renderer = getRenderer();
-  if (!renderer) return;
+let taskIdCounter = 0;
+
+export async function exportAnimation(sceneText, animationName, expressionName, onProgress) {
+  const activeRenderer = getRenderer();
+  if (!activeRenderer) return;
   if (typeof VideoEncoder === 'undefined') {
     showNotification(t('mediaRecorderNotSupported') || 'VideoEncoder API not supported', 'error');
     return;
   }
-  appState.processing = true;
-  const activeCanvas = renderer.getCanvas();
-  const originalVisibility = activeCanvas.style.visibility;
-  activeCanvas.style.visibility = 'hidden';
-  const originalPausedState = appState.animation.paused;
+  const activeCanvas = activeRenderer.getCanvas();
+  taskIdCounter++;
+  const taskId = `video-${taskIdCounter}`;
+  const safeName = animationName ? animationName.split('.')[0] : 'animation';
+  const baseFilename = `${sceneText}_${safeName}`;
+  const worker = new Worker(new URL('./exporter.worker.js', import.meta.url), { type: 'module' });
+  exportQueue.add({
+    id: taskId,
+    type: 'Video',
+    name: baseFilename,
+    progress: 0,
+    status: 'processing',
+    worker: worker
+  });
   let compositingCanvas = null;
   let backgroundImageToRender = null;
   const backgroundColor = document.body.style.backgroundColor;
@@ -142,94 +145,104 @@ export async function exportAnimation(sceneText, animationName, onProgress) {
   } else if (backgroundColor) {
     compositingCanvas = createOffscreenCanvas(1, 1);
   }
+  const { files, selectedDir, selectedScene } = appState.directories;
+  if (!files || !selectedDir || !files[selectedDir]) {
+    exportQueue.updateStatus(taskId, 'error');
+    worker.terminate();
+    return;
+  }
+  const fileNames = files[selectedDir][selectedScene];
+  const hiddenRenderer = createRenderer(fileNames, true);
+  if (hiddenRenderer.setAlphaMode) {
+    hiddenRenderer.setAlphaMode(appState.alphaMode);
+  }
+  try {
+    await hiddenRenderer.load(selectedDir, fileNames);
+  } catch (err) {
+    console.error('Failed to load hidden renderer for export', err);
+    exportQueue.updateStatus(taskId, 'error');
+    worker.terminate();
+    return;
+  }
+  const allSkins = activeRenderer.getPropertyItems?.('skins') || [];
+  if (allSkins.length > 0 && 'applySkins' in hiddenRenderer && typeof hiddenRenderer.applySkins === 'function') {
+    const activeSkins = allSkins.filter(item => item.checked).map(item => item.name);
+    hiddenRenderer.applySkins(activeSkins);
+  }
+  const activeParams = activeRenderer.getPropertyItems?.('parameters') || [];
+  for (const p of activeParams) {
+    hiddenRenderer.updatePropertyItem('parameters', p.name, p.index, p.value);
+  }
+  const syncVisibilityProps = ['attachments', 'parts', 'drawables'];
+  for (const propCategory of syncVisibilityProps) {
+    const props = activeRenderer.getPropertyItems?.(propCategory) || [];
+    for (const p of props) {
+      if (p.type === 'checkbox' && p.checked === false) {
+        hiddenRenderer.updatePropertyItem(propCategory, p.name, p.index, false);
+      }
+    }
+  }
+  const activeLayout = appState.transform;
+  hiddenRenderer.applyTransform(activeLayout.scale, activeLayout.moveX, activeLayout.moveY, activeLayout.rotate);
+  let targetAnim = hiddenRenderer.getAnimations()?.[0]?.value;
+  if (animationName) {
+    const match = hiddenRenderer.getAnimations().find(a => a.name === animationName);
+    if (match) targetAnim = match.value;
+  }
+  if (targetAnim) {
+    const p = hiddenRenderer.setAnimation(targetAnim);
+    if (p && typeof p.then === 'function') {
+      await p;
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+  if (expressionName && 'setExpression' in hiddenRenderer && typeof hiddenRenderer.setExpression === 'function') {
+    hiddenRenderer.setExpression(expressionName);
+  }
+  hiddenRenderer.setPaused(true);
   let targetWidth = activeCanvas.width;
   let targetHeight = activeCanvas.height;
   let useOriginalSize = appState.exportOriginalSize;
   if (useOriginalSize) {
-    const { width, height } = renderer.getOriginalSize();
+    const { width, height } = activeRenderer.getOriginalSize();
     targetWidth = width;
     targetHeight = height;
   }
   if (targetWidth % 2 !== 0) targetWidth += 1;
   if (targetHeight % 2 !== 0) targetHeight += 1;
+  if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
+    hiddenRenderer.resize(targetWidth, targetHeight);
+  }
   if (compositingCanvas) {
     compositingCanvas.width = targetWidth;
     compositingCanvas.height = targetHeight;
   }
-  const tempCanvas = createOffscreenCanvas(targetWidth, targetHeight);
-  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-  const baseDuration = renderer.getAnimationDuration() || 0.1;
-  const fps = renderer.getFPS?.() || RECORDING_FRAME_RATE;
+  const baseDuration = hiddenRenderer.getAnimationDuration() || 0.1;
+  const fps = hiddenRenderer.getFPS?.() || RECORDING_FRAME_RATE;
   const totalFrames = Math.ceil(baseDuration * fps);
 
   function cleanup() {
-    activeCanvas.style.visibility = originalVisibility;
-    appState.processing = false;
-    renderer.setPaused(originalPausedState);
-    if (renderer.setSeeking) renderer.setSeeking(false);
-    if (!originalPausedState) {
-      appState.animation.paused = false;
-    }
-    if (onProgress) onProgress(0);
+    hiddenRenderer.dispose();
   }
 
-  const safeName = animationName ? animationName.split('.')[0] : 'animation';
-  renderer.setPaused(true);
-  if (renderer.setSeeking) renderer.setSeeking(true);
-  try {
-    const output = new Output({
-      format: new WebMOutputFormat(),
-      target: new BufferTarget()
-    });
-    const videoSource = new CanvasSource(tempCanvas, {
-      codec: 'vp9',
-      bitrate: RECORDING_BITRATE,
-    });
-    output.addVideoTrack(videoSource);
-    await output.start();
-    if (renderer.stepAnimation) {
-      if (renderer.seekAnimation) renderer.seekAnimation(0);
+  worker.onmessage = async (e) => {
+    const item = exportQueue.items.find(i => i.id === taskId);
+    if (!item || item.status === 'cancelled') {
+      worker.terminate();
+      cleanup();
+      return;
     }
-    for (let frame = 0; frame < totalFrames; frame++) {
-      if (!appState.processing) {
-        break;
+    if (e.data.type === 'STARTED') {
+      if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function' && 'seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+        hiddenRenderer.seekAnimation(0);
       }
-      const time = frame / fps;
-      const progress = baseDuration > 0 ? time / baseDuration : 0;
-      if (renderer.stepAnimation) {
-        if (frame > 0) {
-          renderer.stepAnimation(1 / fps);
-        }
-      } else {
-        renderer.seekAnimation(progress);
-      }
-      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      let capturedCanvas;
-      if (useOriginalSize) {
-        capturedCanvas = renderer.captureFrame(targetWidth, targetHeight);
-      } else {
-        capturedCanvas = activeCanvas;
-      }
-      if (!capturedCanvas) continue;
-      if (compositingCanvas) {
-        const ctx = compositingCanvas.getContext('2d');
-        drawBackground(ctx, targetWidth, targetHeight, backgroundImageToRender, backgroundColor);
-        ctx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
-        tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-        tempCtx.drawImage(compositingCanvas, 0, 0, targetWidth, targetHeight);
-      } else {
-        tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-        tempCtx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
-      }
-      await videoSource.add(time, 1 / fps);
-      if (onProgress) {
-        onProgress((frame / totalFrames) * 100);
-      }
-    }
-    if (appState.processing) {
-      await output.finalize();
-      const buffer = output.target.buffer;
-      const baseFilename = `${sceneText}_${safeName}`;
+      processNextFrame(0);
+    } else if (e.data.type === 'FRAME_ADDED') {
+      currentWorkerFrame++;
+      exportQueue.updateProgress(taskId, (currentWorkerFrame / totalFrames) * 100);
+      processNextFrame(currentWorkerFrame);
+    } else if (e.data.type === 'DONE_VIDEO') {
+      const buffer = e.data.buffer;
       try {
         const baseDir = await downloadDir();
         const exportBaseDir = await join(baseDir, 'spive2d_export');
@@ -243,29 +256,99 @@ export async function exportAnimation(sceneText, animationName, onProgress) {
           counter++;
         }
         await writeFile(filePath, new Uint8Array(buffer));
+        exportQueue.updateStatus(taskId, 'completed');
         showNotification(t('exportAnimationSuccess'), 'success');
       } catch (err) {
         console.error('Failed to write video:', err);
+        exportQueue.updateStatus(taskId, 'error');
         showNotification(t('exportAnimationError'), 'error');
+      } finally {
+        worker.terminate();
+        cleanup();
       }
+    } else if (e.data.type === 'ERROR') {
+      exportQueue.updateStatus(taskId, 'error');
+      console.error('Worker error:', e.data.error);
+      worker.terminate();
+      cleanup();
     }
-  } catch (err) {
-    console.error('Animation export error:', err);
-    showNotification(t('exportAnimationError'), 'error');
-  } finally {
-    cleanup();
+  };
+
+  worker.postMessage({
+    type: 'START_VIDEO',
+    id: taskId,
+    width: targetWidth,
+    height: targetHeight,
+    bitrate: RECORDING_BITRATE,
+    fps: fps
+  });
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = targetWidth;
+  tempCanvas.height = targetHeight;
+  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+
+  let currentWorkerFrame = 0;
+
+  async function processNextFrame(frame) {
+    const item = exportQueue.items.find(i => i.id === taskId);
+    if (!item || item.status === 'cancelled') {
+      cleanup();
+      return;
+    }
+    if (frame >= totalFrames) {
+      worker.postMessage({ type: 'FINISH_VIDEO', id: taskId });
+      return;
+    }
+    const time = frame / fps;
+    const progress = baseDuration > 0 ? time / baseDuration : 0;
+    if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
+      if (frame > 0) hiddenRenderer.stepAnimation(1 / fps);
+    } else if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+      hiddenRenderer.seekAnimation(progress);
+    }
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    let capturedCanvas;
+    if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
+      capturedCanvas = hiddenRenderer.captureFrame(targetWidth, targetHeight);
+    } else {
+      capturedCanvas = hiddenRenderer.getCanvas();
+    }
+    if (compositingCanvas && capturedCanvas) {
+      const ctx = compositingCanvas.getContext('2d');
+      drawBackground(ctx, targetWidth, targetHeight, backgroundImageToRender, backgroundColor);
+      ctx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
+      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
+      tempCtx.drawImage(compositingCanvas, 0, 0, targetWidth, targetHeight);
+    } else if (capturedCanvas) {
+      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
+      tempCtx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
+    }
+    createImageBitmap(tempCanvas).then((bitmap) => {
+      if (item.status !== 'cancelled') {
+        worker.postMessage({ type: 'ADD_FRAME_VIDEO', id: taskId, bitmap, time }, [bitmap]);
+      }
+    });
   }
 }
 
-export async function exportPNGSequence(targetDir, sceneText, animationName, onProgress) {
-  if (appState.processing) return;
-  const renderer = getRenderer();
-  if (!renderer) return;
-  appState.processing = true;
-  const activeCanvas = renderer.getCanvas();
-  const originalVisibility = activeCanvas.style.visibility;
-  activeCanvas.style.visibility = 'hidden';
-  const originalPausedState = appState.animation.paused;
+export async function exportPNGSequence(targetDir, sceneText, animationName, expressionName, onProgress) {
+  const activeRenderer = getRenderer();
+  if (!activeRenderer) return;
+  const activeCanvas = activeRenderer.getCanvas();
+  taskIdCounter++;
+  const taskId = `png-${taskIdCounter}`;
+  const safeName = animationName ? animationName.split('.')[0] : 'sequence';
+  const baseFilename = `${sceneText}_${safeName}`;
+  const worker = new Worker(new URL('./exporter.worker.js', import.meta.url), { type: 'module' });
+  exportQueue.add({
+    id: taskId,
+    type: 'PNG Sequence',
+    name: baseFilename,
+    progress: 0,
+    status: 'processing',
+    worker: worker
+  });
   let compositingCanvas = null;
   let backgroundImageToRender = null;
   const backgroundColor = document.body.style.backgroundColor;
@@ -277,13 +360,71 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, onP
   } else if (backgroundColor) {
     compositingCanvas = createOffscreenCanvas(1, 1);
   }
+  const { files, selectedDir, selectedScene } = appState.directories;
+  if (!files || !selectedDir || !files[selectedDir]) {
+    exportQueue.updateStatus(taskId, 'error');
+    worker.terminate();
+    return;
+  }
+  const fileNames = files[selectedDir][selectedScene];
+  const hiddenRenderer = createRenderer(fileNames, true);
+  if (hiddenRenderer.setAlphaMode) {
+    hiddenRenderer.setAlphaMode(appState.alphaMode);
+  }
+  try {
+    await hiddenRenderer.load(selectedDir, fileNames);
+  } catch (err) {
+    console.error('Failed to load hidden renderer for export', err);
+    exportQueue.updateStatus(taskId, 'error');
+    worker.terminate();
+    return;
+  }
+  const allSkins = activeRenderer.getPropertyItems?.('skins') || [];
+  if (allSkins.length > 0 && 'applySkins' in hiddenRenderer && typeof hiddenRenderer.applySkins === 'function') {
+    const activeSkins = allSkins.filter(item => item.checked).map(item => item.name);
+    hiddenRenderer.applySkins(activeSkins);
+  }
+  const activeParams = activeRenderer.getPropertyItems?.('parameters') || [];
+  for (const p of activeParams) {
+    hiddenRenderer.updatePropertyItem('parameters', p.name, p.index, p.value);
+  }
+  const syncVisibilityProps = ['attachments', 'parts', 'drawables'];
+  for (const propCategory of syncVisibilityProps) {
+    const props = activeRenderer.getPropertyItems?.(propCategory) || [];
+    for (const p of props) {
+      if (p.type === 'checkbox' && p.checked === false) {
+        hiddenRenderer.updatePropertyItem(propCategory, p.name, p.index, false);
+      }
+    }
+  }
+  const activeLayout = appState.transform;
+  hiddenRenderer.applyTransform(activeLayout.scale, activeLayout.moveX, activeLayout.moveY, activeLayout.rotate);
+  let targetAnim = hiddenRenderer.getAnimations()?.[0]?.value;
+  if (animationName) {
+    const match = hiddenRenderer.getAnimations().find(a => a.name === animationName);
+    if (match) targetAnim = match.value;
+  }
+  if (targetAnim) {
+    const p = hiddenRenderer.setAnimation(targetAnim);
+    if (p && typeof p.then === 'function') {
+      await p;
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+  if (expressionName && 'setExpression' in hiddenRenderer && typeof hiddenRenderer.setExpression === 'function') {
+    hiddenRenderer.setExpression(expressionName);
+  }
+  hiddenRenderer.setPaused(true);
   let targetWidth = activeCanvas.width;
   let targetHeight = activeCanvas.height;
   let useOriginalSize = appState.exportOriginalSize;
   if (useOriginalSize) {
-    const { width, height } = renderer.getOriginalSize();
+    const { width, height } = activeRenderer.getOriginalSize();
     targetWidth = width;
     targetHeight = height;
+  }
+  if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
+    hiddenRenderer.resize(targetWidth, targetHeight);
   }
   if (compositingCanvas) {
     compositingCanvas.width = targetWidth;
@@ -293,84 +434,98 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, onP
   tempCanvas.width = targetWidth;
   tempCanvas.height = targetHeight;
   const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-  const baseDuration = renderer.getAnimationDuration() || 0.1;
-  const fps = renderer.getFPS?.() || RECORDING_FRAME_RATE;
+  const baseDuration = hiddenRenderer.getAnimationDuration() || 0.1;
+  const fps = hiddenRenderer.getFPS?.() || RECORDING_FRAME_RATE;
   const totalFrames = Math.ceil(baseDuration * fps);
 
   function cleanup() {
-    activeCanvas.style.visibility = originalVisibility;
-    appState.processing = false;
-    renderer.setPaused(originalPausedState);
-    if (renderer.setSeeking) renderer.setSeeking(false);
-    if (!originalPausedState) {
-      appState.animation.paused = false;
-    }
-    if (onProgress) onProgress(0);
+    hiddenRenderer.dispose();
   }
 
-  const safeName = animationName ? animationName.split('.')[0] : 'sequence';
-  renderer.setPaused(true);
-  if (renderer.setSeeking) renderer.setSeeking(true);
   const writePromises = [];
-  try {
-    if (renderer.stepAnimation) {
-      if (renderer.seekAnimation) renderer.seekAnimation(0);
-    }
-    for (let frame = 0; frame < totalFrames; frame++) {
-      if (!appState.processing) break;
-      const time = frame / fps;
-      const progress = baseDuration > 0 ? time / baseDuration : 0;
-      if (renderer.stepAnimation) {
-        if (frame > 0) {
-          renderer.stepAnimation(1 / fps);
-        }
-      } else {
-        renderer.seekAnimation(progress);
-      }
-      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      let capturedCanvas;
-      if (useOriginalSize) {
-        capturedCanvas = renderer.captureFrame(targetWidth, targetHeight);
-      } else {
-        capturedCanvas = activeCanvas;
-      }
-      if (!capturedCanvas) continue;
-      if (compositingCanvas) {
-        const ctx = compositingCanvas.getContext('2d');
-        drawBackground(ctx, targetWidth, targetHeight, backgroundImageToRender, backgroundColor);
-        ctx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
-        tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-        tempCtx.drawImage(compositingCanvas, 0, 0, targetWidth, targetHeight);
-      } else {
-        tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-        tempCtx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
-      }
-      const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-      const arrayBuffer = await blob.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      const frameStr = String(frame).padStart(4, '0');
+  let framesProcessed = 0;
+
+  worker.onmessage = async (e) => {
+    const item = exportQueue.items.find(i => i.id === taskId);
+    if (!item || item.status === 'cancelled') return;
+    if (e.data.type === 'FRAME_PNG_DONE') {
+      const buffer = e.data.buffer;
+      const frameIndex = e.data.frameIndex;
+      const bytes = new Uint8Array(buffer);
+      const frameStr = String(frameIndex).padStart(4, '0');
       const filename = `${sceneText}_${safeName}_${frameStr}.png`;
-      const filePath = await join(targetDir, filename);
-      writePromises.push(writeFile(filePath, bytes).catch(e => {
-        console.error(`Failed to write frame ${frame}:`, e);
-      }));
+      const p = join(targetDir, filename).then(filePath => writeFile(filePath, bytes)).catch(err => {
+        console.error(`Failed to write frame ${frameIndex}:`, err);
+      });
+      writePromises.push(p);
+      framesProcessed++;
+      exportQueue.updateProgress(taskId, (framesProcessed / totalFrames) * 100);
       if (writePromises.length >= 10) {
         await Promise.all(writePromises);
         writePromises.length = 0;
       }
-      if (onProgress) {
-        onProgress((frame / totalFrames) * 100);
+      if (framesProcessed >= totalFrames) {
+        if (writePromises.length > 0) {
+          await Promise.all(writePromises);
+        }
+        exportQueue.updateStatus(taskId, 'completed');
+        showNotification(t('exportPngSeqSuccess') || 'PNG Sequence exported', 'success');
+        worker.terminate();
+        cleanup();
       }
-      await new Promise(r => setTimeout(r, 0)); // yield
+    } else if (e.data.type === 'ERROR') {
+      console.error('Sequence worker error:', e.data.error);
+      exportQueue.updateStatus(taskId, 'error');
+      showNotification(t('exportPngSeqError') || 'PNG Sequence export failed', 'error');
+      worker.terminate();
+      cleanup();
     }
-    if (writePromises.length > 0) {
-      await Promise.all(writePromises);
+  };
+
+  let currentWorkerFrame = 0;
+
+  async function processNextFrame() {
+    const item = exportQueue.items.find(i => i.id === taskId);
+    if (!item || item.status === 'cancelled') {
+      cleanup();
+      return;
     }
-    showNotification(t('exportPngSeqSuccess') || 'PNG Sequence exported', 'success');
-  } catch (err) {
-    console.error('Sequence export error:', err);
-    showNotification(t('exportPngSeqError') || 'PNG Sequence export failed', 'error');
-  } finally {
-    cleanup();
+    if (currentWorkerFrame >= totalFrames) return;
+    const frame = currentWorkerFrame;
+    const time = frame / fps;
+    const progress = baseDuration > 0 ? time / baseDuration : 0;
+    if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
+      if (frame > 0) hiddenRenderer.stepAnimation(1 / fps);
+    } else if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+      hiddenRenderer.seekAnimation(progress);
+    }
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    let capturedCanvas;
+    if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
+      capturedCanvas = hiddenRenderer.captureFrame(targetWidth, targetHeight);
+    } else {
+      capturedCanvas = hiddenRenderer.getCanvas();
+    }
+    if (compositingCanvas && capturedCanvas) {
+      const ctx = compositingCanvas.getContext('2d');
+      drawBackground(ctx, targetWidth, targetHeight, backgroundImageToRender, backgroundColor);
+      ctx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
+      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
+      tempCtx.drawImage(compositingCanvas, 0, 0, targetWidth, targetHeight);
+    } else if (capturedCanvas) {
+      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
+      tempCtx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
+    }
+    createImageBitmap(tempCanvas).then((bitmap) => {
+      if (item.status !== 'cancelled') {
+        worker.postMessage({ type: 'PROCESS_FRAME_PNG', id: taskId, bitmap, frameIndex: frame }, [bitmap]);
+        currentWorkerFrame++;
+        setTimeout(processNextFrame, 0);
+      }
+    });
   }
+  if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+    hiddenRenderer.seekAnimation(0);
+  }
+  processNextFrame();
 }

@@ -47,7 +47,7 @@ export class SpineRenderer {
   #activeSkins = null;
   #onFirstRender = null;
   #isFileJson = false;
-  constructor() {
+  constructor(isExport = false) {
     this.#canvas = document.createElement('canvas');
     this.#canvas.style.display = 'none';
     this.#canvas.style.verticalAlign = 'top';
@@ -210,7 +210,7 @@ export class SpineRenderer {
       value: a.name,
     }));
   }
-  setAnimation(value) {
+  async setAnimation(value) {
     for (const key of Object.keys(this.#skeletons)) {
       const { skeleton, state } = this.#skeletons[key];
       if (!skeleton || !state) continue;

@@ -42,6 +42,10 @@
     return anim ? anim.name : selectedAnimation;
   }
 
+  export function getSelectedExpression() {
+    return selectedExpression;
+  }
+
   export function setSelectedAnimation(value) {
     selectedAnimation = value;
   }

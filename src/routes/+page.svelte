@@ -15,6 +15,7 @@
   import Sidebar from './Sidebar.svelte';
   import AnimationController from './AnimationController.svelte';
   import Notification from './Notification.svelte';
+  import ExportQueue from './ExportQueue.svelte';
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { downloadDir, join } from '@tauri-apps/api/path';
@@ -29,8 +30,6 @@
 
   let dialogOpen = $state(true);
   let showSpinner = $state(false);
-  let progressPercent = $state(0);
-  let showProgress = $state(false);
   let canvasContainer = $state();
   let sidebar = $state();
   let animController = $state();
@@ -356,10 +355,8 @@
   function doExportAnimation() {
     const sceneText = getSceneText();
     const animText = sidebar?.getSelectedAnimationText() || '';
-    exportAnimation(sceneText, animText, (progress) => {
-      progressPercent = progress;
-      showProgress = progress > 0;
-    });
+    const exprText = sidebar?.getSelectedExpression?.() || '';
+    exportAnimation(sceneText, animText, exprText);
   }
 
   async function doExportPngSequence() {
@@ -368,17 +365,15 @@
     const safeName = animText ? animText.split('.')[0] : 'sequence';
     const baseDir = await downloadDir();
     const exportBaseDir = await join(baseDir, 'spive2d_export');
-    const folderName = `${sceneText}_${safeName}_export`;
+    const folderName = `${sceneText}_${safeName}`;
     const targetDir = await join(exportBaseDir, folderName);
     try {
       await mkdir(targetDir, { recursive: true });
     } catch (err) {
       console.error('Failed to create export directory:', err);
     }
-    exportPNGSequence(targetDir, sceneText, animText, (progress) => {
-      progressPercent = progress;
-      showProgress = progress > 0;
-    });
+    const exprText = sidebar?.getSelectedExpression?.() || '';
+    exportPNGSequence(targetDir, sceneText, animText, exprText);
   }
 
   function getSceneText() {
@@ -419,12 +414,6 @@
   </div>
 {/if}
 
-{#if showProgress}
-  <div id="progressBarContainer">
-    <div id="progressBar" style:width="{progressPercent}%"></div>
-  </div>
-{/if}
-
 <div use:transformAction={{ appState, sidebar, animController, dialogOpen }}>
   <PreferencesDialog bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
   <Sidebar
@@ -439,6 +428,7 @@
 
 <AnimationController bind:this={animController} />
 
+<ExportQueue />
 <Notification />
 
 <style>
@@ -464,32 +454,6 @@
     border-top: 8px solid #888;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-  }
-
-  #progressBarContainer {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 80%;
-    max-width: 600px;
-    height: 25px;
-    background-color: #eee;
-    border-radius: 10px;
-    border: var(--border-color);
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
-    z-index: 3000;
-  }
-
-  #progressBar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background-color: #888;
-    border-radius: 5px;
-    transition: width 0.1s;
   }
 
   #canvasContainer {
