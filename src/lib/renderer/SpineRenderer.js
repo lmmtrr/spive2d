@@ -387,7 +387,9 @@ export class SpineRenderer {
       if (isWebUrl) return `${name}${ext}`;
       return `${this.#dirName}${name}${ext}`;
     };
-    const atlas = this.#assetManager.get(makePath(fileName, atlasExt));
+    const atlasPath = makePath(fileName, atlasExt);
+    const atlas = this.#assetManager.get(atlasPath);
+    this.#resizeAtlasPages(atlas, atlasPath, isWebUrl);
     for (const page of atlas.pages) {
       if (
         page.minFilter === this.#spine.TextureFilter.MipMap ||
@@ -870,5 +872,81 @@ export class SpineRenderer {
   }
   getAnimationStates() {
     return this.#animationStates;
+  }
+  #parseAtlasDeclaredSizes(atlasText) {
+    const sizes = new Map();
+    const lines = atlasText.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line.endsWith('.png') && !line.endsWith('.jpg') && !line.endsWith('.jpeg') && !line.endsWith('.webp')) continue;
+      const pageName = line;
+      for (let j = i + 1; j < lines.length; j++) {
+        const entry = lines[j].trim();
+        if (!entry || (!entry.includes(':') && (entry.endsWith('.png') || entry.endsWith('.jpg')))) break;
+        const sizeMatch = entry.match(/^size\s*:\s*(\d+)\s*,\s*(\d+)/);
+        if (sizeMatch) {
+          sizes.set(pageName, { width: parseInt(sizeMatch[1]), height: parseInt(sizeMatch[2]) });
+          break;
+        }
+      }
+    }
+    return sizes;
+  }
+  #resizeAtlasPages(atlas, atlasPath, isWebUrl) {
+    let atlasText = null;
+    try {
+      const url = isWebUrl ? atlasPath : convertFileSrc(atlasPath);
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, false);
+      xhr.send();
+      if (xhr.status === 200 || xhr.status === 0) {
+        atlasText = xhr.responseText;
+      }
+    } catch (e) {
+      console.warn('[SpineRenderer] Could not fetch atlas text for resize check:', e);
+    }
+    if (!atlasText) return;
+    const declaredSizes = this.#parseAtlasDeclaredSizes(atlasText);
+    const gl = this.#ctx.gl;
+    const resizedPages = new Set();
+    for (const page of atlas.pages) {
+      const tex = page.texture;
+      if (!tex || !tex.getImage) continue;
+      const img = tex.getImage();
+      if (!img) continue;
+      const declared = declaredSizes.get(page.name);
+      if (!declared) continue;
+      if (img.width === declared.width && img.height === declared.height) continue;
+      const canvas = document.createElement('canvas');
+      canvas.width = declared.width;
+      canvas.height = declared.height;
+      const ctx2d = canvas.getContext('2d');
+      ctx2d.imageSmoothingEnabled = false;
+      ctx2d.drawImage(img, 0, 0, declared.width, declared.height);
+      tex._image = canvas;
+      tex.bind();
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+      page.width = declared.width;
+      page.height = declared.height;
+      resizedPages.add(page);
+      console.log(`[SpineRenderer] Resized ${page.name} from ${img.width}x${img.height} to ${declared.width}x${declared.height}`);
+    }
+    if (resizedPages.size > 0 && atlas.regions) {
+      for (const region of atlas.regions) {
+        if (!resizedPages.has(region.page)) continue;
+        const pw = region.page.width;
+        const ph = region.page.height;
+        region.u = region.x / pw;
+        region.v = region.y / ph;
+        const isRotated = region.degrees === 90 || region.rotate === true;
+        if (isRotated) {
+          region.u2 = (region.x + region.height) / pw;
+          region.v2 = (region.y + region.width) / ph;
+        } else {
+          region.u2 = (region.x + region.width) / pw;
+          region.v2 = (region.y + region.height) / ph;
+        }
+      }
+    }
   }
 }
