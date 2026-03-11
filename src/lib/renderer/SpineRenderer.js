@@ -46,6 +46,7 @@ export class SpineRenderer {
   #attachmentsCache = {};
   #activeSkins = null;
   #onFirstRender = null;
+  #isFileJson = false;
   constructor() {
     this.#canvas = document.createElement('canvas');
     this.#canvas.style.display = 'none';
@@ -87,13 +88,13 @@ export class SpineRenderer {
       if (isWebUrl) return `${name}${ext}`;
       return `${dirName}${name}${ext}`;
     };
-    if (skelExt.includes('.skel'))
+    if (!this.#isFileJson)
       this.#assetManager.loadBinary(makePath(baseName, skelExt));
     else
       this.#assetManager.loadText(makePath(baseName, skelExt));
     this.#assetManager.loadTextureAtlas(makePath(baseName, atlasExt));
     for (let i = 3; i < fileNames.length; i++) {
-      if (skelExt.includes('.skel'))
+      if (!this.#isFileJson)
         this.#assetManager.loadBinary(makePath(baseName, fileNames[i]));
       else
         this.#assetManager.loadText(makePath(baseName, fileNames[i]));
@@ -309,11 +310,34 @@ export class SpineRenderer {
       : convertFileSrc(rawUrl);
     const file = await fetch(url);
     if (!file.ok) {
+      showNotification(`HTTP ${file.status}`, 'error');
       throw new Error(`HTTP ${file.status}`);
     }
-    if (ext.includes('.skel')) {
-      const buffer = await file.arrayBuffer();
-      const data = new Uint8Array(buffer);
+    const buffer = await file.arrayBuffer();
+    const data = new Uint8Array(buffer);
+    let isJson = false;
+    for (let i = 0; i < Math.min(data.length, 100); i++) {
+      const c = data[i];
+      if (c === 123) { // '{'
+        isJson = true;
+        break;
+      }
+      if (c !== 32 && c !== 9 && c !== 10 && c !== 13) {
+        break;
+      }
+    }
+    this.#isFileJson = isJson;
+    if (this.#isFileJson) {
+      const decoder = new TextDecoder('utf-8');
+      const content = decoder.decode(data);
+      const cleanedContent = content.replace(/,(\s*[}\]])/g, '$1');
+      const jsonData = JSON.parse(cleanedContent);
+      if (!jsonData.skeleton?.spine) {
+        showNotification('Invalid JSON structure', 'error');
+        throw new Error('Invalid JSON structure');
+      }
+      return jsonData.skeleton.spine.substring(0, 3);
+    } else {
       let position = -1;
       for (let i = 1; i < data.length - 1; i++) {
         const prev = data[i - 1];
@@ -324,16 +348,12 @@ export class SpineRenderer {
           break;
         }
       }
-      if (position === -1) throw new Error('Valid version pattern not found in .skel file');
+      if (position === -1) {
+        showNotification('Valid version pattern not found in binary file', 'error');
+        throw new Error('Valid version pattern not found in binary file');
+      }
       return `${String.fromCharCode(data[position - 1])}.${String.fromCharCode(data[position + 1])}`;
-    } else if (ext.includes('.json')) {
-      const content = await file.text();
-      const cleanedContent = content.replace(/,(\s*[}\]])/g, '$1');
-      const jsonData = JSON.parse(cleanedContent);
-      if (!jsonData.skeleton?.spine) throw new Error('Invalid JSON structure');
-      return jsonData.skeleton.spine.substring(0, 3);
     }
-    throw new Error('Unknown skeleton extension');
   }
   #waitForAssets() {
     if (!this.#assetManager) return;
@@ -400,11 +420,11 @@ export class SpineRenderer {
         };
       }
     }
-    const skeletonLoader = skelExt.includes('.skel')
+    const skeletonLoader = !this.#isFileJson
       ? new this.#spine.SkeletonBinary(atlasLoader)
       : new this.#spine.SkeletonJson(atlasLoader);
     let skelDataOrText = this.#assetManager.get(makePath(fileName, skelExt));
-    if (typeof skelDataOrText === 'string' && skelExt.includes('.json')) {
+    if (typeof skelDataOrText === 'string' && this.#isFileJson) {
       skelDataOrText = skelDataOrText.replace(/,(\s*[}\]])/g, '$1');
     }
     const skeletonData = skeletonLoader.readSkeletonData(skelDataOrText);
