@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.10] - 2026-03-11
+
+### Added
+
+- Background export system with queue and worker support
+- Ctrl/Cmd+W and Ctrl/Cmd+Q shortcuts to exit application
+- Auto-detection of Spine skeleton format from file content
+- Support for .asset file extension
+- On-the-fly resizing of atlas textures to match declared sizes
+
 ## [0.1.9] - 2026-03-09
 
 ### Fixed
