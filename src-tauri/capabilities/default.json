@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "core:window:allow-set-size",
+    "core:window:allow-close",
     "dialog:allow-open",
     "dialog:allow-save",
     "opener:default",

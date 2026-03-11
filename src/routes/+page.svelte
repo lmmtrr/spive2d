@@ -19,6 +19,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { downloadDir, join } from '@tauri-apps/api/path';
   import { mkdir } from '@tauri-apps/plugin-fs';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
 
   if (typeof window !== 'undefined') {
     window.__TAURI__ = window.__TAURI__ || {};
@@ -291,19 +292,24 @@
 
   function handleKeyDown(e) {
     if (document.activeElement?.matches('input')) return;
-    const key = e.key;
-    if (key !== shortcuts.toggleDialog && !appState.initialized) return;
-    if (key === shortcuts.prevDir) { navigateSelector('dirSelector', -1, handleDirChange); }
-    else if (key === shortcuts.nextDir) { navigateSelector('dirSelector', 1, handleDirChange); }
-    else if (key === shortcuts.prevScene) { navigateSelector('sceneSelector', -1, handleSceneChange); }
-    else if (key === shortcuts.nextScene) { navigateSelector('sceneSelector', 1, handleSceneChange); }
-    else if (key === shortcuts.prevAnim) { sidebar?.navigateAnimation(-1); }
-    else if (key === shortcuts.nextAnim) { sidebar?.navigateAnimation(1); }
-    else if (key === shortcuts.toggleDialog) { toggleDialog(); }
-    else if (key === shortcuts.exportImage) { doExportImage(); }
-    else if (key === shortcuts.exportAnim) { doExportAnimation(); }
-    else if (key === shortcuts.exportPngSeq) { doExportPngSequence(); }
-    else if (key === shortcuts.addToList) {
+    const key = e.key.toLowerCase();    
+    if ((key === 'w' || key === 'q') && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      getCurrentWindow().close();
+      return;
+    }
+    if (e.key !== shortcuts.toggleDialog && !appState.initialized) return;
+    if (e.key === shortcuts.prevDir) { navigateSelector('dirSelector', -1, handleDirChange); }
+    else if (e.key === shortcuts.nextDir) { navigateSelector('dirSelector', 1, handleDirChange); }
+    else if (e.key === shortcuts.prevScene) { navigateSelector('sceneSelector', -1, handleSceneChange); }
+    else if (e.key === shortcuts.nextScene) { navigateSelector('sceneSelector', 1, handleSceneChange); }
+    else if (e.key === shortcuts.prevAnim) { sidebar?.navigateAnimation(-1); }
+    else if (e.key === shortcuts.nextAnim) { sidebar?.navigateAnimation(1); }
+    else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
+    else if (e.key === shortcuts.exportImage) { doExportImage(); }
+    else if (e.key === shortcuts.exportAnim) { doExportAnimation(); }
+    else if (e.key === shortcuts.exportPngSeq) { doExportPngSequence(); }
+    else if (e.key === shortcuts.addToList) {
       invoke('append_to_list', { text: getSceneText() }).then(() => {
         showNotification(t('addedToList'), 'success');
       });

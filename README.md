@@ -17,19 +17,20 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 ## ⌨️ Keyboard Shortcuts
 
-| Action                   | Shortcuts |
-| ------------------------ | --------- |
-| 📂 Previous Directory    | `Q`       |
-| 📁 Next Directory        | `W`       |
-| ⏮️ Previous Scene        | `A`       |
-| ⏭️ Next Scene            | `S`       |
-| ◀️ Previous Animation    | `Z`       |
-| ▶️ Next Animation        | `X`       |
-| ⚙️ Open/Close Settings   | `E`       |
-| 📷 Export Image          | `R`       |
-| 🖼️ Export Image Sequence | `D`       |
-| 💾 Export Animation      | `C`       |
-| 📝 Append to List        | `V`       |
+| Action                   | Shortcuts                  |
+| ------------------------ | -------------------------- |
+| 📂 Previous Directory    | `Q`                        |
+| 📁 Next Directory        | `W`                        |
+| ⏮️ Previous Scene        | `A`                        |
+| ⏭️ Next Scene            | `S`                        |
+| ◀️ Previous Animation    | `Z`                        |
+| ▶️ Next Animation        | `X`                        |
+| ⚙️ Open/Close Settings   | `E`                        |
+| 📷 Export Image          | `R`                        |
+| 🖼️ Export Image Sequence | `D`                        |
+| 💾 Export Animation      | `C`                        |
+| 📝 Append to List        | `V`                        |
+| ❌ Close/Exit            | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
 
