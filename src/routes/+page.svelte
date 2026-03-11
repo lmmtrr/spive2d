@@ -109,6 +109,10 @@
           baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.json'.length);
           ext1 = '.json';
           ext2 = '.atlas';
+        } else if (fileNameWithExt.endsWith('.asset')) {
+          baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.asset'.length);
+          ext1 = '.asset';
+          ext2 = '.atlas';
         } else {
           appState.initialized = wasInitialized;
           showNotification(t('invalidUrl'));

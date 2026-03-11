@@ -363,6 +363,27 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
                 }
             }
         }
+        if main_file_info.is_none() {
+            for rp in file_paths.values() {
+                let original_fn = Path::new(rp)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("");
+                if original_fn.is_empty() {
+                    continue;
+                }
+                let original_fn_lower = original_fn.to_lowercase();
+                let target_pattern = format!("{}.asset", base_lower);
+                if let Some(pos) = original_fn_lower.find(&target_pattern) {
+                    let ext_start = pos + base_lower.len();
+                    if ext_start <= original_fn.len() {
+                        let ext_part = &original_fn[ext_start..];
+                        main_file_info = Some((rp.clone(), ext_part.to_string(), "asset"));
+                        break;
+                    }
+                }
+            }
+        }
         if let Some((main_path, main_extension, _file_type)) = main_file_info {
             let base_name_for_group = main_path.trim_end_matches(&main_extension).to_string();
             let adjusted_base_name = if let Some(slash_pos) = base_name_for_group.find('/') {
