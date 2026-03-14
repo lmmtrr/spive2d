@@ -707,7 +707,7 @@ export class SpineRenderer {
   #getModelId() {
     return `${this.#dirName}/${this.#fileNames[0]}`;
   }
-  captureFrame(width, height) {
+  captureFrame(width, height, options = {}) {
     const skel = this.#skeletons['0'];
     if (!skel) return null;
     const { skeleton, bounds } = skel;
@@ -726,15 +726,51 @@ export class SpineRenderer {
     gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    const s = Math.min(width / bounds.size.x, height / bounds.size.y);
-    this.#mvp.ortho(
-      bounds.offset.x - (width / s - bounds.size.x) / 2,
-      bounds.offset.x + bounds.size.x + (width / s - bounds.size.x) / 2,
-      bounds.offset.y - (height / s - bounds.size.y) / 2,
-      bounds.offset.y + bounds.size.y + (height / s - bounds.size.y) / 2,
-      -1,
-      1
-    );
+    if (options.ignoreTransform) {
+      const s = Math.min(width / bounds.size.x, height / bounds.size.y);
+      this.#mvp.ortho(
+        bounds.offset.x - (width / s - bounds.size.x) / 2,
+        bounds.offset.x + bounds.size.x + (width / s - bounds.size.x) / 2,
+        bounds.offset.y - (height / s - bounds.size.y) / 2,
+        bounds.offset.y + bounds.size.y + (height / s - bounds.size.y) / 2,
+        -1,
+        1
+      );
+    } else {
+      const centerX = bounds.offset.x + bounds.size.x * 0.5;
+      const centerY = bounds.offset.y + bounds.size.y * 0.5;
+      const scaleX = bounds.size.x / width;
+      const scaleY = bounds.size.y / height;
+      let scale = Math.max(scaleX, scaleY);
+      const userScale = this._scale || 1;
+      const userMoveX = this._moveX || 0;
+      const userMoveY = this._moveY || 0;
+      const userRotate = this._rotate || 0;
+      scale /= userScale;
+      const orthoWidth = width * scale;
+      const orthoHeight = height * scale;
+      const viewCenterX = centerX - userMoveX * scale;
+      const viewCenterY = centerY + userMoveY * scale;
+      this.#mvp.ortho2d(
+        viewCenterX - orthoWidth * 0.5,
+        viewCenterY - orthoHeight * 0.5,
+        orthoWidth,
+        orthoHeight
+      );
+      if (userRotate !== 0) {
+        const cos = Math.cos(Math.PI * userRotate);
+        const sin = Math.sin(Math.PI * userRotate);
+        const t1 = new this.#spine.Matrix4();
+        t1.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, centerX, centerY, 0, 1]);
+        const rot = new this.#spine.Matrix4();
+        rot.set([cos, -sin, 0, 0, sin, cos, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+        const t2 = new this.#spine.Matrix4();
+        t2.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -centerX, -centerY, 0, 1]);
+        this.#mvp.multiply(t1);
+        this.#mvp.multiply(rot);
+        this.#mvp.multiply(t2);
+      }
+    }
     this.#shader.bind();
     this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
     this.#batcher.begin(this.#shader);

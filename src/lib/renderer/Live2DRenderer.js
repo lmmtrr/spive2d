@@ -122,6 +122,10 @@ export class Live2DRenderer {
   }
   applyTransform(scale, moveX, moveY, rotate) {
     if (!this.#model) return;
+    this._scale = scale;
+    this._moveX = moveX;
+    this._moveY = moveY;
+    this._rotate = rotate;
     const { innerWidth: w, innerHeight: h } = window;
     const baseScale = Math.min(
       w / this.#model.internalModel.originalWidth,
@@ -133,6 +137,10 @@ export class Live2DRenderer {
   }
   resetTransform(width = window.innerWidth, height = window.innerHeight) {
     if (!this.#model) return;
+    this._scale = 1;
+    this._moveX = 0;
+    this._moveY = 0;
+    this._rotate = 0;
     const s = Math.min(
       width / this.#model.internalModel.originalWidth,
       height / this.#model.internalModel.originalHeight
@@ -141,23 +149,42 @@ export class Live2DRenderer {
     this.#model.position.set(width * 0.5, height * 0.5);
     this.#model.rotation = 0;
   }
-  captureFrame(width, height) {
+  captureFrame(width, height, options = {}) {
     if (!this.#model) return null;
     width = Math.round(width);
     height = Math.round(height);
     const originalScale = this.#model.scale.clone();
     const originalPosition = this.#model.position.clone();
-    const s = Math.min(
-      width / this.#model.internalModel.originalWidth,
-      height / this.#model.internalModel.originalHeight
-    );
-    this.#model.scale.set(s);
-    this.#model.position.set(width * 0.5, height * 0.5);
+    const originalRotation = this.#model.rotation;
+    if (options.ignoreTransform) {
+      const s = Math.min(
+        width / this.#model.internalModel.originalWidth,
+        height / this.#model.internalModel.originalHeight
+      );
+      this.#model.scale.set(s);
+      this.#model.position.set(width * 0.5, height * 0.5);
+      this.#model.rotation = 0;
+    } else {
+      const userScale = this._scale || 1;
+      const userMoveX = this._moveX || 0;
+      const userMoveY = this._moveY || 0;
+      const userRotate = this._rotate || 0;
+      const baseScale = Math.min(
+        width / this.#model.internalModel.originalWidth,
+        height / this.#model.internalModel.originalHeight
+      );
+      const screenBaseScale = Math.min(window.innerWidth / this.#model.internalModel.originalWidth, window.innerHeight / this.#model.internalModel.originalHeight);
+      const scaleFactor = baseScale / screenBaseScale;
+      this.#model.scale.set(baseScale * userScale);
+      this.#model.position.set(width * 0.5 + userMoveX * scaleFactor, height * 0.5 + userMoveY * scaleFactor);
+      this.#model.rotation = userRotate;
+    }
     const renderTexture = PIXI.RenderTexture.create({ width, height });
     this.#app.renderer.render(this.#model, { renderTexture });
     const canvas = this.#app.renderer.extract.canvas(renderTexture);
     this.#model.scale.copyFrom(originalScale);
     this.#model.position.copyFrom(originalPosition);
+    this.#model.rotation = originalRotation;
     renderTexture.destroy(true);
     return canvas;
   }

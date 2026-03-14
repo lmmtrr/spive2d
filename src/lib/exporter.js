@@ -95,7 +95,7 @@ export async function exportImage(sceneText, animationName) {
   const backgroundImage = document.body.style.backgroundImage;
   const imageUrl = parseBackgroundImageUrl(backgroundImage);
   const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(renderer);
-  const capturedCanvas = renderer.captureFrame(contentWidth, contentHeight);
+  const capturedCanvas = renderer.captureFrame(contentWidth, contentHeight, { ignoreTransform: appState.exportBase === 'original' });
   if (!capturedCanvas) return;
   const tempCanvas = createOffscreenCanvas(finalWidth, finalHeight);
   const ctx = tempCanvas.getContext('2d');
@@ -303,7 +303,7 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight);
+      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight, { ignoreTransform: appState.exportBase === 'original' });
     } else {
       capturedCanvas = hiddenRenderer.getCanvas();
     }
@@ -487,7 +487,7 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight);
+      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight, { ignoreTransform: appState.exportBase === 'original' });
     } else {
       capturedCanvas = hiddenRenderer.getCanvas();
     }
