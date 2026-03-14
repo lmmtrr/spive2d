@@ -192,33 +192,28 @@
     appState.exportBase = e.target.value;
   }
 
-  function handleExportScaleChange(e) {
-    appState.exportScale = Number(e.target.value);
-  }
-
   function handleExportScaleValidate() {
-    const scale = appState.exportScale;
-    if (scale === 0 || isNaN(scale)) {
+    if (appState.exportScale == null) {
       appState.exportScale = 100;
     } else {
-      appState.exportScale = Math.max(10, Math.min(1000, scale));
+      appState.exportScale = Math.max(10, Math.min(1000, appState.exportScale));
     }
   }
 
-  function handleExportMarginXChange(e) {
-    appState.exportMarginX = Number(e.target.value);
-  }
-
   function handleExportMarginXValidate() {
-    appState.exportMarginX = Math.max(-1000, Math.min(1000, appState.exportMarginX || 0));
-  }
-
-  function handleExportMarginYChange(e) {
-    appState.exportMarginY = Number(e.target.value);
+    if (appState.exportMarginX == null) {
+      appState.exportMarginX = 0;
+    } else {
+      appState.exportMarginX = Math.max(-1000, Math.min(1000, appState.exportMarginX));
+    }
   }
 
   function handleExportMarginYValidate() {
-    appState.exportMarginY = Math.max(-1000, Math.min(1000, appState.exportMarginY || 0));
+    if (appState.exportMarginY == null) {
+      appState.exportMarginY = 0;
+    } else {
+      appState.exportMarginY = Math.max(-1000, Math.min(1000, appState.exportMarginY));
+    }
   }
 
   let exportResolution = $derived.by(() => {
@@ -230,9 +225,9 @@
       baseW = window.innerWidth;
       baseHeight = window.innerHeight;
     }
-    const scale = appState.exportScale / 100;
-    const marginX = appState.exportMarginX;
-    const marginY = appState.exportMarginY;
+    const scale = (appState.exportScale ?? 100) / 100;
+    const marginX = appState.exportMarginX ?? 0;
+    const marginY = appState.exportMarginY ?? 0;
     return {
       width: Math.round(baseW * scale + marginX * 2),
       height: Math.round(baseHeight * scale + marginY * 2)
@@ -382,16 +377,16 @@
       </div>
       <div class="input-row">
         <label for="exportScale">{t('exportScale')}</label>
-        <input type="number" id="exportScale" min="10" max="1000" value={appState.exportScale} oninput={handleExportScaleChange} onchange={handleExportScaleValidate}>
+        <input type="number" id="exportScale" min="10" max="1000" bind:value={appState.exportScale} onchange={handleExportScaleValidate}>
         <span style="margin-left: 8px;">%</span>
       </div>
       <div class="input-row">
         <label for="exportMarginX">{t('exportMarginX')}</label>
-        <input type="number" id="exportMarginX" min="-1000" max="1000" value={appState.exportMarginX} oninput={handleExportMarginXChange} onchange={handleExportMarginXValidate}>
+        <input type="number" id="exportMarginX" min="-1000" max="1000" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
       </div>
       <div class="input-row">
         <label for="exportMarginY">{t('exportMarginY')}</label>
-        <input type="number" id="exportMarginY" min="-1000" max="1000" value={appState.exportMarginY} oninput={handleExportMarginYChange} onchange={handleExportMarginYValidate}>
+        <input type="number" id="exportMarginY" min="-1000" max="1000" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
       </div>
       <hr>
       <div class="input-row result-row">
