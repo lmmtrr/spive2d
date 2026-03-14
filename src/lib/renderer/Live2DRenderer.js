@@ -156,10 +156,12 @@ export class Live2DRenderer {
     const originalScale = this.#model.scale.clone();
     const originalPosition = this.#model.position.clone();
     const originalRotation = this.#model.rotation;
+    const marginX = options.marginX || 0;
+    const marginY = options.marginY || 0;
     if (options.ignoreTransform) {
       const s = Math.min(
-        width / this.#model.internalModel.originalWidth,
-        height / this.#model.internalModel.originalHeight
+        (width - 2 * marginX) / this.#model.internalModel.originalWidth,
+        (height - 2 * marginY) / this.#model.internalModel.originalHeight
       );
       this.#model.scale.set(s);
       this.#model.position.set(width * 0.5, height * 0.5);
@@ -170,8 +172,8 @@ export class Live2DRenderer {
       const userMoveY = this._moveY || 0;
       const userRotate = this._rotate || 0;
       const baseScale = Math.min(
-        width / this.#model.internalModel.originalWidth,
-        height / this.#model.internalModel.originalHeight
+        (width - 2 * marginX) / this.#model.internalModel.originalWidth,
+        (height - 2 * marginY) / this.#model.internalModel.originalHeight
       );
       const screenBaseScale = Math.min(window.innerWidth / this.#model.internalModel.originalWidth, window.innerHeight / this.#model.internalModel.originalHeight);
       const scaleFactor = baseScale / screenBaseScale;

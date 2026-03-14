@@ -24,7 +24,7 @@
  * @property {() => {width: number, height: number}} getOriginalSize
  * @property {(scale: number, moveX: number, moveY: number, rotate: number) => void} applyTransform
  * @property {(width?: number, height?: number) => void} resetTransform
- * @property {(width: number, height: number) => HTMLCanvasElement|null} captureFrame
+ * @property {(width: number, height: number, options?: Object) => HTMLCanvasElement|null} captureFrame
  * @property {() => AnimationItem[]} getAnimations
  * @property {(value: string) => void} setAnimation
  * @property {() => AnimationItem[]|null} getExpressions

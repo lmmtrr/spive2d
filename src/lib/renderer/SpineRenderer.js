@@ -726,8 +726,10 @@ export class SpineRenderer {
     gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    const marginX = options.marginX || 0;
+    const marginY = options.marginY || 0;
     if (options.ignoreTransform) {
-      const s = Math.min(width / bounds.size.x, height / bounds.size.y);
+      const s = Math.min((width - 2 * marginX) / bounds.size.x, (height - 2 * marginY) / bounds.size.y);
       this.#mvp.ortho(
         bounds.offset.x - (width / s - bounds.size.x) / 2,
         bounds.offset.x + bounds.size.x + (width / s - bounds.size.x) / 2,
@@ -739,8 +741,8 @@ export class SpineRenderer {
     } else {
       const centerX = bounds.offset.x + bounds.size.x * 0.5;
       const centerY = bounds.offset.y + bounds.size.y * 0.5;
-      const scaleX = bounds.size.x / width;
-      const scaleY = bounds.size.y / height;
+      const scaleX = bounds.size.x / (width - 2 * marginX);
+      const scaleY = bounds.size.y / (height - 2 * marginY);
       let scale = Math.max(scaleX, scaleY);
       const userScale = this._scale || 1;
       const userMoveX = this._moveX || 0;

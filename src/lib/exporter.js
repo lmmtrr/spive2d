@@ -95,7 +95,11 @@ export async function exportImage(sceneText, animationName) {
   const backgroundImage = document.body.style.backgroundImage;
   const imageUrl = parseBackgroundImageUrl(backgroundImage);
   const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(renderer);
-  const capturedCanvas = renderer.captureFrame(contentWidth, contentHeight, { ignoreTransform: appState.exportBase === 'original' });
+  const capturedCanvas = renderer.captureFrame(finalWidth, finalHeight, { 
+    ignoreTransform: appState.exportBase === 'original',
+    marginX,
+    marginY
+  });
   if (!capturedCanvas) return;
   const tempCanvas = createOffscreenCanvas(finalWidth, finalHeight);
   const ctx = tempCanvas.getContext('2d');
@@ -106,7 +110,7 @@ export async function exportImage(sceneText, animationName) {
     drawBackground(ctx, finalWidth, finalHeight, null, backgroundColor);
   }
   if (ctx && 'drawImage' in ctx) {
-    ctx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+    ctx.drawImage(capturedCanvas, 0, 0);
   }
   await downloadCanvas(tempCanvas, sceneText, animationName);
   showNotification(t('exportImageSuccess'), 'success');
@@ -303,19 +307,23 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight, { ignoreTransform: appState.exportBase === 'original' });
+      capturedCanvas = hiddenRenderer.captureFrame(finalWidth, finalHeight, { 
+        ignoreTransform: appState.exportBase === 'original',
+        marginX,
+        marginY
+      });
     } else {
       capturedCanvas = hiddenRenderer.getCanvas();
     }
     if (compositingCanvas && capturedCanvas) {
       const ctx = compositingCanvas.getContext('2d');
       drawBackground(ctx, finalWidth, finalHeight, backgroundImageToRender, backgroundColor);
-      ctx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+      ctx.drawImage(capturedCanvas, 0, 0);
       tempCtx.clearRect(0, 0, finalWidth, finalHeight);
       tempCtx.drawImage(compositingCanvas, 0, 0, finalWidth, finalHeight);
     } else if (capturedCanvas) {
       tempCtx.clearRect(0, 0, finalWidth, finalHeight);
-      tempCtx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+      tempCtx.drawImage(capturedCanvas, 0, 0);
     }
     createImageBitmap(tempCanvas).then((bitmap) => {
       if (item.status !== 'cancelled') {
@@ -487,19 +495,23 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight, { ignoreTransform: appState.exportBase === 'original' });
+      capturedCanvas = hiddenRenderer.captureFrame(finalWidth, finalHeight, { 
+        ignoreTransform: appState.exportBase === 'original',
+        marginX,
+        marginY
+      });
     } else {
       capturedCanvas = hiddenRenderer.getCanvas();
     }
     if (compositingCanvas && capturedCanvas) {
       const ctx = compositingCanvas.getContext('2d');
       drawBackground(ctx, finalWidth, finalHeight, backgroundImageToRender, backgroundColor);
-      ctx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+      ctx.drawImage(capturedCanvas, 0, 0);
       tempCtx.clearRect(0, 0, finalWidth, finalHeight);
       tempCtx.drawImage(compositingCanvas, 0, 0, finalWidth, finalHeight);
     } else if (capturedCanvas) {
       tempCtx.clearRect(0, 0, finalWidth, finalHeight);
-      tempCtx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+      tempCtx.drawImage(capturedCanvas, 0, 0);
     }
     createImageBitmap(tempCanvas).then((bitmap) => {
       if (item.status !== 'cancelled') {
