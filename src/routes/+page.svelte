@@ -355,13 +355,15 @@
   function doExportAnimation() {
     const sceneText = getSceneText();
     const animText = sidebar?.getSelectedAnimationText() || '';
-    const exprText = sidebar?.getSelectedExpression?.() || '';
-    exportAnimation(sceneText, animText, exprText);
+    const animValue = sidebar?.getSelectedAnimation?.() || '';
+    const exprValue = sidebar?.getSelectedExpression?.() || '';
+    exportAnimation(sceneText, animText, animValue, exprValue);
   }
 
   async function doExportPngSequence() {
     const sceneText = getSceneText();
     const animText = sidebar?.getSelectedAnimationText() || '';
+    const animValue = sidebar?.getSelectedAnimation?.() || '';
     const safeName = animText ? animText.split('.')[0] : 'sequence';
     const baseDir = await downloadDir();
     const exportBaseDir = await join(baseDir, 'spive2d_export');
@@ -372,8 +374,8 @@
     } catch (err) {
       console.error('Failed to create export directory:', err);
     }
-    const exprText = sidebar?.getSelectedExpression?.() || '';
-    exportPNGSequence(targetDir, sceneText, animText, exprText);
+    const exprValue = sidebar?.getSelectedExpression?.() || '';
+    exportPNGSequence(targetDir, sceneText, animText, animValue, exprValue);
   }
 
   function getSceneText() {

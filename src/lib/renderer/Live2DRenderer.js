@@ -350,6 +350,7 @@ export class Live2DRenderer {
         mm.update(internalModel.coreModel, savedStateTime);
         entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
         internalModel.coreModel.update();
+        this.#model.deltaTime = 0;
         this.render();
         if (this.#app && !this.#model.autoUpdate) {
           this.#app.render();

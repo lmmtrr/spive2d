@@ -139,7 +139,7 @@ export async function exportImage(sceneText, animationName) {
   }
 }
 
-export async function exportAnimation(sceneText, animationName, expressionName, onProgress) {
+export async function exportAnimation(sceneText, animationName, animationValue, expressionValue, onProgress) {
   const activeRenderer = getRenderer();
   if (!activeRenderer) return;
   if (typeof VideoEncoder === 'undefined') {
@@ -183,6 +183,12 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
   }
   try {
     await hiddenRenderer.load(selectedDir, fileNames);
+    if (animationValue) {
+      await hiddenRenderer.setAnimation(animationValue);
+    }
+    if (expressionValue !== undefined && expressionValue !== null && 'setExpression' in hiddenRenderer) {
+      hiddenRenderer.setExpression(expressionValue);
+    }
   } catch (err) {
     console.error('Failed to load hidden renderer for export', err);
     exportQueue.updateStatus(taskId, 'error');
@@ -199,6 +205,20 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
   if (allSkins.length > 0 && 'applySkins' in hiddenRenderer && typeof hiddenRenderer.applySkins === 'function') {
     const activeSkins = allSkins.filter(item => item.checked).map(item => item.name);
     hiddenRenderer.applySkins(activeSkins);
+  }
+  if ('applyTransform' in hiddenRenderer && typeof hiddenRenderer.applyTransform === 'function') {
+    hiddenRenderer.applyTransform(
+      appState.transform.scale,
+      appState.transform.moveX,
+      appState.transform.moveY,
+      appState.transform.rotate
+    );
+  }
+  if ('setSpeed' in hiddenRenderer && typeof hiddenRenderer.setSpeed === 'function') {
+    hiddenRenderer.setSpeed(appState.animation.speed);
+  }
+  if ('setPaused' in hiddenRenderer && typeof hiddenRenderer.setPaused === 'function') {
+    hiddenRenderer.setPaused(true);
   }
   hiddenRenderer.getPropertyItems?.('parameters');
   const activeParams = activeRenderer.getPropertyItems?.('parameters') || [];
@@ -235,9 +255,10 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
       return;
     }
     if (e.data.type === 'STARTED') {
-      if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function' && 'seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+      if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
         hiddenRenderer.seekAnimation(0);
       }
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       processNextFrame(0);
     } else if (e.data.type === 'FRAME_ADDED') {
       currentWorkerFrame++;
@@ -302,10 +323,10 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     }
     const time = frame / fps;
     const progress = baseDuration > 0 ? time / baseDuration : 0;
-    if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
-      if (frame > 0) hiddenRenderer.stepAnimation(1 / fps);
-    } else if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+    if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
       hiddenRenderer.seekAnimation(progress);
+    } else if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
+      if (frame > 0) hiddenRenderer.stepAnimation(1 / fps);
     }
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
@@ -336,7 +357,7 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
   }
 }
 
-export async function exportPNGSequence(targetDir, sceneText, animationName, expressionName, onProgress) {
+export async function exportPNGSequence(targetDir, sceneText, animationName, animationValue, expressionValue, onProgress) {
   const activeRenderer = getRenderer();
   if (!activeRenderer) return;
   taskIdCounter++;
@@ -376,6 +397,12 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
   }
   try {
     await hiddenRenderer.load(selectedDir, fileNames);
+    if (animationValue) {
+      await hiddenRenderer.setAnimation(animationValue);
+    }
+    if (expressionValue !== undefined && expressionValue !== null && 'setExpression' in hiddenRenderer) {
+      hiddenRenderer.setExpression(expressionValue);
+    }
   } catch (err) {
     console.error('Failed to load hidden renderer for export', err);
     exportQueue.updateStatus(taskId, 'error');
@@ -390,6 +417,20 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
   if (allSkins.length > 0 && 'applySkins' in hiddenRenderer && typeof hiddenRenderer.applySkins === 'function') {
     const activeSkins = allSkins.filter(item => item.checked).map(item => item.name);
     hiddenRenderer.applySkins(activeSkins);
+  }
+  if ('applyTransform' in hiddenRenderer && typeof hiddenRenderer.applyTransform === 'function') {
+    hiddenRenderer.applyTransform(
+      appState.transform.scale,
+      appState.transform.moveX,
+      appState.transform.moveY,
+      appState.transform.rotate
+    );
+  }
+  if ('setSpeed' in hiddenRenderer && typeof hiddenRenderer.setSpeed === 'function') {
+    hiddenRenderer.setSpeed(appState.animation.speed);
+  }
+  if ('setPaused' in hiddenRenderer && typeof hiddenRenderer.setPaused === 'function') {
+    hiddenRenderer.setPaused(true);
   }
   hiddenRenderer.getPropertyItems?.('parameters');
   const activeParams = activeRenderer.getPropertyItems?.('parameters') || [];
@@ -472,10 +513,10 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     const frame = currentWorkerFrame;
     const time = frame / fps;
     const progress = baseDuration > 0 ? time / baseDuration : 0;
-    if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
-      if (frame > 0) hiddenRenderer.stepAnimation(1 / fps);
-    } else if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
+    if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
       hiddenRenderer.seekAnimation(progress);
+    } else if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
+      if (frame > 0) hiddenRenderer.stepAnimation(1 / fps);
     }
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
@@ -509,5 +550,9 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
   if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
     hiddenRenderer.seekAnimation(0);
   }
-  processNextFrame();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      processNextFrame();
+    });
+  });
 }
