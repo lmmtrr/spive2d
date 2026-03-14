@@ -11,6 +11,8 @@ import { exportQueue } from './exportQueue.svelte.js';
 const RECORDING_BITRATE = 12000000;
 const RECORDING_FRAME_RATE = 60;
 
+let taskIdCounter = 0;
+
 function createOffscreenCanvas(width = 1, height = 1) {
   return typeof OffscreenCanvas !== 'undefined'
     ? new OffscreenCanvas(width, height)
@@ -89,34 +91,53 @@ function getFinalExportSize(renderer) {
 }
 
 export async function exportImage(sceneText, animationName) {
-  const renderer = getRenderer();
-  if (!renderer) return;
-  const backgroundColor = document.body.style.backgroundColor;
-  const backgroundImage = document.body.style.backgroundImage;
-  const imageUrl = parseBackgroundImageUrl(backgroundImage);
-  const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(renderer);
-  const capturedCanvas = renderer.captureFrame(finalWidth, finalHeight, { 
-    ignoreTransform: appState.exportBase === 'original',
-    marginX,
-    marginY
+  const taskId = `image-${++taskIdCounter}`;
+  const safeName = animationName ? animationName.split('.')[0] : 'snapshot';
+  const baseFilename = `${sceneText}_${safeName}`;
+  exportQueue.add({
+    id: taskId,
+    type: 'Image',
+    name: baseFilename,
+    progress: 100,
+    status: 'processing'
   });
-  if (!capturedCanvas) return;
-  const tempCanvas = createOffscreenCanvas(finalWidth, finalHeight);
-  const ctx = tempCanvas.getContext('2d');
-  if (imageUrl) {
-    const img = await loadImage(imageUrl);
-    drawBackground(ctx, finalWidth, finalHeight, img, null);
-  } else {
-    drawBackground(ctx, finalWidth, finalHeight, null, backgroundColor);
+  try {
+    const renderer = getRenderer();
+    if (!renderer) {
+      exportQueue.updateStatus(taskId, 'error');
+      return;
+    }
+    const backgroundColor = document.body.style.backgroundColor;
+    const backgroundImage = document.body.style.backgroundImage;
+    const imageUrl = parseBackgroundImageUrl(backgroundImage);
+    const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(renderer);
+    const capturedCanvas = renderer.captureFrame(finalWidth, finalHeight, {
+      ignoreTransform: appState.exportBase === 'original',
+      marginX,
+      marginY
+    });
+    if (!capturedCanvas) {
+      exportQueue.updateStatus(taskId, 'error');
+      return;
+    }
+    const tempCanvas = createOffscreenCanvas(finalWidth, finalHeight);
+    const ctx = tempCanvas.getContext('2d');
+    if (imageUrl) {
+      const img = await loadImage(imageUrl);
+      drawBackground(ctx, finalWidth, finalHeight, img, null);
+    } else {
+      drawBackground(ctx, finalWidth, finalHeight, null, backgroundColor);
+    }
+    if (ctx && 'drawImage' in ctx) {
+      ctx.drawImage(capturedCanvas, 0, 0);
+    }
+    await downloadCanvas(tempCanvas, sceneText, animationName);
+    exportQueue.updateStatus(taskId, 'completed');
+  } catch (err) {
+    console.error('Failed to export image:', err);
+    exportQueue.updateStatus(taskId, 'error');
   }
-  if (ctx && 'drawImage' in ctx) {
-    ctx.drawImage(capturedCanvas, 0, 0);
-  }
-  await downloadCanvas(tempCanvas, sceneText, animationName);
-  showNotification(t('exportImageSuccess'), 'success');
 }
-
-let taskIdCounter = 0;
 
 export async function exportAnimation(sceneText, animationName, expressionName, onProgress) {
   const activeRenderer = getRenderer();
@@ -254,11 +275,9 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
         }
         await writeFile(filePath, new Uint8Array(buffer));
         exportQueue.updateStatus(taskId, 'completed');
-        showNotification(t('exportAnimationSuccess'), 'success');
       } catch (err) {
         console.error('Failed to write video:', err);
         exportQueue.updateStatus(taskId, 'error');
-        showNotification(t('exportAnimationError'), 'error');
       } finally {
         worker.terminate();
         cleanup();
@@ -307,7 +326,7 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(finalWidth, finalHeight, { 
+      capturedCanvas = hiddenRenderer.captureFrame(finalWidth, finalHeight, {
         ignoreTransform: appState.exportBase === 'original',
         marginX,
         marginY
@@ -462,14 +481,12 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
           await Promise.all(writePromises);
         }
         exportQueue.updateStatus(taskId, 'completed');
-        showNotification(t('exportPngSeqSuccess') || 'PNG Sequence exported', 'success');
         worker.terminate();
         cleanup();
       }
     } else if (e.data.type === 'ERROR') {
       console.error('Sequence worker error:', e.data.error);
       exportQueue.updateStatus(taskId, 'error');
-      showNotification(t('exportPngSeqError') || 'PNG Sequence export failed', 'error');
       worker.terminate();
       cleanup();
     }
@@ -495,7 +512,7 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(finalWidth, finalHeight, { 
+      capturedCanvas = hiddenRenderer.captureFrame(finalWidth, finalHeight, {
         ignoreTransform: appState.exportBase === 'original',
         marginX,
         marginY

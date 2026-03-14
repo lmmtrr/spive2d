@@ -147,7 +147,7 @@
     color: #cccccc;
   }
 
-  .success { color: #2ecc71; }
+  .success { color: #ffffff; }
   .error { color: #e74c3c; }
   .cancelled { color: #95a5a6; }
 </style>
