@@ -189,47 +189,31 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     worker.terminate();
     return;
   }
+  const { contentWidth, contentHeight, finalWidth: rawFinalWidth, finalHeight: rawFinalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
+  const finalWidth = rawFinalWidth % 2 === 0 ? rawFinalWidth : rawFinalWidth + 1;
+  const finalHeight = rawFinalHeight % 2 === 0 ? rawFinalHeight : rawFinalHeight + 1;
+  if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
+    hiddenRenderer.resize(contentWidth, contentHeight);
+  }
   const allSkins = activeRenderer.getPropertyItems?.('skins') || [];
   if (allSkins.length > 0 && 'applySkins' in hiddenRenderer && typeof hiddenRenderer.applySkins === 'function') {
     const activeSkins = allSkins.filter(item => item.checked).map(item => item.name);
     hiddenRenderer.applySkins(activeSkins);
   }
+  hiddenRenderer.getPropertyItems?.('parameters');
   const activeParams = activeRenderer.getPropertyItems?.('parameters') || [];
   for (const p of activeParams) {
     hiddenRenderer.updatePropertyItem('parameters', p.name, p.index, p.value);
   }
   const syncVisibilityProps = ['attachments', 'parts', 'drawables'];
   for (const propCategory of syncVisibilityProps) {
+    hiddenRenderer.getPropertyItems?.(propCategory);
     const props = activeRenderer.getPropertyItems?.(propCategory) || [];
     for (const p of props) {
       if (p.type === 'checkbox' && p.checked === false) {
         hiddenRenderer.updatePropertyItem(propCategory, p.name, p.index, false);
       }
     }
-  }
-  const activeLayout = appState.transform;
-  hiddenRenderer.applyTransform(activeLayout.scale, activeLayout.moveX, activeLayout.moveY, activeLayout.rotate);
-  let targetAnim = hiddenRenderer.getAnimations()?.[0]?.value;
-  if (animationName) {
-    const match = hiddenRenderer.getAnimations().find(a => a.name === animationName);
-    if (match) targetAnim = match.value;
-  }
-  if (targetAnim) {
-    const p = hiddenRenderer.setAnimation(targetAnim);
-    if (p && typeof p.then === 'function') {
-      await p;
-      await new Promise(r => setTimeout(r, 50));
-    }
-  }
-  if (expressionName && 'setExpression' in hiddenRenderer && typeof hiddenRenderer.setExpression === 'function') {
-    hiddenRenderer.setExpression(expressionName);
-  }
-  hiddenRenderer.setPaused(true);
-  const { contentWidth, contentHeight, finalWidth: rawFinalWidth, finalHeight: rawFinalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
-  const finalWidth = rawFinalWidth % 2 === 0 ? rawFinalWidth : rawFinalWidth + 1;
-  const finalHeight = rawFinalHeight % 2 === 0 ? rawFinalHeight : rawFinalHeight + 1;
-  if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
-    hiddenRenderer.resize(contentWidth, contentHeight);
   }
   if (compositingCanvas) {
     compositingCanvas.width = finalWidth;
@@ -398,45 +382,29 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     worker.terminate();
     return;
   }
+  const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
+  if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
+    hiddenRenderer.resize(contentWidth, contentHeight);
+  }
   const allSkins = activeRenderer.getPropertyItems?.('skins') || [];
   if (allSkins.length > 0 && 'applySkins' in hiddenRenderer && typeof hiddenRenderer.applySkins === 'function') {
     const activeSkins = allSkins.filter(item => item.checked).map(item => item.name);
     hiddenRenderer.applySkins(activeSkins);
   }
+  hiddenRenderer.getPropertyItems?.('parameters');
   const activeParams = activeRenderer.getPropertyItems?.('parameters') || [];
   for (const p of activeParams) {
     hiddenRenderer.updatePropertyItem('parameters', p.name, p.index, p.value);
   }
   const syncVisibilityProps = ['attachments', 'parts', 'drawables'];
   for (const propCategory of syncVisibilityProps) {
+    hiddenRenderer.getPropertyItems?.(propCategory);
     const props = activeRenderer.getPropertyItems?.(propCategory) || [];
     for (const p of props) {
       if (p.type === 'checkbox' && p.checked === false) {
         hiddenRenderer.updatePropertyItem(propCategory, p.name, p.index, false);
       }
     }
-  }
-  const activeLayout = appState.transform;
-  hiddenRenderer.applyTransform(activeLayout.scale, activeLayout.moveX, activeLayout.moveY, activeLayout.rotate);
-  let targetAnim = hiddenRenderer.getAnimations()?.[0]?.value;
-  if (animationName) {
-    const match = hiddenRenderer.getAnimations().find(a => a.name === animationName);
-    if (match) targetAnim = match.value;
-  }
-  if (targetAnim) {
-    const p = hiddenRenderer.setAnimation(targetAnim);
-    if (p && typeof p.then === 'function') {
-      await p;
-      await new Promise(r => setTimeout(r, 50));
-    }
-  }
-  if (expressionName && 'setExpression' in hiddenRenderer && typeof hiddenRenderer.setExpression === 'function') {
-    hiddenRenderer.setExpression(expressionName);
-  }
-  hiddenRenderer.setPaused(true);
-  const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
-  if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
-    hiddenRenderer.resize(contentWidth, contentHeight);
   }
   if (compositingCanvas) {
     compositingCanvas.width = finalWidth;

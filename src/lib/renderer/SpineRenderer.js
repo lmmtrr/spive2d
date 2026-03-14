@@ -899,7 +899,9 @@ export class SpineRenderer {
     return items;
   }
   #updateParameter(name, index, value) {
-    if (!this._parameterItems) return;
+    if (!this._parameterItems) {
+      this.#getParameterItems();
+    }
     const item = this._parameterItems.find(i => i.index === index);
     if (!item) return;
     item._target[item._prop] = value;
