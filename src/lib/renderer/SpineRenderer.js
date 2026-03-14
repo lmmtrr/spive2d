@@ -145,63 +145,6 @@ export class SpineRenderer {
     this._moveY = 0;
     this._rotate = 0;
   }
-  captureFrame(width, height) {
-    width = Math.round(width);
-    height = Math.round(height);
-    const gl = this.#ctx.gl;
-    const framebuffer = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      return null;
-    }
-    const oldViewport = gl.getParameter(gl.VIEWPORT);
-    gl.viewport(0, 0, width, height);
-    const originalMvpValues = new Float32Array(this.#mvp.values);
-    this.#updateMVP(width, height);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    this.#shader.bind();
-    this.#shader.setUniformi(this.#spine.Shader.SAMPLER, 0);
-    this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
-    this.#batcher.begin(this.#shader);
-    for (const key of Object.keys(this.#skeletons).reverse()) {
-      const skel = this.#skeletons[key].skeleton;
-      this.#syncHiddenAttachments();
-      this.#skeletonRenderer.vertexEffect = null;
-      this.#skeletonRenderer.premultipliedAlpha = (this.#alphaMode === 'unpack' || this.#alphaMode === 'pma');
-      this.#skeletonRenderer.draw(this.#batcher, skel);
-    }
-    this.#batcher.end();
-    this.#shader.unbind();
-    const pixels = new Uint8Array(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.deleteFramebuffer(framebuffer);
-    gl.deleteTexture(texture);
-    gl.viewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
-    this.#mvp.set(originalMvpValues);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx2d = canvas.getContext('2d');
-    const imgData = ctx2d.createImageData(width, height);
-    const rowBytes = width * 4;
-    for (let y = 0; y < height; y++) {
-      const srcRowStart = y * rowBytes;
-      const dstRowStart = (height - 1 - y) * rowBytes;
-      imgData.data.set(pixels.subarray(srcRowStart, srcRowStart + rowBytes), dstRowStart);
-    }
-    ctx2d.putImageData(imgData, 0, 0);
-    return canvas;
-  }
   getAnimations() {
     const skel = this.#skeletons['0']?.skeleton;
     if (!skel) return [];
@@ -431,6 +374,8 @@ export class SpineRenderer {
     }
     const skeletonData = skeletonLoader.readSkeletonData(skelDataOrText);
     const skeleton = new this.#spine.Skeleton(skeletonData);
+    skeleton.scaleX = 1;
+    skeleton.scaleY = 1;
     let initialSkinName;
     if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1)
       initialSkinName = skeleton.data.skins[1].name;
@@ -761,6 +706,62 @@ export class SpineRenderer {
   }
   #getModelId() {
     return `${this.#dirName}/${this.#fileNames[0]}`;
+  }
+  captureFrame(width, height) {
+    const skel = this.#skeletons['0'];
+    if (!skel) return null;
+    const { skeleton, bounds } = skel;
+    const originalMvp = this.#mvp.copy();
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const gl = this.#ctx.gl;
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    const rb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA4, width, height);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+    const oldViewport = gl.getParameter(gl.VIEWPORT);
+    gl.viewport(0, 0, width, height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const s = Math.min(width / bounds.size.x, height / bounds.size.y);
+    this.#mvp.ortho(
+      bounds.offset.x - (width / s - bounds.size.x) / 2,
+      bounds.offset.x + bounds.size.x + (width / s - bounds.size.x) / 2,
+      bounds.offset.y - (height / s - bounds.size.y) / 2,
+      bounds.offset.y + bounds.size.y + (height / s - bounds.size.y) / 2,
+      -1,
+      1
+    );
+    this.#shader.bind();
+    this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
+    this.#batcher.begin(this.#shader);
+    this.#skeletonRenderer.draw(this.#batcher, skeleton);
+    this.#batcher.end();
+    this.#shader.unbind();
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    gl.deleteRenderbuffer(rb);
+    gl.viewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+    this.#mvp.set(originalMvp);
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = width;
+    finalCanvas.height = height;
+    const ctx = finalCanvas.getContext('2d');
+    const imageData = new ImageData(pixels, width, height);
+    const flipCanvas = document.createElement('canvas');
+    flipCanvas.width = width;
+    flipCanvas.height = height;
+    const flipCtx = flipCanvas.getContext('2d');
+    flipCtx.putImageData(imageData, 0, 0);
+    ctx.scale(1, -1);
+    ctx.drawImage(flipCanvas, 0, -height);
+    return finalCanvas;
   }
   #getParameterItems() {
     const skel = this.#skeletons['0']?.skeleton;

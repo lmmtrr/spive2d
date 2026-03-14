@@ -62,53 +62,54 @@ async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
   }
 }
 
+function getFinalExportSize(renderer) {
+  let baseWidth, baseHeight;
+  if (appState.exportBase === 'original' && renderer) {
+    const size = renderer.getOriginalSize();
+    baseWidth = size.width;
+    baseHeight = size.height;
+  } else {
+    const activeCanvas = getRenderer()?.getCanvas() || { width: window.innerWidth, height: window.innerHeight };
+    baseWidth = activeCanvas.width;
+    baseHeight = activeCanvas.height;
+  }
+  const scale = appState.exportScale / 100;
+  const marginX = Math.round(appState.exportMarginX);
+  const marginY = Math.round(appState.exportMarginY);
+  const contentWidth = Math.round(baseWidth * scale);
+  const contentHeight = Math.round(baseHeight * scale);
+  return {
+    contentWidth,
+    contentHeight,
+    finalWidth: contentWidth + marginX * 2,
+    finalHeight: contentHeight + marginY * 2,
+    marginX,
+    marginY
+  };
+}
+
 export async function exportImage(sceneText, animationName) {
   const renderer = getRenderer();
   if (!renderer) return;
-  const activeCanvas = renderer.getCanvas();
   const backgroundColor = document.body.style.backgroundColor;
   const backgroundImage = document.body.style.backgroundImage;
   const imageUrl = parseBackgroundImageUrl(backgroundImage);
-  if (appState.exportOriginalSize) {
-    await exportImageOriginalSize(renderer, sceneText, animationName, backgroundColor, imageUrl);
-  } else {
-    await exportImageWindowSize(activeCanvas, sceneText, animationName, backgroundColor, imageUrl);
-  }
-  showNotification(t('exportImageSuccess'), 'success');
-}
-
-async function exportImageOriginalSize(renderer, sceneText, animationName, backgroundColor, imageUrl) {
-  const { width, height } = renderer.getOriginalSize();
-  const capturedCanvas = renderer.captureFrame(width, height);
+  const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(renderer);
+  const capturedCanvas = renderer.captureFrame(contentWidth, contentHeight);
   if (!capturedCanvas) return;
-  const tempCanvas = createOffscreenCanvas(width, height);
+  const tempCanvas = createOffscreenCanvas(finalWidth, finalHeight);
   const ctx = tempCanvas.getContext('2d');
   if (imageUrl) {
     const img = await loadImage(imageUrl);
-    drawBackground(ctx, width, height, img, null);
+    drawBackground(ctx, finalWidth, finalHeight, img, null);
   } else {
-    drawBackground(ctx, width, height, null, backgroundColor);
+    drawBackground(ctx, finalWidth, finalHeight, null, backgroundColor);
   }
   if (ctx && 'drawImage' in ctx) {
-    ctx.drawImage(capturedCanvas, 0, 0, width, height);
-  }
-  await downloadCanvas(tempCanvas, sceneText, animationName, '_original');
-}
-
-async function exportImageWindowSize(activeCanvas, sceneText, animationName, backgroundColor, imageUrl) {
-  const tempCanvas = createOffscreenCanvas(activeCanvas.width, activeCanvas.height);
-  const ctx = tempCanvas.getContext('2d');
-  if (imageUrl) {
-    const img = await loadImage(imageUrl);
-    drawBackground(ctx, activeCanvas.width, activeCanvas.height, img, null);
-  } else if (backgroundColor) {
-    if (ctx && 'fillStyle' in ctx) ctx.fillStyle = backgroundColor;
-    if (ctx && 'fillRect' in ctx) ctx.fillRect(0, 0, activeCanvas.width, activeCanvas.height);
-  }
-  if (ctx && 'drawImage' in ctx) {
-    ctx.drawImage(activeCanvas, 0, 0, activeCanvas.width, activeCanvas.height);
+    ctx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
   }
   await downloadCanvas(tempCanvas, sceneText, animationName);
+  showNotification(t('exportImageSuccess'), 'success');
 }
 
 let taskIdCounter = 0;
@@ -120,9 +121,8 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     showNotification(t('mediaRecorderNotSupported') || 'VideoEncoder API not supported', 'error');
     return;
   }
-  const activeCanvas = activeRenderer.getCanvas();
-  taskIdCounter++;
-  const taskId = `video-${taskIdCounter}`;
+  const taskIdCounterValue = ++taskIdCounter;
+  const taskId = `video-${taskIdCounterValue}`;
   const safeName = animationName ? animationName.split('.')[0] : 'animation';
   const baseFilename = `${sceneText}_${safeName}`;
   const worker = new Worker(new URL('./exporter.worker.js', import.meta.url), { type: 'module' });
@@ -200,22 +200,15 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     hiddenRenderer.setExpression(expressionName);
   }
   hiddenRenderer.setPaused(true);
-  let targetWidth = activeCanvas.width;
-  let targetHeight = activeCanvas.height;
-  let useOriginalSize = appState.exportOriginalSize;
-  if (useOriginalSize) {
-    const { width, height } = activeRenderer.getOriginalSize();
-    targetWidth = width;
-    targetHeight = height;
-  }
-  if (targetWidth % 2 !== 0) targetWidth += 1;
-  if (targetHeight % 2 !== 0) targetHeight += 1;
+  const { contentWidth, contentHeight, finalWidth: rawFinalWidth, finalHeight: rawFinalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
+  const finalWidth = rawFinalWidth % 2 === 0 ? rawFinalWidth : rawFinalWidth + 1;
+  const finalHeight = rawFinalHeight % 2 === 0 ? rawFinalHeight : rawFinalHeight + 1;
   if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
-    hiddenRenderer.resize(targetWidth, targetHeight);
+    hiddenRenderer.resize(contentWidth, contentHeight);
   }
   if (compositingCanvas) {
-    compositingCanvas.width = targetWidth;
-    compositingCanvas.height = targetHeight;
+    compositingCanvas.width = finalWidth;
+    compositingCanvas.height = finalHeight;
   }
   const baseDuration = hiddenRenderer.getAnimationDuration() || 0.1;
   const fps = hiddenRenderer.getFPS?.() || RECORDING_FRAME_RATE;
@@ -247,12 +240,12 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
         const baseDir = await downloadDir();
         const exportBaseDir = await join(baseDir, 'spive2d_export');
         await mkdir(exportBaseDir, { recursive: true });
-        let finalFilename = `${baseFilename}.webm`;
-        let filePath = await join(exportBaseDir, finalFilename);
+        let finalOutputFilename = `${baseFilename}.webm`;
+        let filePath = await join(exportBaseDir, finalOutputFilename);
         let counter = 1;
         while (await exists(filePath)) {
-          finalFilename = `${baseFilename} (${counter}).webm`;
-          filePath = await join(exportBaseDir, finalFilename);
+          finalOutputFilename = `${baseFilename} (${counter}).webm`;
+          filePath = await join(exportBaseDir, finalOutputFilename);
           counter++;
         }
         await writeFile(filePath, new Uint8Array(buffer));
@@ -277,15 +270,15 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
   worker.postMessage({
     type: 'START_VIDEO',
     id: taskId,
-    width: targetWidth,
-    height: targetHeight,
+    width: finalWidth,
+    height: finalHeight,
     bitrate: RECORDING_BITRATE,
     fps: fps
   });
 
   const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = targetWidth;
-  tempCanvas.height = targetHeight;
+  tempCanvas.width = finalWidth;
+  tempCanvas.height = finalHeight;
   const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
 
   let currentWorkerFrame = 0;
@@ -310,19 +303,19 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(targetWidth, targetHeight);
+      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight);
     } else {
       capturedCanvas = hiddenRenderer.getCanvas();
     }
     if (compositingCanvas && capturedCanvas) {
       const ctx = compositingCanvas.getContext('2d');
-      drawBackground(ctx, targetWidth, targetHeight, backgroundImageToRender, backgroundColor);
-      ctx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
-      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-      tempCtx.drawImage(compositingCanvas, 0, 0, targetWidth, targetHeight);
+      drawBackground(ctx, finalWidth, finalHeight, backgroundImageToRender, backgroundColor);
+      ctx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+      tempCtx.clearRect(0, 0, finalWidth, finalHeight);
+      tempCtx.drawImage(compositingCanvas, 0, 0, finalWidth, finalHeight);
     } else if (capturedCanvas) {
-      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-      tempCtx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
+      tempCtx.clearRect(0, 0, finalWidth, finalHeight);
+      tempCtx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
     }
     createImageBitmap(tempCanvas).then((bitmap) => {
       if (item.status !== 'cancelled') {
@@ -335,7 +328,6 @@ export async function exportAnimation(sceneText, animationName, expressionName, 
 export async function exportPNGSequence(targetDir, sceneText, animationName, expressionName, onProgress) {
   const activeRenderer = getRenderer();
   if (!activeRenderer) return;
-  const activeCanvas = activeRenderer.getCanvas();
   taskIdCounter++;
   const taskId = `png-${taskIdCounter}`;
   const safeName = animationName ? animationName.split('.')[0] : 'sequence';
@@ -415,24 +407,17 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     hiddenRenderer.setExpression(expressionName);
   }
   hiddenRenderer.setPaused(true);
-  let targetWidth = activeCanvas.width;
-  let targetHeight = activeCanvas.height;
-  let useOriginalSize = appState.exportOriginalSize;
-  if (useOriginalSize) {
-    const { width, height } = activeRenderer.getOriginalSize();
-    targetWidth = width;
-    targetHeight = height;
-  }
+  const { contentWidth, contentHeight, finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
   if ('resize' in hiddenRenderer && typeof hiddenRenderer.resize === 'function') {
-    hiddenRenderer.resize(targetWidth, targetHeight);
+    hiddenRenderer.resize(contentWidth, contentHeight);
   }
   if (compositingCanvas) {
-    compositingCanvas.width = targetWidth;
-    compositingCanvas.height = targetHeight;
+    compositingCanvas.width = finalWidth;
+    compositingCanvas.height = finalHeight;
   }
   const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = targetWidth;
-  tempCanvas.height = targetHeight;
+  tempCanvas.width = finalWidth;
+  tempCanvas.height = finalHeight;
   const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
   const baseDuration = hiddenRenderer.getAnimationDuration() || 0.1;
   const fps = hiddenRenderer.getFPS?.() || RECORDING_FRAME_RATE;
@@ -502,19 +487,19 @@ export async function exportPNGSequence(targetDir, sceneText, animationName, exp
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     let capturedCanvas;
     if ('captureFrame' in hiddenRenderer && typeof hiddenRenderer.captureFrame === 'function') {
-      capturedCanvas = hiddenRenderer.captureFrame(targetWidth, targetHeight);
+      capturedCanvas = hiddenRenderer.captureFrame(contentWidth, contentHeight);
     } else {
       capturedCanvas = hiddenRenderer.getCanvas();
     }
     if (compositingCanvas && capturedCanvas) {
       const ctx = compositingCanvas.getContext('2d');
-      drawBackground(ctx, targetWidth, targetHeight, backgroundImageToRender, backgroundColor);
-      ctx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
-      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-      tempCtx.drawImage(compositingCanvas, 0, 0, targetWidth, targetHeight);
+      drawBackground(ctx, finalWidth, finalHeight, backgroundImageToRender, backgroundColor);
+      ctx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
+      tempCtx.clearRect(0, 0, finalWidth, finalHeight);
+      tempCtx.drawImage(compositingCanvas, 0, 0, finalWidth, finalHeight);
     } else if (capturedCanvas) {
-      tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-      tempCtx.drawImage(capturedCanvas, 0, 0, targetWidth, targetHeight);
+      tempCtx.clearRect(0, 0, finalWidth, finalHeight);
+      tempCtx.drawImage(capturedCanvas, marginX, marginY, contentWidth, contentHeight);
     }
     createImageBitmap(tempCanvas).then((bitmap) => {
       if (item.status !== 'cancelled') {

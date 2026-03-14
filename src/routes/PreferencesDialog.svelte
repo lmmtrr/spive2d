@@ -188,9 +188,56 @@
     }
   }
 
-  function handleExportOriginalSizeChange(e) {
-    appState.exportOriginalSize = e.target.checked;
+  function handleExportBaseChange(e) {
+    appState.exportBase = e.target.value;
   }
+
+  function handleExportScaleChange(e) {
+    appState.exportScale = Number(e.target.value);
+  }
+
+  function handleExportScaleValidate() {
+    const scale = appState.exportScale;
+    if (scale === 0 || isNaN(scale)) {
+      appState.exportScale = 100;
+    } else {
+      appState.exportScale = Math.max(10, Math.min(1000, scale));
+    }
+  }
+
+  function handleExportMarginXChange(e) {
+    appState.exportMarginX = Number(e.target.value);
+  }
+
+  function handleExportMarginXValidate() {
+    appState.exportMarginX = Math.max(-1000, Math.min(1000, appState.exportMarginX || 0));
+  }
+
+  function handleExportMarginYChange(e) {
+    appState.exportMarginY = Number(e.target.value);
+  }
+
+  function handleExportMarginYValidate() {
+    appState.exportMarginY = Math.max(-1000, Math.min(1000, appState.exportMarginY || 0));
+  }
+
+  let exportResolution = $derived.by(() => {
+    let baseW, baseHeight;
+    if (appState.exportBase === 'original') {
+      baseW = originalWidth;
+      baseHeight = originalHeight;
+    } else {
+      baseW = window.innerWidth;
+      baseHeight = window.innerHeight;
+    }
+    const scale = appState.exportScale / 100;
+    const marginX = appState.exportMarginX;
+    const marginY = appState.exportMarginY;
+    return {
+      width: Math.round(baseW * scale + marginX * 2),
+      height: Math.round(baseHeight * scale + marginY * 2)
+    };
+  });
 
   function handleLoadUrl() {
     if (urlInput.trim()) {
@@ -279,6 +326,9 @@
     <button class="tab-btn" class:active={activeTab === 'general'} onclick={() => activeTab = 'general'}>
       {t('tabGeneral')}
     </button>
+    <button class="tab-btn" class:active={activeTab === 'export'} onclick={() => activeTab = 'export'}>
+      {t('tabExport')}
+    </button>
     <button class="tab-btn" class:active={activeTab === 'shortcuts'} onclick={() => { activeTab = 'shortcuts'; }}>
       {t('tabShortcuts')}
     </button>
@@ -299,7 +349,6 @@
         <button onclick={handleOpenDirectory}>{t('openDirectory')}</button>
         <button onclick={handleOpenArchive}>{t('openArchive')}</button>
         <button onclick={handleOpenCurrentDir} disabled={isCurrentDirUrl}>{t('openCurrentDirectory')}</button>
-        <button onclick={handleOpenExportDir}>{t('openExportDirectory')}</button>
       </div>
       <hr>
       <div class="input-row">
@@ -314,6 +363,40 @@
       <div class="input-row">
         <label for="bgColorPicker">{t('backgroundColor')}</label>
         <input type="color" id="bgColorPicker" oninput={handleColorChange}>
+      </div>
+    </div>
+  {/if}
+
+  {#if activeTab === 'export'}
+    <div class="tab-content">
+      <div class="input-row radio-group" style="gap: 20px;">
+        <span>{t('exportSizeBase')}</span>
+        <label class="radio-label">
+          <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
+          <span>{t('baseWindow')}</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
+          <span>{t('baseOriginal')}</span>
+        </label>
+      </div>
+      <div class="input-row">
+        <label for="exportScale">{t('exportScale')}</label>
+        <input type="number" id="exportScale" min="10" max="1000" value={appState.exportScale} oninput={handleExportScaleChange} onchange={handleExportScaleValidate}>
+        <span style="margin-left: 8px;">%</span>
+      </div>
+      <div class="input-row">
+        <label for="exportMarginX">{t('exportMarginX')}</label>
+        <input type="number" id="exportMarginX" min="-1000" max="1000" value={appState.exportMarginX} oninput={handleExportMarginXChange} onchange={handleExportMarginXValidate}>
+      </div>
+      <div class="input-row">
+        <label for="exportMarginY">{t('exportMarginY')}</label>
+        <input type="number" id="exportMarginY" min="-1000" max="1000" value={appState.exportMarginY} oninput={handleExportMarginYChange} onchange={handleExportMarginYValidate}>
+      </div>
+      <hr>
+      <div class="input-row result-row">
+        <span class="label">{t('resultingSize')}</span>
+        <span class="value">{exportResolution.width} x {exportResolution.height}</span>
       </div>
       <hr>
       <label class="checkbox-label" for="aspectRatioToggle">
@@ -339,11 +422,8 @@
       <div class="button-group">
         <button onclick={handleSetOriginalSize}>{t('setOriginalSize')}</button>
         <button onclick={handleResetState}>{t('resetState')}</button>
+        <button onclick={handleOpenExportDir}>{t('openExportDirectory')}</button>
       </div>
-      <label class="checkbox-label" for="originalSizeCheckbox">
-        <input type="checkbox" id="originalSizeCheckbox" onchange={handleExportOriginalSizeChange}>
-        <span>{t('exportOriginalSize')}</span>
-      </label>
     </div>
   {/if}
 
@@ -491,6 +571,14 @@
     font-size: 15px;
     user-select: text;
   }
+  
+  .input-row input[readonly] {
+    background-color: #0009;
+    color: var(--text-color);
+    border: var(--border-color);
+    opacity: 0.6;
+    cursor: default;
+  }
 
   .checkbox-label {
     display: flex;
@@ -502,6 +590,30 @@
   .checkbox-label input[type="checkbox"] {
     position: relative;
     top: 1px;
+  }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .radio-label input[type="radio"] {
+    margin: 0;
+  }
+
+
+  .result-row {
+    font-weight: bold;
+    color: #eef;
+    justify-content: space-between;
+  }
+
+  .result-row .value {
+    font-family: monospace;
+    font-size: 16px;
   }
 
   .shortcut-tab {

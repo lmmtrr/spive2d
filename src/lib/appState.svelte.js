@@ -31,7 +31,10 @@ let background = $state({
   imagePath: loadPreference('spive2d_bg_image_path', ''),
 });
 let propertyCategory = $state('parameters');
-let exportOriginalSize = $state(false);
+let exportBase = $state('window');
+let exportScale = $state(100);
+let exportMarginX = $state(0);
+let exportMarginY = $state(0);
 let alphaMode = $state(loadPreference('spive2d_alpha_mode', 'unpack'));
 const SCALE_MAX = 8;
 const SCALE_MIN = 0.5;
@@ -52,8 +55,14 @@ export const appState = {
   set background(v) { background = v; },
   get propertyCategory() { return propertyCategory; },
   set propertyCategory(v) { propertyCategory = v; },
-  get exportOriginalSize() { return exportOriginalSize; },
-  set exportOriginalSize(v) { exportOriginalSize = v; },
+  get exportBase() { return exportBase; },
+  set exportBase(v) { exportBase = v; },
+  get exportScale() { return exportScale; },
+  set exportScale(v) { exportScale = v; },
+  get exportMarginX() { return exportMarginX; },
+  set exportMarginX(v) { exportMarginX = v; },
+  get exportMarginY() { return exportMarginY; },
+  set exportMarginY(v) { exportMarginY = v; },
   get alphaMode() { return alphaMode; },
   set alphaMode(v) { alphaMode = v; },
   SCALE_MAX,
