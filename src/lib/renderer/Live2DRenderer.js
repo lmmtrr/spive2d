@@ -17,6 +17,7 @@ export class Live2DRenderer {
   #speed = 1.0;
   #isExport = false;
   #animations = [];
+  #disposed = false;
   constructor(isExport = false) {
     this.#isExport = isExport;
     if (!sharedApp) {
@@ -45,6 +46,7 @@ export class Live2DRenderer {
     return this.#canvas;
   }
   async load(dirName, fileNames) {
+    if (this.#disposed) return;
     if (!this.#isExport && this.#canvas) {
       this.#canvas.style.display = 'block';
     }
@@ -59,6 +61,10 @@ export class Live2DRenderer {
     const { live2d: { Live2DModel } } = PIXI;
     try {
       const model = await Live2DModel.from(url, { autoInteract: false, idleMotionGroup: 'None' });
+      if (this.#disposed) {
+        model.destroy();
+        return;
+      }
       if (!this.#app) {
         model.destroy();
         return;
@@ -72,17 +78,19 @@ export class Live2DRenderer {
       model.scale.set(s);
       model.anchor.set(0.5, 0.5);
       model.position.set(w * 0.5, h * 0.5);
-      if (!this.#isExport) {
+      if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.addChild(model);
       }
       if (model.internalModel && model.internalModel.breath) {
         model.internalModel.breath = null;
       }
       const animations = await this.#filterAnimations();
+      if (this.#disposed || !this.#model) return;
       this.#animations = animations;
       if (animations.length > 0) {
-        this.setAnimation(animations[0].value);
+        await this.setAnimation(animations[0].value);
       }
+      if (this.#disposed || !this.#model) return;
       const originalUpdate = this.#model.update;
       this.#model.update = function (dt) {
         originalUpdate.call(this, dt * this._spive2dSpeed);
@@ -94,11 +102,13 @@ export class Live2DRenderer {
     }
   }
   dispose() {
+    if (this.#disposed) return;
+    this.#disposed = true;
     if (!this.#isExport && this.#canvas) {
       this.#canvas.style.display = 'none';
     }
     if (this.#model) {
-      if (!this.#isExport && this.#app) {
+      if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.removeChild(this.#model);
       }
       this.#model.destroy();
@@ -205,9 +215,10 @@ export class Live2DRenderer {
         const anim = anims[i];
         try {
           const motion = await this.#model.internalModel.motionManager.loadMotion(groupName, i);
-          const duration = motion._loopDurationSeconds ||
-            (motion._motionData && motion._motionData.duration) ||
-            (motion.getDuration ? motion.getDuration() : 0);
+          if (this.#disposed || !this.#model || !this.#model.internalModel) return result;
+          const duration = motion?._loopDurationSeconds ||
+            (motion?._motionData && motion._motionData.duration) ||
+            (motion?.getDuration ? motion.getDuration() : 0);
           if (duration > 0) {
             result.push({
               name: (anim.file || anim.File || '').split('/').pop(),
@@ -222,10 +233,14 @@ export class Live2DRenderer {
     return result.sort(sortByText);
   }
   async setAnimation(value) {
-    if (!this.#model) return;
+    if (this.#disposed || !this.#model) return;
     const [group, index] = value.split(',');
     this.#currentMotion = { group, index: Number(index) };
-    await this.#model.motion(group, Number(index), 3);
+    try {
+      await this.#model.motion(group, Number(index), 3);
+    } catch (e) {
+      console.error('Failed to set animation:', e);
+    }
   }
   getExpressions() {
     if (!this.#model) return null;

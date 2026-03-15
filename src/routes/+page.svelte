@@ -188,10 +188,6 @@
     if (loadId !== currentLoadId) {
       loadingRenderers = loadingRenderers.filter(r => r !== renderer);
       renderer.dispose();
-      const canvas = renderer.getCanvas();
-      if (canvasContainer?.contains(canvas)) {
-        canvasContainer.removeChild(canvas);
-      }
       return;
     }
     loadingRenderers = loadingRenderers.filter(r => r !== renderer);
