@@ -16,6 +16,7 @@ export class Live2DRenderer {
   #currentMotion = { group: null, index: null };
   #speed = 1.0;
   #isExport = false;
+  #animations = [];
   constructor(isExport = false) {
     this.#isExport = isExport;
     if (!sharedApp) {
@@ -77,7 +78,8 @@ export class Live2DRenderer {
       if (model.internalModel && model.internalModel.breath) {
         model.internalModel.breath = null;
       }
-      const animations = this.getAnimations();
+      const animations = await this.#filterAnimations();
+      this.#animations = animations;
       if (animations.length > 0) {
         this.setAnimation(animations[0].value);
       }
@@ -191,17 +193,33 @@ export class Live2DRenderer {
     return canvas;
   }
   getAnimations() {
+    return this.#animations;
+  }
+  async #filterAnimations() {
     if (!this.#model) return [];
     const motions = this.#model.internalModel.motionManager.definitions;
     if (!motions) return [];
-    return Object.entries(motions)
-      .flatMap(([groupName, anims]) =>
-        anims.map((anim, i) => ({
-          name: (anim.file || anim.File || '').split('/').pop(),
-          value: `${groupName},${i}`,
-        }))
-      )
-      .sort(sortByText);
+    const result = [];
+    for (const [groupName, anims] of Object.entries(motions)) {
+      for (let i = 0; i < anims.length; i++) {
+        const anim = anims[i];
+        try {
+          const motion = await this.#model.internalModel.motionManager.loadMotion(groupName, i);
+          const duration = motion._loopDurationSeconds ||
+            (motion._motionData && motion._motionData.duration) ||
+            (motion.getDuration ? motion.getDuration() : 0);
+          if (duration > 0) {
+            result.push({
+              name: (anim.file || anim.File || '').split('/').pop(),
+              value: `${groupName},${i}`,
+            });
+          }
+        } catch (e) {
+          console.error(`Failed to load motion ${groupName},${i}:`, e);
+        }
+      }
+    }
+    return result.sort(sortByText);
   }
   async setAnimation(value) {
     if (!this.#model) return;
