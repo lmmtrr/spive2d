@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.12] - 2026-03-15
+
+### Fixed
+
+- Re-published release due to immutable release constraints that affected v0.1.11 availability
+
 ## [0.1.11] - 2026-03-15
 
 ### Added
