@@ -57,5 +57,7 @@
   "exportPngSeq": "Export PNG Sequence",
   "shortcutAddToList": "Add to List",
   "shortcutResetDefaults": "Reset to Defaults",
-  "pressKey": "Press a key..."
+  "pressKey": "Press a key...",
+  "exportPreview": "Preview",
+  "refreshPreview": "Refresh"
 }

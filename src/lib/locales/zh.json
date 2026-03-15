@@ -57,5 +57,7 @@
   "exportPngSeq": "导出PNG序列帧",
   "shortcutAddToList": "添加到列表",
   "shortcutResetDefaults": "恢复默认",
-  "pressKey": "请按一个键..."
+  "pressKey": "请按一个键...",
+  "exportPreview": "预览",
+  "refreshPreview": "刷新"
 }

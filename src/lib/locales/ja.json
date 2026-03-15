@@ -57,5 +57,7 @@
   "exportPngSeq": "連番PNGエクスポート",
   "shortcutAddToList": "リストに追加",
   "shortcutResetDefaults": "デフォルトに戻す",
-  "pressKey": "キーを押してください..."
+  "pressKey": "キーを押してください...",
+  "exportPreview": "プレビュー",
+  "refreshPreview": "更新"
 }

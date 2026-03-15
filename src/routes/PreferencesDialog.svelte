@@ -167,13 +167,6 @@
     aspectRatio = windowHeight / windowWidth;
   }
 
-  async function handleSetOriginalSize() {
-    if (!appState.initialized) return;
-    await setWindowSize(originalWidth, originalHeight);
-    appState.resetTransform();
-    const renderer = getRenderer();
-    if (renderer) renderer.resetTransform(originalWidth, originalHeight);
-  }
 
   function handleResetState() {
     appState.resetTransform();
@@ -198,21 +191,29 @@
     } else {
       appState.exportScale = Math.max(10, Math.min(1000, appState.exportScale));
     }
+    handleExportMarginXValidate();
+    handleExportMarginYValidate();
   }
 
   function handleExportMarginXValidate() {
+    const baseW = appState.exportBase === 'original' ? originalWidth : window.innerWidth;
+    const scale = (appState.exportScale ?? 100) / 100;
+    const minMargin = Math.ceil((1 - baseW * scale) / 2);
     if (appState.exportMarginX == null) {
       appState.exportMarginX = 0;
     } else {
-      appState.exportMarginX = Math.max(-1000, Math.min(1000, appState.exportMarginX));
+      appState.exportMarginX = Math.max(minMargin, Math.min(1000, appState.exportMarginX));
     }
   }
 
   function handleExportMarginYValidate() {
+    const baseHeight = appState.exportBase === 'original' ? originalHeight : window.innerHeight;
+    const scale = (appState.exportScale ?? 100) / 100;
+    const minMargin = Math.ceil((1 - baseHeight * scale) / 2);
     if (appState.exportMarginY == null) {
       appState.exportMarginY = 0;
     } else {
-      appState.exportMarginY = Math.max(-1000, Math.min(1000, appState.exportMarginY));
+      appState.exportMarginY = Math.max(minMargin, Math.min(1000, appState.exportMarginY));
     }
   }
 
@@ -233,6 +234,94 @@
       height: Math.round(baseHeight * scale + marginY * 2)
     };
   });
+
+  let previewCanvasEl = $state(null);
+  let previewImgUrl = $state('');
+
+  $effect(() => {
+    if (activeTab === 'export' && open && appState.initialized) {
+      appState.exportBase;
+      const _ow = originalWidth;
+      const _oh = originalHeight;
+      refreshPreviewScreenshot();
+    }
+  });
+
+  $effect(() => {
+    const _res = exportResolution;
+    const _mx = appState.exportMarginX;
+    const _my = appState.exportMarginY;
+    if (activeTab === 'export' && previewImgUrl && previewCanvasEl) {
+      drawPreview();
+    }
+  });
+
+  function refreshPreviewScreenshot() {
+    const renderer = getRenderer();
+    if (!renderer) return;
+    try {
+      if (appState.exportBase === 'original' && originalWidth > 0 && originalHeight > 0) {
+        const captured = renderer.captureFrame(originalWidth, originalHeight, { ignoreTransform: true });
+        if (captured) {
+          previewImgUrl = captured.toDataURL('image/png');
+          return;
+        }
+      }
+      const canvas = renderer.getCanvas();
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        previewImgUrl = canvas.toDataURL('image/png');
+      }
+    } catch (e) {
+      console.warn('Preview capture failed', e);
+    }
+  }
+
+  function drawPreview() {
+    if (!previewCanvasEl || !previewImgUrl) return;
+    const exportW = exportResolution.width;
+    const exportH = exportResolution.height;
+    if (exportW <= 0 || exportH <= 0) return;
+    const marginX = appState.exportMarginX ?? 0;
+    const marginY = appState.exportMarginY ?? 0;
+    const MAX_W = 380;
+    const MAX_H = 200;
+    const ratio = exportW / exportH;
+    let pw = MAX_W;
+    let ph = Math.round(MAX_W / ratio);
+    if (ph > MAX_H) { ph = MAX_H; pw = Math.round(MAX_H * ratio); }
+    pw = Math.max(pw, 2);
+    ph = Math.max(ph, 2);
+    previewCanvasEl.width = pw;
+    previewCanvasEl.height = ph;
+    const ctx = previewCanvasEl.getContext('2d');
+    const scaleF = pw / exportW;
+    const cx = Math.round(marginX * scaleF);
+    const cy = Math.round(marginY * scaleF);
+    const cw = Math.round(pw - 2 * marginX * scaleF);
+    const ch = Math.round(ph - 2 * marginY * scaleF);
+    const tile = 8;
+    for (let y = 0; y < ph; y += tile) {
+      for (let x = 0; x < pw; x += tile) {
+        ctx.fillStyle = ((Math.floor(x / tile) + Math.floor(y / tile)) % 2 === 0) ? '#555' : '#333';
+        ctx.fillRect(x, y, Math.min(tile, pw - x), Math.min(tile, ph - y));
+      }
+    }
+    if (cw > 0 && ch > 0) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, cx, cy, cw, ch);
+        ctx.fillStyle = 'rgba(80, 130, 220, 0.35)';
+        if (cy > 0) ctx.fillRect(0, 0, pw, cy);
+        if (ph - cy - ch > 0) ctx.fillRect(0, cy + ch, pw, ph - cy - ch);
+        if (cx > 0) ctx.fillRect(0, cy, cx, ch);
+        if (pw - cx - cw > 0) ctx.fillRect(cx + cw, cy, pw - cx - cw, ch);
+        ctx.strokeStyle = 'rgba(160, 190, 255, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, ch - 1);
+      };
+      img.src = previewImgUrl;
+    }
+  }
 
   function handleLoadUrl() {
     if (urlInput.trim()) {
@@ -364,6 +453,10 @@
 
   {#if activeTab === 'export'}
     <div class="tab-content">
+      <div class="button-group">
+        <button onclick={handleResetState}>{t('resetState')}</button>
+        <button onclick={handleOpenExportDir}>{t('openExportDirectory')}</button>
+      </div>
       <div class="input-row radio-group" style="gap: 20px;">
         <span>{t('exportSizeBase')}</span>
         <label class="radio-label">
@@ -382,16 +475,26 @@
       </div>
       <div class="input-row">
         <label for="exportMarginX">{t('exportMarginX')}</label>
-        <input type="number" id="exportMarginX" min="-1000" max="1000" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
+        <input type="number" id="exportMarginX" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
       </div>
       <div class="input-row">
         <label for="exportMarginY">{t('exportMarginY')}</label>
-        <input type="number" id="exportMarginY" min="-1000" max="1000" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
+        <input type="number" id="exportMarginY" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
       </div>
       <hr>
       <div class="input-row result-row">
         <span class="label">{t('resultingSize')}</span>
         <span class="value">{exportResolution.width} x {exportResolution.height}</span>
+      </div>
+      <hr>
+      <div class="preview-section">
+        <div class="preview-header">
+          <span class="preview-title">{t('exportPreview')}</span>
+          <button class="preview-refresh-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
+        </div>
+        <div class="preview-canvas-wrap">
+          <canvas bind:this={previewCanvasEl} class="preview-canvas"></canvas>
+        </div>
       </div>
       <hr>
       <label class="checkbox-label" for="aspectRatioToggle">
@@ -413,11 +516,6 @@
       <div class="input-row">
         <label for="originalHeight">{t('originalHeight')}</label>
         <input type="text" id="originalHeight" readonly value={originalHeight}>
-      </div>
-      <div class="button-group">
-        <button onclick={handleSetOriginalSize}>{t('setOriginalSize')}</button>
-        <button onclick={handleResetState}>{t('resetState')}</button>
-        <button onclick={handleOpenExportDir}>{t('openExportDirectory')}</button>
       </div>
     </div>
   {/if}
@@ -613,6 +711,46 @@
 
   .shortcut-tab {
     overflow-y: auto;
+  }
+
+  .preview-section {
+    margin-bottom: 4px;
+  }
+
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .preview-title {
+    font-size: 13px;
+    opacity: 0.8;
+  }
+
+  .preview-refresh-btn {
+    height: 26px !important;
+    width: auto !important;
+    padding: 0 12px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    border-radius: 5px !important;
+  }
+
+  .preview-canvas-wrap {
+    display: flex;
+    justify-content: center;
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 6px;
+    min-height: 40px;
+  }
+
+  .preview-canvas {
+    display: block;
+    border-radius: 3px;
+    max-width: 100%;
   }
 
   .shortcut-row {
