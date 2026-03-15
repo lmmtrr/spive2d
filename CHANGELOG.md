@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13] - 2026-03-15
+
+### Fixed
+
+- Resolve race conditions in Live2D renderer during rapid scene changes
+- Filter out 0-duration animations to prevent application freezes
+
 ## [0.1.12] - 2026-03-15
 
 ### Fixed
