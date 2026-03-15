@@ -1,4 +1,4 @@
-import { loadPreference } from './preferences.js';
+import { loadSetting } from './settings.js';
 
 let initialized = $state(false);
 let processing = $state(false);
@@ -27,15 +27,15 @@ let directories = $state({
   selectedScene: 0,
 });
 let background = $state({
-  color: loadPreference('spive2d_bg_color', ''),
-  imagePath: loadPreference('spive2d_bg_image_path', ''),
+  color: loadSetting('spive2d_bg_color', ''),
+  imagePath: loadSetting('spive2d_bg_image_path', ''),
 });
 let propertyCategory = $state('parameters');
 let exportBase = $state('window');
 let exportScale = $state(100);
 let exportMarginX = $state(0);
 let exportMarginY = $state(0);
-let alphaMode = $state(loadPreference('spive2d_alpha_mode', 'unpack'));
+let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'unpack'));
 const SCALE_MAX = 8;
 const SCALE_MIN = 0.5;
 export const appState = {

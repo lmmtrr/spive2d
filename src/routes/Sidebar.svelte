@@ -2,7 +2,7 @@
   import { appState } from '$lib/appState.svelte.js';
   import { getRenderer } from '$lib/rendererStore.js';
   import { t } from '$lib/i18n.svelte.js';
-  import { savePreference } from '$lib/preferences.js';
+  import { saveSetting } from '$lib/settings.js';
 
   let { onDirChange, onSceneChange, onAnimationChange, onExpressionChange } = $props();
   let filterText = $state('');
@@ -66,7 +66,7 @@
 
   async function handleAlphaModeChange(e) {
     appState.alphaMode = e.target.value;
-    savePreference('spive2d_alpha_mode', appState.alphaMode);
+    saveSetting('spive2d_alpha_mode', appState.alphaMode);
     const renderer = getRenderer();
     if (renderer && renderer.setAlphaMode) {
       await renderer.setAlphaMode(appState.alphaMode);

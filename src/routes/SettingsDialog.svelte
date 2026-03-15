@@ -3,7 +3,7 @@
   import { getRenderer } from '$lib/rendererStore.js';
   import { t, getLocale, setLocale } from '$lib/i18n.svelte.js';
   import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, openImageFile, getAssetUrl } from '$lib/fileManager.js';
-  import { savePreference, removePreference } from '$lib/preferences.js';
+  import { saveSetting, removeSetting } from '$lib/settings.js';
   import { setWindowSize } from '$lib/windowManager.js';
   import { getShortcuts, saveShortcuts, resetShortcuts } from '$lib/shortcutKeys.js';
 
@@ -29,8 +29,9 @@
 
   const shortcutActions = [
     'prevDir', 'nextDir', 'prevScene', 'nextScene',
-    'prevAnim', 'nextAnim', 'toggleDialog',
-    'exportImage', 'exportPngSeq', 'exportAnim', 'addToList',
+    'prevAnim', 'nextAnim', 
+    'exportImage', 'exportImageSeq', 'exportAnim',
+    'toggleDialog', 'addToList',
   ];
 
   const shortcutLabelKeys = {
@@ -42,7 +43,7 @@
     nextAnim: 'shortcutNextAnim',
     toggleDialog: 'shortcutToggleDialog',
     exportImage: 'shortcutExportImage',
-    exportPngSeq: 'shortcutExportPngSeq',
+    exportImageSeq: 'shortcutExportImageSeq',
     exportAnim: 'shortcutExportAnim',
     addToList: 'shortcutAddToList',
   };
@@ -119,7 +120,7 @@
     document.body.style.backgroundImage = `url("${getAssetUrl(path)}")`;
     document.body.style.backgroundSize = 'cover';
     document.body.style.backgroundPosition = 'center';
-    savePreference('spive2d_bg_image_path', path);
+    saveSetting('spive2d_bg_image_path', path);
     appState.background = { ...appState.background, imagePath: path };
   }
 
@@ -132,8 +133,8 @@
       linear-gradient(45deg, transparent 75%, #fff 0)`;
     document.body.style.backgroundSize = '32px 32px';
     document.body.style.backgroundPosition = '0 0, 16px 16px, 16px 16px, 32px 32px';
-    removePreference('spive2d_bg_image_path');
-    removePreference('spive2d_bg_color');
+    removeSetting('spive2d_bg_image_path');
+    removeSetting('spive2d_bg_color');
     appState.background = { color: '', imagePath: '' };
   }
 
@@ -141,8 +142,8 @@
     const color = e.target.value;
     document.body.style.backgroundColor = color;
     document.body.style.backgroundImage = 'none';
-    savePreference('spive2d_bg_color', color);
-    removePreference('spive2d_bg_image_path');
+    saveSetting('spive2d_bg_color', color);
+    removeSetting('spive2d_bg_image_path');
     appState.background = { color, imagePath: '' };
   }
 

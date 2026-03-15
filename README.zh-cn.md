@@ -25,12 +25,12 @@ https://github.com/user-attachments/assets/1a2d61f0-bc33-490c-80c2-3cdf962f2d84
 | ⏭️ 下一个场景    | `S`                        |
 | ◀️ 上一个动画    | `Z`                        |
 | ▶️ 下一个动画    | `X`                        |
-| ⚙️ 打开/关闭设置 | `E`                        |
 | 📷 导出图像      | `R`                        |
 | 🖼️ 导出图像序列  | `D`                        |
 | 💾 导出动画      | `C`                        |
+| ⚙️ 打开/关闭设置 | `E`                        |
 | 📝 添加到列表    | `V`                        |
-| ❌ 关闭/退出     | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
+| ❌ 退出     | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **添加到列表**: 将当前场景文本保存到列表中。请参考 [`py/copy_by_list.py`](py/copy_by_list.py) 来处理导出的列表。
 

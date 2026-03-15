@@ -357,7 +357,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
   }
 }
 
-export async function exportPNGSequence(targetDir, sceneText, animationName, animationValue, expressionValue, onProgress) {
+export async function exportImageSequence(targetDir, sceneText, animationName, animationValue, expressionValue, onProgress) {
   const activeRenderer = getRenderer();
   if (!activeRenderer) return;
   taskIdCounter++;

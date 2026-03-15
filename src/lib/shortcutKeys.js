@@ -7,10 +7,10 @@ const DEFAULT_SHORTCUTS = {
   nextScene: 's',
   prevAnim: 'z',
   nextAnim: 'x',
-  toggleDialog: 'e',
-  exportImage: 'r',
+  exportImage: 'e',
+  exportImageSeq: 'd',
   exportAnim: 'c',
-  exportPngSeq: 'd',
+  toggleDialog: 'r',
   addToList: 'v',
 };
 

@@ -5,13 +5,13 @@
   import { createRenderer } from '$lib/renderer/createRenderer.js';
   import { getSortableKey, findMaxNumber } from '$lib/utils.js';
   import { getAssetUrl } from '$lib/fileManager.js';
-  import { exportImage, exportAnimation, exportPNGSequence } from '$lib/exporter.js';
+  import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
   import { createTransformAction } from '$lib/inputAction.js';
-  import { loadPreference } from '$lib/preferences.js';
+  import { loadSetting } from '$lib/settings.js';
   import { showNotification } from '$lib/notificationStore.svelte.js';
   import { t } from '$lib/i18n.svelte.js';
   import { getShortcuts } from '$lib/shortcutKeys.js';
-  import PreferencesDialog from './PreferencesDialog.svelte';
+  import SettingsDialog from './SettingsDialog.svelte';
   import Sidebar from './Sidebar.svelte';
   import AnimationController from './AnimationController.svelte';
   import Notification from './Notification.svelte';
@@ -61,8 +61,8 @@
   });
 
   function initBackground() {
-    const savedImagePath = loadPreference('spive2d_bg_image_path', '');
-    const savedColor = loadPreference('spive2d_bg_color', '');
+    const savedImagePath = loadSetting('spive2d_bg_image_path', '');
+    const savedColor = loadSetting('spive2d_bg_color', '');
     if (savedImagePath) {
       document.body.style.backgroundColor = '';
       document.body.style.backgroundImage = `url("${getAssetUrl(savedImagePath)}")`;
@@ -304,10 +304,10 @@
     else if (e.key === shortcuts.nextScene) { navigateSelector('sceneSelector', 1, handleSceneChange); }
     else if (e.key === shortcuts.prevAnim) { sidebar?.navigateAnimation(-1); }
     else if (e.key === shortcuts.nextAnim) { sidebar?.navigateAnimation(1); }
-    else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
     else if (e.key === shortcuts.exportImage) { doExportImage(); }
+    else if (e.key === shortcuts.exportImageSeq) { doExportImageSequence(); }
     else if (e.key === shortcuts.exportAnim) { doExportAnimation(); }
-    else if (e.key === shortcuts.exportPngSeq) { doExportPngSequence(); }
+    else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
     else if (e.key === shortcuts.addToList) {
       invoke('append_to_list', { text: getSceneText() }).then(() => {
         showNotification(t('addedToList'), 'success');
@@ -360,7 +360,7 @@
     exportAnimation(sceneText, animText, animValue, exprValue);
   }
 
-  async function doExportPngSequence() {
+  async function doExportImageSequence() {
     const sceneText = getSceneText();
     const animText = sidebar?.getSelectedAnimationText() || '';
     const animValue = sidebar?.getSelectedAnimation?.() || '';
@@ -375,7 +375,7 @@
       console.error('Failed to create export directory:', err);
     }
     const exprValue = sidebar?.getSelectedExpression?.() || '';
-    exportPNGSequence(targetDir, sceneText, animText, animValue, exprValue);
+    exportImageSequence(targetDir, sceneText, animText, animValue, exprValue);
   }
 
   function getSceneText() {
@@ -417,7 +417,7 @@
 {/if}
 
 <div use:transformAction={{ appState, sidebar, animController, dialogOpen }}>
-  <PreferencesDialog bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
+  <SettingsDialog bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
   <Sidebar
     bind:this={sidebar}
     onDirChange={handleDirChange}
