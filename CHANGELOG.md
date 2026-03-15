@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.11] - 2026-03-15
+
+### Added
+
+- Export preview in settings dialog
+- Custom scale and separate margins support for export
+- Unified export notifications into queue with refined status UI
+
+### Fixed
+
+- Improved export accuracy by synchronizing renderer state and capturing zoom/pan
+- Fixed application of parameter and skin changes during export
+
+### Changed
+
+- Updated keyboard shortcuts for export and toggle
+
 ## [0.1.10] - 2026-03-11
 
 ### Added
