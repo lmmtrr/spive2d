@@ -231,7 +231,7 @@
   >
     {#if appState.propertyCategory === 'skins'}
       <div id="skin-panel">
-        {#each propertyItems as item}
+        {#each propertyItems as item (item.name + '_' + item.index)}
           <div class="item" style:display={matchesFilter(item.name) ? 'flex' : 'none'}>
             <label title={item.name}>
               {item.name}
@@ -241,7 +241,7 @@
         {/each}
       </div>
     {:else}
-      {#each propertyItems as item}
+      {#each propertyItems as item (item.name + '_' + item.index)}
         <div class="item" style:display={matchesFilter(item.name) ? 'flex' : 'none'}>
           {#if item.type === 'range'}
             <label title={item.name}><span class="label-text">{item.name}</span><input type="range" data-name={item.name} data-old-index={item.index} max={item.max} min={item.min} step={item.step} value={item.value}></label>
