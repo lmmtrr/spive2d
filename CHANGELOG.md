@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.15] - 2026-03-16
+
+### Fixed
+
+- Resolve missing spine attachments and UI state retention across models
+
 ## [0.1.14] - 2026-03-16
 
 ### Fixed
