@@ -69,4 +69,5 @@ jobs:
         if: matrix.platform == 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.ref_name }} spive2d-windows.zip --clobber
+          TAG_NAME: ${{ github.ref_name }}
+        run: gh release upload "$env:TAG_NAME" spive2d-windows.zip --clobber
