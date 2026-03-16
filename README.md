@@ -2,7 +2,7 @@
 
 English | [日本語](README.ja.md) | [中文](README.zh-cn.md)
 
-https://github.com/user-attachments/assets/1a2d61f0-bc33-490c-80c2-3cdf962f2d84
+https://github.com/user-attachments/assets/223c1507-fcc5-4636-81cc-fcee7f07db1b
 
 A desktop application built with Tauri for viewing and interacting with Spine skeletal animations and Live2D models.
 
