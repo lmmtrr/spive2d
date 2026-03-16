@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.14] - 2026-03-16
+
+### Fixed
+
+- Ignore per-curve fade times during export to prevent static frames
+
 ## [0.1.13] - 2026-03-15
 
 ### Fixed
