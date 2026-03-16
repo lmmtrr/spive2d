@@ -377,6 +377,12 @@ export class Live2DRenderer {
         if (entry._motion) {
           entry._motion._fadeInSeconds = 0;
           entry._motion._fadeOutSeconds = 0;
+          if (entry._motion._motionData?.curves) {
+            for (const curve of entry._motion._motionData.curves) {
+              curve.fadeInTime = -1;
+              curve.fadeOutTime = -1;
+            }
+          }
         }
         const savedStateTime = entry._stateTimeSeconds;
         entry._startTimeSeconds = savedStateTime - targetTime;
@@ -474,6 +480,12 @@ export class Live2DRenderer {
     if (currentMotion) {
       currentMotion._fadeInSeconds = 0;
       currentMotion._fadeOutSeconds = 0;
+      if (currentMotion._motionData?.curves) {
+        for (const curve of currentMotion._motionData.curves) {
+          curve.fadeInTime = -1;
+          curve.fadeOutTime = -1;
+        }
+      }
     }
     const dtMs = deltaSeconds * 1000.0;
     this.#model.update(dtMs);
