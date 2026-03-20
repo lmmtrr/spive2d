@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.16] - 2026-03-20
+
+### Added
+
+- Reactive character transform and redesigned export UI
+- Overhauled export preview with interactive zoom, pan, and full model context
+
+### Fixed
+
+- Robustness of Spine skeleton version detection
+- Included margins in export preview rendering
+
 ## [0.1.15] - 2026-03-16
 
 ### Fixed
