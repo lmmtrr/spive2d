@@ -62,7 +62,7 @@ export function createTransformAction() {
     }
 
     function handleWheel(e) {
-      if (!appState.initialized) return;
+      if (dialogOpen || !appState.initialized) return;
       if (e.clientX < SIDEBAR_WIDTH || (window.innerHeight - e.clientY <= CONTROLLER_HEIGHT)) return;
       const { transform } = appState;
       const baseScaleStep = 0.1;

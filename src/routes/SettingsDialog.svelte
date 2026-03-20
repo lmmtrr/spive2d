@@ -21,6 +21,17 @@
   let shortcuts = $state(getShortcuts());
   let editingKey = $state(null);
 
+  const isSpine = $derived.by(() => {
+    if (!appState.directories?.files || !appState.directories?.selectedDir) return false;
+    const scenes = appState.directories.files[appState.directories.selectedDir];
+    const selectedScene = appState.directories.selectedScene;
+    if (!scenes || selectedScene < 0 || selectedScene >= scenes.length) return false;
+    const scene = scenes[selectedScene];
+    if (!scene || scene.length < 2) return false;
+    const ext = scene[1];
+    return !(ext.includes('.moc') || ext.includes('.model3.json') || ext.includes('.model.json'));
+  });
+
   let isCurrentDirUrl = $derived(
     !!appState.directories?.selectedDir &&
     (appState.directories.selectedDir.startsWith('http://') ||
@@ -197,7 +208,7 @@
   }
 
   function handleExportMarginXValidate() {
-    const baseW = appState.exportBase === 'original' ? originalWidth : window.innerWidth;
+    const baseW = appState.exportBase === 'original' ? originalWidth : windowWidth;
     const scale = (appState.exportScale ?? 100) / 100;
     const minMargin = Math.ceil((1 - baseW * scale) / 2);
     if (appState.exportMarginX == null) {
@@ -208,7 +219,7 @@
   }
 
   function handleExportMarginYValidate() {
-    const baseHeight = appState.exportBase === 'original' ? originalHeight : window.innerHeight;
+    const baseHeight = appState.exportBase === 'original' ? originalHeight : windowHeight;
     const scale = (appState.exportScale ?? 100) / 100;
     const minMargin = Math.ceil((1 - baseHeight * scale) / 2);
     if (appState.exportMarginY == null) {
@@ -224,8 +235,8 @@
       baseW = originalWidth;
       baseHeight = originalHeight;
     } else {
-      baseW = window.innerWidth;
-      baseHeight = window.innerHeight;
+      baseW = windowWidth;
+      baseHeight = windowHeight;
     }
     const scale = (appState.exportScale ?? 100) / 100;
     const marginX = appState.exportMarginX ?? 0;
@@ -238,6 +249,66 @@
 
   let previewCanvasEl = $state(null);
   let previewImgUrl = $state('');
+  let previewImage = $state(null);
+  
+  $effect(() => {
+    if (previewImgUrl) {
+      const img = new Image();
+      img.onload = () => {
+        previewImage = img;
+        drawPreview();
+      };
+      img.src = previewImgUrl;
+    } else {
+      previewImage = null;
+    }
+  });
+
+  let previewZoom = $state(1.0);
+  let previewOffset = $state({ x: 0, y: 0 });
+  let isDraggingPreview = $state(false);
+  let lastMousePos = { x: 0, y: 0 };
+
+  function handlePreviewWheel(e) {
+    e.preventDefault();
+    const delta = -e.deltaY;
+    const factor = Math.pow(1.1, delta / 100);
+    const newZoom = Math.max(0.1, Math.min(20, previewZoom * factor));
+    const rect = previewCanvasEl.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const worldX = (mouseX - previewOffset.x) / previewZoom;
+    const worldY = (mouseY - previewOffset.y) / previewZoom;
+    previewZoom = newZoom;
+    previewOffset.x = mouseX - worldX * previewZoom;
+    previewOffset.y = mouseY - worldY * previewZoom;
+    drawPreview();
+  }
+
+  function handlePreviewMouseDown(e) {
+    isDraggingPreview = true;
+    lastMousePos = { x: e.clientX, y: e.clientY };
+  }
+
+  function handlePreviewMouseMove(e) {
+    if (!isDraggingPreview) return;
+    const dx = e.clientX - lastMousePos.x;
+    const dy = e.clientY - lastMousePos.y;
+    previewOffset.x += dx;
+    previewOffset.y += dy;
+    lastMousePos = { x: e.clientX, y: e.clientY };
+    drawPreview();
+  }
+
+  function handlePreviewMouseUp() {
+    isDraggingPreview = false;
+  }
+
+  function resetPreviewView() {
+    previewZoom = 1.0;
+    previewOffset = { x: 0, y: 0 };
+    drawPreview();
+  }
 
   $effect(() => {
     if (activeTab === 'export' && open && appState.initialized) {
@@ -252,6 +323,10 @@
     const _res = exportResolution;
     const _mx = appState.exportMarginX;
     const _my = appState.exportMarginY;
+    const _trans = appState.transform;
+    const _base = appState.exportBase;
+    const _w = windowWidth;
+    const _h = windowHeight;
     if (activeTab === 'export' && previewImgUrl && previewCanvasEl) {
       drawPreview();
     }
@@ -261,31 +336,20 @@
     const renderer = getRenderer();
     if (!renderer) return;
     try {
-      const { width, height } = exportResolution;
-      const marginX = appState.exportMarginX ?? 0;
-      const marginY = appState.exportMarginY ?? 0;
-      if (appState.exportBase === 'original' && originalWidth > 0 && originalHeight > 0) {
-        const captured = renderer.captureFrame(width, height, {
-          ignoreTransform: true,
-          marginX,
-          marginY
-        });
-        if (captured) {
-          previewImgUrl = captured.toDataURL('image/png');
-          return;
-        }
-      }
-      const canvas = renderer.getCanvas();
-      if (canvas && canvas.width > 0 && canvas.height > 0) {
-        const captured = renderer.captureFrame(width, height, {
-          marginX,
-          marginY
-        });
-        if (captured) {
-          previewImgUrl = captured.toDataURL('image/png');
-          return;
-        }
-        previewImgUrl = canvas.toDataURL('image/png');
+      const size = renderer.getOriginalSize();
+      if (size.width <= 0 || size.height <= 0) return;
+      const marginX = Math.round(size.width * 0.3);
+      const marginY = Math.round(size.height * 0.3);
+      const width = size.width + marginX * 2;
+      const height = size.height + marginY * 2;
+      const captured = renderer.captureFrame(width, height, {
+        ignoreTransform: true,
+        marginX: marginX,
+        marginY: marginY
+      });
+      if (captured) {
+        previewImgUrl = captured.toDataURL('image/png');
+        return;
       }
     } catch (e) {
       console.warn('Preview capture failed', e);
@@ -293,28 +357,51 @@
   }
 
   function drawPreview() {
-    if (!previewCanvasEl || !previewImgUrl) return;
-    const exportW = exportResolution.width;
-    const exportH = exportResolution.height;
-    if (exportW <= 0 || exportH <= 0) return;
-    const marginX = appState.exportMarginX ?? 0;
-    const marginY = appState.exportMarginY ?? 0;
+    if (!previewCanvasEl || !previewImage) return;
+    const mX = appState.exportMarginX ?? 0;
+    const mY = appState.exportMarginY ?? 0;
+    const eS = (appState.exportScale ?? 100) / 100;
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+    let crop;
+    if (appState.exportBase === 'original') {
+      crop = {
+        cx: originalWidth / 2,
+        cy: originalHeight / 2,
+        w: originalWidth + (2 * mX / (eS * dpr)),
+        h: originalHeight + (2 * mY / (eS * dpr))
+      };
+    } else {
+      const vw = windowWidth;
+      const vh = windowHeight;
+      const bs = Math.min(vw / originalWidth, vh / originalHeight);
+      const us = appState.transform.scale;
+      const S = bs * us;
+      const mx = appState.transform.moveX;
+      const my = appState.transform.moveY;
+      const orthoW = (vw + (2 * mX / (eS * dpr))) / S;
+      const orthoH = (vh + (2 * mY / (eS * dpr))) / S;
+      crop = {
+        cx: (originalWidth / 2) - (mx / S),
+        cy: (originalHeight / 2) - (my / S),
+        w: orthoW,
+        h: orthoH
+      };
+    }
     const MAX_W = 380;
     const MAX_H = 200;
-    const ratio = exportW / exportH;
+    const ratio = (crop.w && crop.h) ? crop.w / crop.h : 1;
     let pw = MAX_W;
     let ph = Math.round(MAX_W / ratio);
     if (ph > MAX_H) { ph = MAX_H; pw = Math.round(MAX_H * ratio); }
     pw = Math.max(pw, 2);
     ph = Math.max(ph, 2);
-    previewCanvasEl.width = pw;
-    previewCanvasEl.height = ph;
+    if (previewCanvasEl.width !== pw || previewCanvasEl.height !== ph) {
+      previewCanvasEl.width = pw;
+      previewCanvasEl.height = ph;
+    }
     const ctx = previewCanvasEl.getContext('2d');
-    const scaleF = pw / exportW;
-    const cx = Math.round(marginX * scaleF);
-    const cy = Math.round(marginY * scaleF);
-    const cw = Math.round(pw - 2 * marginX * scaleF);
-    const ch = Math.round(ph - 2 * marginY * scaleF);
+    ctx.clearRect(0, 0, pw, ph);
+    const scaleF = pw / crop.w;
     const tile = 8;
     for (let y = 0; y < ph; y += tile) {
       for (let x = 0; x < pw; x += tile) {
@@ -322,21 +409,43 @@
         ctx.fillRect(x, y, Math.min(tile, pw - x), Math.min(tile, ph - y));
       }
     }
-    if (cw > 0 && ch > 0) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, pw, ph);
-        ctx.fillStyle = 'rgba(80, 130, 220, 0.35)';
-        if (cy > 0) ctx.fillRect(0, 0, pw, cy);
-        if (ph - cy - ch > 0) ctx.fillRect(0, cy + ch, pw, ph - cy - ch);
-        if (cx > 0) ctx.fillRect(0, cy, cx, ch);
-        if (pw - cx - cw > 0) ctx.fillRect(cx + cw, cy, pw - cx - cw, ch);
-        ctx.strokeStyle = 'rgba(160, 190, 255, 0.8)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, ch - 1);
-      };
-      img.src = previewImgUrl;
-    }
+    ctx.save();
+    ctx.translate(previewOffset.x, previewOffset.y);
+    ctx.scale(previewZoom, previewZoom);
+    const mcx = pw / 2 + (originalWidth / 2 - crop.cx) * scaleF;
+    const mcy = ph / 2 + (originalHeight / 2 - crop.cy) * scaleF;
+    ctx.save();
+    ctx.translate(mcx, mcy);
+    const rotate = appState.exportBase === 'original' ? 0 : (appState.transform.rotate * (isSpine ? Math.PI : 1));
+    ctx.rotate(rotate);
+    const imgW = (originalWidth * 1.6) * scaleF;
+    const imgH = (originalHeight * 1.6) * scaleF;
+    ctx.drawImage(previewImage, -imgW / 2, -imgH / 2, imgW, imgH);
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.beginPath();
+    ctx.moveTo(-10000, -10000);
+    ctx.lineTo(10000, -10000);
+    ctx.lineTo(10000, 10000);
+    ctx.lineTo(-10000, 10000);
+    ctx.closePath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, ph);
+    ctx.lineTo(pw, ph);
+    ctx.lineTo(pw, 0);
+    ctx.closePath();
+    ctx.fill('evenodd');
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(160, 190, 255, 0.9)';
+    ctx.lineWidth = 1 / previewZoom;
+    ctx.strokeRect(0, 0, pw, ph);
+    const cs = 10 / previewZoom;
+    ctx.beginPath();
+    ctx.moveTo(pw / 2 - cs, ph / 2); ctx.lineTo(pw / 2 + cs, ph / 2);
+    ctx.moveTo(pw / 2, ph / 2 - cs); ctx.lineTo(pw / 2, ph / 2 + cs);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function handleLoadUrl() {
@@ -506,10 +615,21 @@
       <div class="preview-section">
         <div class="preview-header">
           <span class="preview-title">{t('exportPreview')}</span>
-          <button class="preview-refresh-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="preview-refresh-btn" onclick={resetPreviewView}>{t('resetView') || 'Reset View'}</button>
+            <button class="preview-refresh-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
+          </div>
         </div>
         <div class="preview-canvas-wrap">
-          <canvas bind:this={previewCanvasEl} class="preview-canvas"></canvas>
+          <canvas
+            bind:this={previewCanvasEl}
+            class="preview-canvas"
+            onwheel={handlePreviewWheel}
+            onmousedown={handlePreviewMouseDown}
+            onmousemove={handlePreviewMouseMove}
+            onmouseup={handlePreviewMouseUp}
+            onmouseleave={handlePreviewMouseUp}
+          ></canvas>
         </div>
       </div>
       <hr>
@@ -767,6 +887,12 @@
     display: block;
     border-radius: 3px;
     max-width: 100%;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .preview-canvas:active {
+    cursor: grabbing;
   }
 
   .shortcut-row {
