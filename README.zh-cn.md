@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md) | 中文
 
-https://github.com/user-attachments/assets/1a2d61f0-bc33-490c-80c2-3cdf962f2d84
+https://github.com/user-attachments/assets/223c1507-fcc5-4636-81cc-fcee7f07db1b
 
 一款使用 Tauri 构建的桌面应用程序，用于查看 Spine 骨骼动画和 Live2D 模型并与之交互。
 
