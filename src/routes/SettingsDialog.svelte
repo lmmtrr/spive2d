@@ -261,8 +261,15 @@
     const renderer = getRenderer();
     if (!renderer) return;
     try {
+      const { width, height } = exportResolution;
+      const marginX = appState.exportMarginX ?? 0;
+      const marginY = appState.exportMarginY ?? 0;
       if (appState.exportBase === 'original' && originalWidth > 0 && originalHeight > 0) {
-        const captured = renderer.captureFrame(originalWidth, originalHeight, { ignoreTransform: true });
+        const captured = renderer.captureFrame(width, height, {
+          ignoreTransform: true,
+          marginX,
+          marginY
+        });
         if (captured) {
           previewImgUrl = captured.toDataURL('image/png');
           return;
@@ -270,6 +277,14 @@
       }
       const canvas = renderer.getCanvas();
       if (canvas && canvas.width > 0 && canvas.height > 0) {
+        const captured = renderer.captureFrame(width, height, {
+          marginX,
+          marginY
+        });
+        if (captured) {
+          previewImgUrl = captured.toDataURL('image/png');
+          return;
+        }
         previewImgUrl = canvas.toDataURL('image/png');
       }
     } catch (e) {
@@ -310,7 +325,7 @@
     if (cw > 0 && ch > 0) {
       const img = new Image();
       img.onload = () => {
-        ctx.drawImage(img, cx, cy, cw, ch);
+        ctx.drawImage(img, 0, 0, pw, ph);
         ctx.fillStyle = 'rgba(80, 130, 220, 0.35)';
         if (cy > 0) ctx.fillRect(0, 0, pw, cy);
         if (ph - cy - ch > 0) ctx.fillRect(0, cy + ch, pw, ph - cy - ch);
