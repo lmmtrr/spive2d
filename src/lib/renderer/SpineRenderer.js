@@ -248,57 +248,33 @@ export class SpineRenderer {
     }
   }
   async #getSpineVersion(dirName, fileNames) {
-    const ext = fileNames[1];
-    const rawUrl = `${dirName}${fileNames[0]}${ext}`;
-    const url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
-      ? rawUrl
-      : convertFileSrc(rawUrl);
+    const rawUrl = `${dirName}${fileNames[0]}${fileNames[1]}`;
+    const url = /^https?:\/\//.test(rawUrl) ? rawUrl : convertFileSrc(rawUrl);
     const file = await fetch(url);
     if (!file.ok) {
       showNotification(`HTTP ${file.status}`, 'error');
       throw new Error(`HTTP ${file.status}`);
     }
-    const buffer = await file.arrayBuffer();
-    const data = new Uint8Array(buffer);
-    let isJson = false;
-    for (let i = 0; i < Math.min(data.length, 100); i++) {
-      const c = data[i];
-      if (c === 123) { // '{'
-        isJson = true;
-        break;
-      }
-      if (c !== 32 && c !== 9 && c !== 10 && c !== 13) {
-        break;
-      }
-    }
-    this.#isFileJson = isJson;
+    const data = new Uint8Array(await file.arrayBuffer());
+    const head = data.subarray(0, 100);
+    const firstIdx = head.findIndex(c => ![32, 9, 10, 13].includes(c));
+    this.#isFileJson = head[firstIdx] === 123 &&
+      !head.subarray(firstIdx + 1).some(c => c === 0 || (c < 9) || (c > 13 && c < 32));
     if (this.#isFileJson) {
-      const decoder = new TextDecoder('utf-8');
-      const content = decoder.decode(data);
-      const cleanedContent = content.replace(/,(\s*[}\]])/g, '$1');
-      const jsonData = JSON.parse(cleanedContent);
+      const content = new TextDecoder().decode(data).replace(/,(\s*[}\]])/g, '$1');
+      const jsonData = JSON.parse(content);
       if (!jsonData.skeleton?.spine) {
         showNotification('Invalid JSON structure', 'error');
         throw new Error('Invalid JSON structure');
       }
       return jsonData.skeleton.spine.substring(0, 3);
-    } else {
-      let position = -1;
-      for (let i = 1; i < data.length - 1; i++) {
-        const prev = data[i - 1];
-        const current = data[i];
-        const next = data[i + 1];
-        if (current === 46 && prev >= 48 && prev <= 57 && next >= 48 && next <= 57) {
-          position = i;
-          break;
-        }
-      }
-      if (position === -1) {
-        showNotification('Valid version pattern not found in binary file', 'error');
-        throw new Error('Valid version pattern not found in binary file');
-      }
-      return `${String.fromCharCode(data[position - 1])}.${String.fromCharCode(data[position + 1])}`;
     }
+    const versionMatch = new TextDecoder().decode(data.subarray(0, 256)).match(/\d\.\d/);
+    if (!versionMatch) {
+      showNotification('Valid version pattern not found in binary file', 'error');
+      throw new Error('Valid version pattern not found in binary file');
+    }
+    return versionMatch[0];
   }
   #waitForAssets() {
     if (!this.#assetManager) return;
