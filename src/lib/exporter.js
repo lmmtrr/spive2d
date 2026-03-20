@@ -1,6 +1,6 @@
 import { appState } from './appState.svelte.js';
 import { parseBackgroundImageUrl, loadImage } from './utils.js';
-import { getRenderer } from './rendererStore.js';
+import { getRenderer } from './rendererStore.svelte.js';
 import { createRenderer } from './renderer/createRenderer.js';
 import { showNotification } from './notificationStore.svelte.js';
 import { t } from './i18n.svelte.js';

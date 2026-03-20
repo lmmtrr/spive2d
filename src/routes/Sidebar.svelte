@@ -1,6 +1,6 @@
 <script>
   import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer } from '$lib/rendererStore.js';
+  import { getRenderer } from '$lib/rendererStore.svelte.js';
   import { t } from '$lib/i18n.svelte.js';
   import { saveSetting } from '$lib/settings.js';
 

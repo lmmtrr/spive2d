@@ -1,6 +1,6 @@
 <script>
   import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer } from '$lib/rendererStore.js';
+  import { getRenderer } from '$lib/rendererStore.svelte.js';
   import { formatFrames } from '$lib/utils.js';
 
   let visible = $state(false);

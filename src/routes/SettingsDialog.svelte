@@ -1,6 +1,6 @@
 <script>
   import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer } from '$lib/rendererStore.js';
+  import { getRenderer } from '$lib/rendererStore.svelte.js';
   import { t, getLocale, setLocale } from '$lib/i18n.svelte.js';
   import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, openImageFile, getAssetUrl } from '$lib/fileManager.js';
   import { saveSetting, removeSetting } from '$lib/settings.js';
@@ -10,8 +10,6 @@
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
   let windowWidth = $state(window.innerWidth);
   let windowHeight = $state(window.innerHeight);
-  let aspectRatio = $state(window.innerHeight / window.innerWidth);
-  let keepAspectRatio = $state(false);
   let originalWidth = $state(0);
   let originalHeight = $state(0);
   let locale = $state(getLocale());
@@ -159,16 +157,10 @@
   }
 
   function handleWidthChange() {
-    if (keepAspectRatio) {
-      windowHeight = Math.round(windowWidth * aspectRatio);
-    }
     validateAndResize();
   }
 
   function handleHeightChange() {
-    if (keepAspectRatio) {
-      windowWidth = Math.round(windowHeight / aspectRatio);
-    }
     validateAndResize();
   }
 
@@ -176,7 +168,6 @@
     windowWidth = Math.max(100, Math.min(10000, windowWidth));
     windowHeight = Math.max(100, Math.min(10000, windowHeight));
     setWindowSize(windowWidth, windowHeight);
-    aspectRatio = windowHeight / windowWidth;
   }
 
 
@@ -184,13 +175,6 @@
     appState.resetTransform();
     const renderer = getRenderer();
     if (renderer) renderer.resetTransform();
-  }
-
-  function handleAspectRatioChange(e) {
-    keepAspectRatio = e.target.checked;
-    if (keepAspectRatio) {
-      aspectRatio = windowHeight / windowWidth;
-    }
   }
 
   function handleExportBaseChange(e) {
@@ -226,6 +210,41 @@
       appState.exportMarginY = 0;
     } else {
       appState.exportMarginY = Math.max(minMargin, Math.min(1000, appState.exportMarginY));
+    }
+  }
+
+  function handleTransformScaleValidate() {
+    if (appState.transform.scale == null) {
+      appState.transform.scale = 1;
+    } else {
+      appState.transform.scale = Math.max(appState.SCALE_MIN, Math.min(appState.SCALE_MAX, appState.transform.scale));
+    }
+  }
+
+  function handleTransformMoveXValidate() {
+    if (appState.transform.moveX == null) {
+      appState.transform.moveX = 0;
+    } else {
+      appState.transform.moveX = Math.max(-5000, Math.min(5000, appState.transform.moveX));
+    }
+  }
+
+  function handleTransformMoveYValidate() {
+    if (appState.transform.moveY == null) {
+      appState.transform.moveY = 0;
+    } else {
+      appState.transform.moveY = Math.max(-5000, Math.min(5000, appState.transform.moveY));
+    }
+  }
+
+  function handleTransformRotateValidate() {
+    if (appState.transform.rotate == null) {
+      appState.transform.rotate = 0;
+    } else {
+      let val = appState.transform.rotate;
+      while (val > Math.PI) val -= 2 * Math.PI;
+      while (val < -Math.PI) val += 2 * Math.PI;
+      appState.transform.rotate = val;
     }
   }
 
@@ -521,16 +540,13 @@
     if (open && dialogEl?.open) {
       windowWidth = window.innerWidth;
       windowHeight = window.innerHeight;
-      if (!keepAspectRatio) {
-        aspectRatio = windowHeight / windowWidth;
-      }
     }
   }
 </script>
 
 <svelte:window onresize={handleResize} />
 
-<dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja'} onclick={handleDialogClick}>
+<dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja'} onclick={handleDialogClick} class:wide={activeTab === 'export'}>
   <div class="tab-bar">
     <button class="tab-btn" class:active={activeTab === 'general'} onclick={() => activeTab = 'general'}>
       {t('tabGeneral')}
@@ -577,81 +593,99 @@
   {/if}
 
   {#if activeTab === 'export'}
-    <div class="tab-content">
-      <div class="button-group">
-        <button onclick={handleResetState}>{t('resetState')}</button>
-        <button onclick={handleOpenExportDir}>{t('openExportDirectory')}</button>
+    <div class="tab-content export-tab-wrapper">
+      <div class="export-col-left">
+        <div class="button-group" style="justify-content: flex-start; gap: 10px;">
+          <button onclick={handleResetState} style="width: auto; padding: 0 15px;">{t('resetState')}</button>
+          <button onclick={handleOpenExportDir} style="width: auto; padding: 0 15px;">{t('openExportDirectory')}</button>
+        </div>
+        <div class="input-row radio-group" style="gap: 15px; margin-top: 10px;">
+          <span>{t('exportSizeBase')}</span>
+          <label class="radio-label">
+            <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
+            <span>{t('baseWindow')}</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
+            <span>{t('baseOriginal')}</span>
+          </label>
+        </div>
+        <div class="input-row">
+          <label for="exportScale">{t('exportScale')}</label>
+          <input type="number" id="exportScale" min="10" max="1000" bind:value={appState.exportScale} onchange={handleExportScaleValidate}>
+          <span style="margin-left: 8px;">%</span>
+        </div>
+        <div class="input-row">
+          <label for="exportMarginX">{t('exportMarginX')}</label>
+          <input type="number" id="exportMarginX" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
+        </div>
+        <div class="input-row">
+          <label for="exportMarginY">{t('exportMarginY')}</label>
+          <input type="number" id="exportMarginY" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
+        </div>
+        <hr>
+        <div class="input-row">
+          <label for="transformScale">{t('transformScale')}</label>
+          <input type="number" id="transformScale" step="0.1" bind:value={appState.transform.scale} onchange={handleTransformScaleValidate}>
+        </div>
+        <div class="input-row">
+          <label for="transformRotate">{t('transformRotate')}</label>
+          <input type="number" id="transformRotate" step="0.01" bind:value={appState.transform.rotate} onchange={handleTransformRotateValidate}>
+        </div>
+        <div class="input-row">
+          <label for="transformMoveX">{t('transformMoveX')}</label>
+          <input type="number" id="transformMoveX" step="10" bind:value={appState.transform.moveX} onchange={handleTransformMoveXValidate}>
+        </div>
+        <div class="input-row">
+          <label for="transformMoveY">{t('transformMoveY')}</label>
+          <input type="number" id="transformMoveY" step="10" bind:value={appState.transform.moveY} onchange={handleTransformMoveYValidate}>
+        </div>
       </div>
-      <div class="input-row radio-group" style="gap: 20px;">
-        <span>{t('exportSizeBase')}</span>
-        <label class="radio-label">
-          <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
-          <span>{t('baseWindow')}</span>
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
-          <span>{t('baseOriginal')}</span>
-        </label>
-      </div>
-      <div class="input-row">
-        <label for="exportScale">{t('exportScale')}</label>
-        <input type="number" id="exportScale" min="10" max="1000" bind:value={appState.exportScale} onchange={handleExportScaleValidate}>
-        <span style="margin-left: 8px;">%</span>
-      </div>
-      <div class="input-row">
-        <label for="exportMarginX">{t('exportMarginX')}</label>
-        <input type="number" id="exportMarginX" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
-      </div>
-      <div class="input-row">
-        <label for="exportMarginY">{t('exportMarginY')}</label>
-        <input type="number" id="exportMarginY" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
-      </div>
-      <hr>
-      <div class="input-row result-row">
-        <span class="label">{t('resultingSize')}</span>
-        <span class="value">{exportResolution.width} x {exportResolution.height}</span>
-      </div>
-      <hr>
-      <div class="preview-section">
-        <div class="preview-header">
-          <span class="preview-title">{t('exportPreview')}</span>
-          <div style="display: flex; gap: 8px;">
-            <button class="preview-refresh-btn" onclick={resetPreviewView}>{t('resetView') || 'Reset View'}</button>
-            <button class="preview-refresh-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
+
+      <div class="export-col-right">
+        <div class="preview-section">
+          <div class="preview-header">
+            <span class="preview-title">{t('exportPreview')}</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="preview-refresh-btn" onclick={resetPreviewView}>{t('resetView') || 'Reset View'}</button>
+              <button class="preview-refresh-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
+            </div>
+          </div>
+          <div class="preview-canvas-wrap">
+            <canvas
+              bind:this={previewCanvasEl}
+              class="preview-canvas"
+              onwheel={handlePreviewWheel}
+              onmousedown={handlePreviewMouseDown}
+              onmousemove={handlePreviewMouseMove}
+              onmouseup={handlePreviewMouseUp}
+              onmouseleave={handlePreviewMouseUp}
+            ></canvas>
           </div>
         </div>
-        <div class="preview-canvas-wrap">
-          <canvas
-            bind:this={previewCanvasEl}
-            class="preview-canvas"
-            onwheel={handlePreviewWheel}
-            onmousedown={handlePreviewMouseDown}
-            onmousemove={handlePreviewMouseMove}
-            onmouseup={handlePreviewMouseUp}
-            onmouseleave={handlePreviewMouseUp}
-          ></canvas>
+        <div class="input-row result-row" style="margin: 12px 0 8px 0;">
+          <span class="label">{t('resultingSize')}</span>
+          <span class="value">{exportResolution.width} x {exportResolution.height}</span>
         </div>
-      </div>
-      <hr>
-      <label class="checkbox-label" for="aspectRatioToggle">
-        <input type="checkbox" id="aspectRatioToggle" onchange={handleAspectRatioChange}>
-        <span>{t('keepAspectRatio')}</span>
-      </label>
-      <div class="input-row">
-        <label for="windowWidth">{t('windowWidth')}</label>
-        <input type="number" id="windowWidth" min="100" max="10000" bind:value={windowWidth} onchange={handleWidthChange}>
-      </div>
-      <div class="input-row">
-        <label for="windowHeight">{t('windowHeight')}</label>
-        <input type="number" id="windowHeight" min="100" max="10000" bind:value={windowHeight} onchange={handleHeightChange}>
-      </div>
-      <div class="input-row">
-        <label for="originalWidth">{t('originalWidth')}</label>
-        <input type="text" id="originalWidth" readonly value={originalWidth}>
-      </div>
-      <div class="input-row">
-        <label for="originalHeight">{t('originalHeight')}</label>
-        <input type="text" id="originalHeight" readonly value={originalHeight}>
+
+        <div style="margin-top: 10px;">
+          <div class="input-row">
+            <label for="windowWidth" style="flex-basis: 140px;">{t('windowWidth')}</label>
+            <input type="number" id="windowWidth" min="100" max="10000" bind:value={windowWidth} onchange={handleWidthChange}>
+          </div>
+          <div class="input-row">
+            <label for="windowHeight" style="flex-basis: 140px;">{t('windowHeight')}</label>
+            <input type="number" id="windowHeight" min="100" max="10000" bind:value={windowHeight} onchange={handleHeightChange}>
+          </div>
+          <div class="input-row">
+            <label for="originalWidth" style="flex-basis: 140px;">{t('originalWidth')}</label>
+            <input type="text" id="originalWidth" readonly value={originalWidth}>
+          </div>
+          <div class="input-row">
+            <label for="originalHeight" style="flex-basis: 140px;">{t('originalHeight')}</label>
+            <input type="text" id="originalHeight" readonly value={originalHeight}>
+          </div>
+        </div>
       </div>
     </div>
   {/if}
@@ -690,6 +724,12 @@
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     user-select: none;
   }
+
+  dialog.wide {
+    width: 760px;
+  }
+
+
 
   .tab-bar {
     display: flex;
@@ -809,18 +849,6 @@
     cursor: default;
   }
 
-  .checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-bottom: 12px;
-  }
-
-  .checkbox-label input[type="checkbox"] {
-    position: relative;
-    top: 1px;
-  }
-
   .radio-label {
     display: flex;
     align-items: center;
@@ -936,5 +964,23 @@
   @keyframes pulse-border {
     0%, 100% { border-color: #aaf; }
     50% { border-color: #66f; }
+  }
+
+  .export-tab-wrapper {
+    display: flex;
+    gap: 30px;
+    padding-bottom: 20px;
+  }
+
+  .export-col-left {
+    flex: 1;
+    min-width: 320px;
+  }
+
+  .export-col-right {
+    flex: 1;
+    min-width: 340px;
+    display: flex;
+    flex-direction: column;
   }
 </style>

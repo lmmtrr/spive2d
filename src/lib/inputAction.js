@@ -1,4 +1,4 @@
-import { getRenderer } from '$lib/rendererStore.js';
+import { getRenderer } from '$lib/rendererStore.svelte.js';
 
 export function createTransformAction() {
   let isMove = false;
@@ -36,21 +36,9 @@ export function createTransformAction() {
           moveX: transform.moveX + (e.clientX - startX),
           moveY: transform.moveY + (e.clientY - startY),
         };
-        renderer?.applyTransform(
-          appState.transform.scale,
-          appState.transform.moveX,
-          appState.transform.moveY,
-          appState.transform.rotate
-        );
       } else if (e.clientX >= window.innerWidth - SIDEBAR_WIDTH && (window.innerHeight - e.clientY > CONTROLLER_HEIGHT)) {
         const delta = ((e.clientY - startY) / window.innerHeight) * 2.0;
         appState.transform = { ...transform, rotate: transform.rotate + delta };
-        renderer?.applyTransform(
-          appState.transform.scale,
-          appState.transform.moveX,
-          appState.transform.moveY,
-          appState.transform.rotate
-        );
       }
       startX = e.clientX;
       startY = e.clientY;
@@ -73,7 +61,6 @@ export function createTransformAction() {
         Math.max(appState.SCALE_MIN, transform.scale - Math.sign(e.deltaY) * scaleStep)
       );
       appState.transform = { ...transform, scale: newScale };
-      getRenderer()?.applyTransform(newScale, transform.moveX, transform.moveY, transform.rotate);
     }
 
     function handleContextMenu(e) {

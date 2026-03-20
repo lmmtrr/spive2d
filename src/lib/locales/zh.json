@@ -7,14 +7,11 @@
   "openExportDirectory": "打开导出目录",
   "removeImage": "删除背景图片",
   "backgroundColor": "背景颜色:",
-  "keepAspectRatio": "保持宽高比",
   "windowWidth": "窗口宽度:",
   "windowHeight": "窗口高度:",
   "originalWidth": "原始宽度:",
   "originalHeight": "原始高度:",
-  "setOriginalSize": "设置为原始尺寸",
   "resetState": "重置状态",
-  "exportOriginalSize": "以原始尺寸导出",
   "tabExport": "导出",
   "exportSizeBase": "基准分辨率:",
   "exportScale": "缩放比例:",
@@ -59,5 +56,10 @@
   "shortcutResetDefaults": "恢复默认",
   "pressKey": "请按一个键...",
   "exportPreview": "预览",
-  "refreshPreview": "刷新"
+  "refreshPreview": "刷新",
+  "resetView": "重置视图",
+  "transformScale": "模型缩放:",
+  "transformMoveX": "模型移动 X:",
+  "transformMoveY": "模型移动 Y:",
+  "transformRotate": "模型旋转:"
 }

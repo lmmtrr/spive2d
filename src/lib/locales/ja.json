@@ -7,14 +7,11 @@
   "openExportDirectory": "エクスポートディレクトリを開く",
   "removeImage": "背景画像を削除",
   "backgroundColor": "背景色:",
-  "keepAspectRatio": "アスペクト比を維持",
   "windowWidth": "ウィンドウ幅:",
   "windowHeight": "ウィンドウ高さ:",
   "originalWidth": "元の幅:",
   "originalHeight": "元の高さ:",
-  "setOriginalSize": "元のサイズに設定",
   "resetState": "状態をリセット",
-  "exportOriginalSize": "元のサイズでエクスポート",
   "tabExport": "エクスポート",
   "exportSizeBase": "基準解像度:",
   "exportScale": "スケール比率:",
@@ -59,5 +56,10 @@
   "shortcutResetDefaults": "デフォルトに戻す",
   "pressKey": "キーを押してください...",
   "exportPreview": "プレビュー",
-  "refreshPreview": "更新"
+  "refreshPreview": "更新",
+  "resetView": "表示をリセット",
+  "transformScale": "モデルの縮尺:",
+  "transformMoveX": "モデルの移動 X:",
+  "transformMoveY": "モデルの移動 Y:",
+  "transformRotate": "モデルの回転:"
 }

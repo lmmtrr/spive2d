@@ -7,14 +7,11 @@
   "openExportDirectory": "Open Export Directory",
   "removeImage": "Remove Background Image",
   "backgroundColor": "Background Color:",
-  "keepAspectRatio": "Keep Aspect Ratio",
   "windowWidth": "Window Width:",
   "windowHeight": "Window Height:",
   "originalWidth": "Original Width:",
   "originalHeight": "Original Height:",
-  "setOriginalSize": "Set to Original Size",
   "resetState": "Reset State",
-  "exportOriginalSize": "Export at Original Size",
   "tabExport": "Export",
   "exportSizeBase": "Base Resolution:",
   "exportScale": "Scale Percentage:",
@@ -59,5 +56,10 @@
   "shortcutResetDefaults": "Reset to Defaults",
   "pressKey": "Press a key...",
   "exportPreview": "Preview",
-  "refreshPreview": "Refresh"
+  "refreshPreview": "Refresh",
+  "resetView": "Reset View",
+  "transformScale": "Model Scale:",
+  "transformMoveX": "Model Move X:",
+  "transformMoveY": "Model Move Y:",
+  "transformRotate": "Model Rotate:"
 }

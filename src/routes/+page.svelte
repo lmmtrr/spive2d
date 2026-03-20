@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer, setRenderer } from '$lib/rendererStore.js';
+  import { getRenderer, setRenderer } from '$lib/rendererStore.svelte.js';
   import { createRenderer } from '$lib/renderer/createRenderer.js';
   import { getSortableKey, findMaxNumber } from '$lib/utils.js';
   import { getAssetUrl } from '$lib/fileManager.js';
@@ -58,6 +58,18 @@
       (await unlistenProgress)();
       (await unlistenDragDrop)();
     };
+  });
+
+  $effect(() => {
+    const renderer = getRenderer();
+    if (renderer && appState.initialized) {
+      renderer.applyTransform(
+        appState.transform.scale,
+        appState.transform.moveX,
+        appState.transform.moveY,
+        appState.transform.rotate
+      );
+    }
   });
 
   function initBackground() {
