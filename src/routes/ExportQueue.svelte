@@ -1,6 +1,7 @@
 <script>
   import { exportQueue } from '$lib/exportQueue.svelte.js';
   import { t } from '$lib/i18n.svelte.js';
+  import { openExportDirectory } from '$lib/fileManager.js';
 
   function handleCancel(id) {
     const item = exportQueue.items.find(i => i.id === id);
@@ -39,7 +40,14 @@
           </div>
           <div class="status-text">{Math.round(item.progress)}%</div>
         {:else if item.status === 'completed'}
-          <div class="status-text success">{t('completed') || 'Completed'}</div>
+          <div class="status-row">
+            <div class="status-text success">{t('completed') || 'Completed'}</div>
+            <button class="queue-action" onclick={() => openExportDirectory()} title="Open folder">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </button>
+          </div>
         {:else if item.status === 'error'}
           <div class="status-text error">{t('error') || 'Error'}</div>
         {:else if item.status === 'cancelled'}
@@ -150,4 +158,29 @@
   .success { color: #ffffff; }
   .error { color: #e74c3c; }
   .cancelled { color: #95a5a6; }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: -4px;
+  }
+
+  .queue-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #2ecc71;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .queue-action:hover {
+    background-color: rgba(46, 204, 113, 0.2);
+    transform: scale(1.1);
+  }
 </style>
