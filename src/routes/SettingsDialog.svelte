@@ -341,7 +341,6 @@
 
   $effect(() => {
     if (activeTab === 'export' && open && appState.initialized) {
-      appState.exportBase;
       const _ow = originalWidth;
       const _oh = originalHeight;
       refreshPreviewScreenshot();
@@ -369,12 +368,18 @@
       if (size.width <= 0 || size.height <= 0) return;
       const marginX = Math.round(size.width * 0.3);
       const marginY = Math.round(size.height * 0.3);
-      const width = size.width + marginX * 2;
-      const height = size.height + marginY * 2;
+      let width = size.width + marginX * 2;
+      let height = size.height + marginY * 2;
+      const MAX_CAPTURE_SIZE = 1024;
+      if (width > MAX_CAPTURE_SIZE || height > MAX_CAPTURE_SIZE) {
+        const scale = Math.min(MAX_CAPTURE_SIZE / width, MAX_CAPTURE_SIZE / height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
       const captured = renderer.captureFrame(width, height, {
         ignoreTransform: true,
-        marginX: marginX,
-        marginY: marginY
+        marginX: marginX * (width / (size.width + marginX * 2)),
+        marginY: marginY * (height / (size.height + marginY * 2))
       });
       if (captured) {
         previewImgUrl = captured.toDataURL('image/png');
