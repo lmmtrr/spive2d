@@ -170,6 +170,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
   } else if (backgroundColor) {
     compositingCanvas = createOffscreenCanvas(1, 1);
   }
+  const speed = appState.animation.speed || 1.0;
   const { files, selectedDir, selectedScene } = appState.directories;
   if (!files || !selectedDir || !files[selectedDir]) {
     exportQueue.updateStatus(taskId, 'error');
@@ -215,7 +216,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     );
   }
   if ('setSpeed' in hiddenRenderer && typeof hiddenRenderer.setSpeed === 'function') {
-    hiddenRenderer.setSpeed(appState.animation.speed);
+    hiddenRenderer.setSpeed(speed);
   }
   if ('setPaused' in hiddenRenderer && typeof hiddenRenderer.setPaused === 'function') {
     hiddenRenderer.setPaused(true);
@@ -241,7 +242,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
   }
   const baseDuration = hiddenRenderer.getAnimationDuration() || 0.1;
   const fps = hiddenRenderer.getFPS?.() || RECORDING_FRAME_RATE;
-  const totalFrames = Math.ceil(baseDuration * fps);
+  const totalFrames = Math.ceil((baseDuration / speed) * fps);
 
   function cleanup() {
     hiddenRenderer.dispose();
@@ -322,7 +323,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
       return;
     }
     const time = frame / fps;
-    const progress = baseDuration > 0 ? time / baseDuration : 0;
+    const progress = baseDuration > 0 ? Math.min(1, (time * speed) / baseDuration) : 0;
     if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
       hiddenRenderer.seekAnimation(progress);
     } else if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
@@ -384,6 +385,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
   } else if (backgroundColor) {
     compositingCanvas = createOffscreenCanvas(1, 1);
   }
+  const speed = appState.animation.speed || 1.0;
   const { files, selectedDir, selectedScene } = appState.directories;
   if (!files || !selectedDir || !files[selectedDir]) {
     exportQueue.updateStatus(taskId, 'error');
@@ -427,7 +429,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     );
   }
   if ('setSpeed' in hiddenRenderer && typeof hiddenRenderer.setSpeed === 'function') {
-    hiddenRenderer.setSpeed(appState.animation.speed);
+    hiddenRenderer.setSpeed(speed);
   }
   if ('setPaused' in hiddenRenderer && typeof hiddenRenderer.setPaused === 'function') {
     hiddenRenderer.setPaused(true);
@@ -457,7 +459,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
   const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
   const baseDuration = hiddenRenderer.getAnimationDuration() || 0.1;
   const fps = hiddenRenderer.getFPS?.() || RECORDING_FRAME_RATE;
-  const totalFrames = Math.ceil(baseDuration * fps);
+  const totalFrames = Math.ceil((baseDuration / speed) * fps);
 
   function cleanup() {
     hiddenRenderer.dispose();
@@ -512,7 +514,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     if (currentWorkerFrame >= totalFrames) return;
     const frame = currentWorkerFrame;
     const time = frame / fps;
-    const progress = baseDuration > 0 ? time / baseDuration : 0;
+    const progress = baseDuration > 0 ? Math.min(1, (time * speed) / baseDuration) : 0;
     if ('seekAnimation' in hiddenRenderer && typeof hiddenRenderer.seekAnimation === 'function') {
       hiddenRenderer.seekAnimation(progress);
     } else if ('stepAnimation' in hiddenRenderer && typeof hiddenRenderer.stepAnimation === 'function') {
