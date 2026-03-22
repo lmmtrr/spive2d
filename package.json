@@ -1,6 +1,6 @@
-{
-  "name": "spive2d",
-  "version": "0.1.16",
+ {
+   "name": "spive2d",
+   "version": "0.1.17",
   "description": "",
   "type": "module",
   "scripts": {

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.17] - 2026-03-22
+
+### Added
+
+- Support playback speed in animation and image sequence exports
+- Clear cache functionality and refined settings layout
+
+### Fixed
+
+- Optimized export tab preview performance for large models
+
 ## [0.1.16] - 2026-03-20
 
 ### Added
