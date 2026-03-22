@@ -199,6 +199,14 @@ fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn clear_cache(app_handle: AppHandle) -> Result<(), String> {
+    for window in app_handle.webview_windows().values() {
+        window.clear_all_browsing_data().map_err(|e: tauri::Error| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn process_directory_with_subdirs(
     dir_path: &Path,
     base_path: &Path,
@@ -475,7 +483,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_subdir_files,
             handle_dropped_path,
-            append_to_list
+            append_to_list,
+            clear_cache
         ])
         .plugin(tauri_plugin_dialog::init())
         .run(tauri::generate_context!())

@@ -6,6 +6,8 @@
   import { saveSetting, removeSetting } from '$lib/settings.js';
   import { setWindowSize } from '$lib/windowManager.js';
   import { getShortcuts, saveShortcuts, resetShortcuts } from '$lib/shortcutKeys.js';
+  import { invoke } from '@tauri-apps/api/core';
+  import { showNotification } from '$lib/notificationStore.svelte.js';
 
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
   let windowWidth = $state(window.innerWidth);
@@ -170,6 +172,14 @@
     setWindowSize(windowWidth, windowHeight);
   }
 
+  async function handleClearCache() {
+    try {
+      await invoke('clear_cache');
+      showNotification(t('clearCacheSuccess'), 'success');
+    } catch (e) {
+      console.error('Failed to clear cache:', e);
+    }
+  }
 
   function handleResetState() {
     appState.resetTransform();
@@ -581,13 +591,17 @@
         <button style="width: auto; margin: 0; padding: 0 15px;" onclick={handleLoadUrl}>{t('loadFromUrl')}</button>
       </div>
       <hr>
+      <div class="input-row">
+        <label for="bgColorPicker">{t('backgroundColor')}</label>
+        <input type="color" id="bgColorPicker" oninput={handleColorChange}>
+      </div>
       <div class="button-group">
         <button onclick={handleOpenImage}>{t('openImage')}</button>
         <button onclick={handleRemoveImage}>{t('removeImage')}</button>
       </div>
-      <div class="input-row">
-        <label for="bgColorPicker">{t('backgroundColor')}</label>
-        <input type="color" id="bgColorPicker" oninput={handleColorChange}>
+      <hr>
+      <div class="button-group">
+        <button onclick={handleClearCache}>{t('clearCache')}</button>
       </div>
     </div>
   {/if}

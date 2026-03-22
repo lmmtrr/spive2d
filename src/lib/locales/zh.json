@@ -61,5 +61,7 @@
   "transformScale": "模型缩放:",
   "transformMoveX": "模型移动 X:",
   "transformMoveY": "模型移动 Y:",
-  "transformRotate": "模型旋转:"
+  "transformRotate": "模型旋转:",
+  "clearCache": "清理缓存",
+  "clearCacheSuccess": "缓存清理成功"
 }

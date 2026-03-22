@@ -61,5 +61,7 @@
   "transformScale": "モデルの縮尺:",
   "transformMoveX": "モデルの移動 X:",
   "transformMoveY": "モデルの移動 Y:",
-  "transformRotate": "モデルの回転:"
+  "transformRotate": "モデルの回転:",
+  "clearCache": "キャッシュを削除",
+  "clearCacheSuccess": "キャッシュを削除しました"
 }

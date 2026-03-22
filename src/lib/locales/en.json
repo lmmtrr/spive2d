@@ -61,5 +61,7 @@
   "transformScale": "Model Scale:",
   "transformMoveX": "Model Move X:",
   "transformMoveY": "Model Move Y:",
-  "transformRotate": "Model Rotate:"
+  "transformRotate": "Model Rotate:",
+  "clearCache": "Clear Cache",
+  "clearCacheSuccess": "Cache cleared successfully"
 }
