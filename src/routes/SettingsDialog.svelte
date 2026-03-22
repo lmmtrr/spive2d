@@ -303,9 +303,8 @@
     const delta = -e.deltaY;
     const factor = Math.pow(1.1, delta / 100);
     const newZoom = Math.max(0.1, Math.min(20, previewZoom * factor));
-    const rect = previewCanvasEl.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const mouseX = previewCanvasEl.width / 2;
+    const mouseY = previewCanvasEl.height / 2;
     const worldX = (mouseX - previewOffset.x) / previewZoom;
     const worldY = (mouseY - previewOffset.y) / previewZoom;
     previewZoom = newZoom;
