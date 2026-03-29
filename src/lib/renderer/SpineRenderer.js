@@ -310,6 +310,19 @@ export class SpineRenderer {
     };
     const atlasPath = makePath(fileName, atlasExt);
     const atlas = this.#assetManager.get(atlasPath);
+    if (atlas && atlas.regions) {
+      atlas.regions.forEach((region) => {
+        if (region.name) region.name = region.name.trim();
+      });
+      const originalFindRegion = atlas.findRegion;
+      atlas.findRegion = function (name) {
+        let region = originalFindRegion.call(this, name);
+        if (!region && name) {
+          region = originalFindRegion.call(this, name.trim());
+        }
+        return region;
+      };
+    }
     this.#resizeAtlasPages(atlas, atlasPath, isWebUrl);
     for (const page of atlas.pages) {
       if (
