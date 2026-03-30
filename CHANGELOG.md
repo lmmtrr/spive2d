@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.18] - 2026-03-30
+
+### Added
+
+- Refactored export pipeline with worker pooling and renderer synchronization for improved stability and performance
+
+### Fixed
+
+- Trim atlas region names to prevent lookup failures
+
 ## [0.1.17] - 2026-03-22
 
 ### Added
