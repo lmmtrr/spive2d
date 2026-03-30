@@ -1,29 +1,12 @@
+import { BaseRenderer } from './BaseRenderer.js';
 import { createSorter } from '../utils.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { showNotification } from '../notificationStore.svelte.js';
+import { SpineVersionManager } from './SpineVersionManager.js';
 
 const sortByName = createSorter(item => item[0] || item.name || '');
-const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
-const spineLibs = {};
 
-(async () => {
-  for (const version of SPINE_VERSIONS) {
-    await new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = `lib/spine-webgl-${version}.js`;
-      script.onload = () => {
-        if (version[0] === '3') Object.assign(window.spine, window.spine.webgl);
-        spineLibs[version] = window.spine;
-        window.spine = undefined;
-        script.remove();
-        resolve();
-      };
-      document.head.appendChild(script);
-    });
-  }
-})();
-
-export class SpineRenderer {
+export class SpineRenderer extends BaseRenderer {
   #canvas;
   #spine = null;
   #ctx = null;
@@ -47,24 +30,39 @@ export class SpineRenderer {
   #activeSkins = null;
   #onFirstRender = null;
   #isFileJson = false;
+  #captureResources = null;
+  #isExport = false;
+  _parameterItems = null;
+
   constructor(isExport = false) {
+    super(isExport);
+    this.#isExport = isExport;
     this.#canvas = document.createElement('canvas');
     this.#canvas.style.display = 'none';
     this.#canvas.style.verticalAlign = 'top';
     this.#canvas.style.opacity = '0';
   }
+
   getCanvas() {
     return this.#canvas;
   }
+
   async load(dirName, fileNames) {
+    this.dispose();
     this.#attachmentsCache = {};
     this.#activeSkins = null;
     this.#canvas.style.display = 'block';
     this.#dirName = dirName;
     this.#fileNames = fileNames;
     this.#firstRender = true;
-    const spineVersion = await this.#getSpineVersion(dirName, fileNames);
-    this.#spine = spineLibs[spineVersion];
+    const { version, isJson } = await SpineVersionManager.detectVersion(dirName, fileNames);
+    this.#isFileJson = isJson;
+    this.#spine = SpineVersionManager.getLib(version);
+    if (!this.#spine) {
+      const msg = `Spine library for version ${version} not loaded.`;
+      showNotification(msg, 'error');
+      throw new Error(msg);
+    }
     const dpr = window.devicePixelRatio || 1;
     this.#canvas.width = Math.round(window.innerWidth * dpr);
     this.#canvas.height = Math.round(window.innerHeight * dpr);
@@ -109,17 +107,45 @@ export class SpineRenderer {
       requestAnimationFrame(() => this.#waitForAssets());
     });
   }
+
   dispose() {
     this.#canvas.style.display = 'none';
     if (this.#requestId) window.cancelAnimationFrame(this.#requestId);
     this.#requestId = undefined;
     this.#attachmentsCache = {};
-    if (this.#assetManager) this.#assetManager.dispose();
-    this.#assetManager = null;
+    if (this.#assetManager) {
+      this.#assetManager.dispose();
+      this.#assetManager = null;
+    }
+    if (this.#skeletonRenderer) {
+      if (typeof this.#skeletonRenderer.dispose === 'function') this.#skeletonRenderer.dispose();
+      this.#skeletonRenderer = null;
+    }
+    if (this.#batcher) {
+      this.#batcher.dispose();
+      this.#batcher = null;
+    }
+    if (this.#shader) {
+      this.#shader.dispose();
+      this.#shader = null;
+    }
+    if (this.#ctx) {
+      if (typeof this.#ctx.dispose === 'function') this.#ctx.dispose();
+      this.#ctx = null;
+    }
     this.#animationStates = [];
     this.#skeletons = {};
     this.#activeSkins = null;
+    if (this.#captureResources) {
+      const gl = this.#ctx?.gl;
+      if (gl) {
+        if (this.#captureResources.fb) gl.deleteFramebuffer(this.#captureResources.fb);
+        if (this.#captureResources.rb) gl.deleteRenderbuffer(this.#captureResources.rb);
+      }
+      this.#captureResources = null;
+    }
   }
+
   resize(width, height) {
     const dpr = window.devicePixelRatio || 1;
     this.#canvas.width = Math.round(width * dpr);
@@ -127,6 +153,7 @@ export class SpineRenderer {
     this.#canvas.style.width = `${width}px`;
     this.#canvas.style.height = `${height}px`;
   }
+
   getOriginalSize() {
     const skel = this.#skeletons['0']?.skeleton;
     if (!skel) return { width: 0, height: 0 };
@@ -135,18 +162,15 @@ export class SpineRenderer {
       height: Math.round(skel.data.height),
     };
   }
+
   applyTransform(scale, moveX, moveY, rotate) {
-    this._scale = scale;
-    this._moveX = moveX;
-    this._moveY = moveY;
-    this._rotate = rotate;
+    super.applyTransform(scale, moveX, moveY, rotate);
   }
+
   resetTransform() {
-    this._scale = 1;
-    this._moveX = 0;
-    this._moveY = 0;
-    this._rotate = 0;
+    super.resetTransform();
   }
+
   getAnimations() {
     const skel = this.#skeletons['0']?.skeleton;
     if (!skel) return [];
@@ -155,6 +179,7 @@ export class SpineRenderer {
       value: a.name,
     }));
   }
+
   async setAnimation(value) {
     for (const key of Object.keys(this.#skeletons)) {
       const { skeleton, state } = this.#skeletons[key];
@@ -164,17 +189,14 @@ export class SpineRenderer {
       state.setAnimation(0, value, true);
     }
   }
-  getExpressions() {
-    return null;
-  }
-  setExpression(_value) {
-  }
+
   getPropertyCategories() {
     const categories = ['attachments'];
     if (!this.isSkinsDisabled()) categories.push('skins');
     categories.push('parameters');
     return categories;
   }
+
   getPropertyItems(category) {
     const skel = this.#skeletons['0']?.skeleton;
     if (!skel) return [];
@@ -189,6 +211,7 @@ export class SpineRenderer {
     }
     return [];
   }
+
   updatePropertyItem(category, name, index, value) {
     if (category === 'attachments') {
       this.#toggleAttachment(name, index, value);
@@ -198,6 +221,7 @@ export class SpineRenderer {
       this.#updateParameter(name, index, value);
     }
   }
+
   getAnimationDuration() {
     const state = this.#skeletons['0']?.state;
     if (state?.tracks[0]) {
@@ -205,6 +229,7 @@ export class SpineRenderer {
     }
     return 0;
   }
+
   seekAnimation(progress) {
     for (const skeletonId in this.#skeletons) {
       const state = this.#skeletons[skeletonId]?.state;
@@ -216,7 +241,9 @@ export class SpineRenderer {
         skel.updateWorldTransform(2);
       }
     }
+    this.render(0);
   }
+
   getCurrentTime() {
     const state = this.#skeletons['0']?.state;
     if (state?.tracks[0]) {
@@ -225,20 +252,90 @@ export class SpineRenderer {
     }
     return 0;
   }
+
   getFPS() {
-    return 30;
+    return 60;
   }
+
   setPaused(paused) {
+    if (this.#paused === paused) return;
     this.#paused = paused;
+    if (paused) {
+      if (this.#requestId) {
+        cancelAnimationFrame(this.#requestId);
+        this.#requestId = undefined;
+      }
+    } else {
+      if (!this.#requestId) {
+        this.#lastFrameTime = Date.now() / 1000;
+        requestAnimationFrame(() => this.#renderLoop());
+      }
+    }
   }
+
   setSeeking(seeking) {
     this.#seeking = seeking;
   }
+
   setSpeed(speed) {
     this.#speed = speed;
   }
-  render() {
+
+  getSyncState() {
+    return {
+      ...super.getSyncState(),
+      activeSkins: this.#activeSkins ? Array.from(this.#activeSkins) : null,
+      attachmentsCache: JSON.parse(JSON.stringify(this.#attachmentsCache)),
+    };
   }
+
+  applySyncState(state) {
+    if (!state) return;
+    super.applySyncState(state);
+    if (state.activeSkins) {
+      this.applySkins(state.activeSkins);
+    }
+    if (state.attachmentsCache) {
+      this.#attachmentsCache = { ...state.attachmentsCache };
+      this.#syncHiddenAttachments();
+    }
+  }
+
+  render(delta = 0) {
+    const gl = this.#ctx.gl;
+    if (!gl) return;
+    const dpr = window.devicePixelRatio || 1;
+    this.#updateMVP(this.#canvas.width, this.#canvas.height, dpr);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    for (const key of Object.keys(this.#skeletons).reverse()) {
+      const skel = this.#skeletons[key].skeleton;
+      const state = this.#skeletons[key].state;
+      if (delta > 0 && !this.#seeking && !this.#paused) {
+        state.update(delta * this.#speed);
+      }
+      state.apply(skel);
+      this.#applyParameterOverrides(skel);
+      skel.updateWorldTransform(2);
+      this.#syncHiddenAttachments();
+      this.#shader.bind();
+      this.#shader.setUniformi(this.#spine.Shader.SAMPLER, 0);
+      this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
+      this.#batcher.begin(this.#shader);
+      this.#skeletonRenderer.vertexEffect = null;
+      this.#skeletonRenderer.premultipliedAlpha = (this.#alphaMode === 'unpack' || this.#alphaMode === 'pma');
+      this.#skeletonRenderer.draw(this.#batcher, skel);
+      this.#batcher.end();
+      this.#shader.unbind();
+    }
+    if (this.#firstRender) {
+      this.#firstRender = false;
+      if (this.#onFirstRender) {
+        this.#onFirstRender();
+        this.#onFirstRender = null;
+      }
+    }
+  }
+
   async setAlphaMode(alphaMode) {
     this.#alphaMode = alphaMode;
     this.#firstRender = true;
@@ -247,35 +344,7 @@ export class SpineRenderer {
       await this.load(this.#dirName, this.#fileNames);
     }
   }
-  async #getSpineVersion(dirName, fileNames) {
-    const rawUrl = `${dirName}${fileNames[0]}${fileNames[1]}`;
-    const url = /^https?:\/\//.test(rawUrl) ? rawUrl : convertFileSrc(rawUrl);
-    const file = await fetch(url);
-    if (!file.ok) {
-      showNotification(`HTTP ${file.status}`, 'error');
-      throw new Error(`HTTP ${file.status}`);
-    }
-    const data = new Uint8Array(await file.arrayBuffer());
-    const head = data.subarray(0, 100);
-    const firstIdx = head.findIndex(c => ![32, 9, 10, 13].includes(c));
-    this.#isFileJson = head[firstIdx] === 123 &&
-      !head.subarray(firstIdx + 1).some(c => c === 0 || (c < 9) || (c > 13 && c < 32));
-    if (this.#isFileJson) {
-      const content = new TextDecoder().decode(data).replace(/,(\s*[}\]])/g, '$1');
-      const jsonData = JSON.parse(content);
-      if (!jsonData.skeleton?.spine) {
-        showNotification('Invalid JSON structure', 'error');
-        throw new Error('Invalid JSON structure');
-      }
-      return jsonData.skeleton.spine.substring(0, 3);
-    }
-    const versionMatch = new TextDecoder().decode(data.subarray(0, 256)).match(/\d\.\d/);
-    if (!versionMatch) {
-      showNotification('Valid version pattern not found in binary file', 'error');
-      throw new Error('Valid version pattern not found in binary file');
-    }
-    return versionMatch[0];
-  }
+
   #waitForAssets() {
     if (!this.#assetManager) return;
     if (this.#assetManager.isLoadingComplete()) {
@@ -295,11 +364,19 @@ export class SpineRenderer {
         showNotification(`Region not found: ${names}`, 'error', 5000);
       }
       this.#lastFrameTime = Date.now() / 1000;
-      requestAnimationFrame(() => this.#renderLoop());
+      if (!this.#isExport && !this.#paused) {
+        requestAnimationFrame(() => this.#renderLoop());
+      } else if (this.#isExport) {
+        if (this.#onFirstRender) {
+          this.#onFirstRender();
+          this.#onFirstRender = null;
+        }
+      }
     } else {
       requestAnimationFrame(() => this.#waitForAssets());
     }
   }
+
   #loadSkeleton(fileName) {
     const skelExt = this.#fileNames[1];
     const atlasExt = this.#fileNames[2];
@@ -392,6 +469,7 @@ export class SpineRenderer {
     animationState.setAnimation(0, animations[0].name, true);
     return { skeleton, state: animationState, bounds, skippedAttachments };
   }
+
   #calculateBounds(skeleton) {
     const originalSkin = skeleton.skin;
     const allSkins = skeleton.data.skins;
@@ -433,6 +511,7 @@ export class SpineRenderer {
     skeleton.updateWorldTransform(2);
     return { offset, size };
   }
+
   #updateMVP(canvasWidth = this.#canvas.width, canvasHeight = this.#canvas.height, dpr = 1) {
     const logicalWidth = canvasWidth / dpr;
     const logicalHeight = canvasHeight / dpr;
@@ -472,42 +551,15 @@ export class SpineRenderer {
     }
     this.#ctx.gl.viewport(0, 0, canvasWidth, canvasHeight);
   }
+
   #renderLoop() {
-    const gl = this.#ctx.gl;
     const now = Date.now() / 1000;
     const delta = now - this.#lastFrameTime;
     this.#lastFrameTime = now;
-    const dpr = window.devicePixelRatio || 1;
-    this.#updateMVP(this.#canvas.width, this.#canvas.height, dpr);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    for (const key of Object.keys(this.#skeletons).reverse()) {
-      const skel = this.#skeletons[key].skeleton;
-      const state = this.#skeletons[key].state;
-      if (!this.#seeking && !this.#paused) {
-        state.update(delta * this.#speed);
-      }
-      state.apply(skel);
-      skel.updateWorldTransform(2);
-      this.#syncHiddenAttachments();
-      this.#shader.bind();
-      this.#shader.setUniformi(this.#spine.Shader.SAMPLER, 0);
-      this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
-      this.#batcher.begin(this.#shader);
-      this.#skeletonRenderer.vertexEffect = null;
-      this.#skeletonRenderer.premultipliedAlpha = (this.#alphaMode === 'unpack' || this.#alphaMode === 'pma');
-      this.#skeletonRenderer.draw(this.#batcher, skel);
-      this.#batcher.end();
-      this.#shader.unbind();
-    }
-    if (this.#firstRender) {
-      this.#firstRender = false;
-      if (this.#onFirstRender) {
-        this.#onFirstRender();
-        this.#onFirstRender = null;
-      }
-    }
+    this.render(delta);
     this.#requestId = requestAnimationFrame(() => this.#renderLoop());
   }
+
   #getAttachmentItems() {
     const skeleton = this.#skeletons['0']?.skeleton;
     if (!skeleton) return [];
@@ -593,6 +645,7 @@ export class SpineRenderer {
       })
       .sort(sortByName);
   }
+
   #getSkinItems() {
     const skel = this.#skeletons['0']?.skeleton;
     if (!skel) return [];
@@ -616,6 +669,7 @@ export class SpineRenderer {
       checked: activeSkinNames.has(skin.name),
     }));
   }
+
   #toggleAttachment(name, slotIndex, checked) {
     const skeleton = this.#skeletons['0'].skeleton;
     const compositeKey = `${name}##${slotIndex}`;
@@ -634,12 +688,13 @@ export class SpineRenderer {
       } else {
         att = { name: name };
       }
-      this.#attachmentsCache[compositeKey] = [slotIndex, att];
+      this.#attachmentsCache[compositeKey] = [slotIndex, { name: name }];
       if (slot && slot.attachment && slot.attachment.name === name) {
         slot.attachment = null;
       }
     }
   }
+
   #toggleSkin(name, checked) {
     if (!this.#activeSkins) {
       this.#activeSkins = new Set();
@@ -660,6 +715,7 @@ export class SpineRenderer {
     }
     this.applySkins(Array.from(this.#activeSkins));
   }
+
   applySkins(names) {
     const skeleton = this.#skeletons['0']?.skeleton;
     if (!skeleton) return;
@@ -677,9 +733,7 @@ export class SpineRenderer {
     skeleton.updateWorldTransform(2);
     this.#syncHiddenAttachments();
   }
-  saveSkins(checkedNames) {
-    return checkedNames;
-  }
+
   #syncHiddenAttachments() {
     const skeleton = this.#skeletons['0']?.skeleton;
     if (!skeleton) return;
@@ -690,24 +744,41 @@ export class SpineRenderer {
       }
     });
   }
-  #getModelId() {
-    return `${this.#dirName}/${this.#fileNames[0]}`;
-  }
+
   captureFrame(width, height, options = {}) {
     const skel = this.#skeletons['0'];
     if (!skel) return null;
     const { skeleton, bounds } = skel;
-    const originalMvp = this.#mvp.copy();
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
     const gl = this.#ctx.gl;
-    const fb = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    const rb = gl.createRenderbuffer();
-    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA4, width, height);
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+    if (!this.#captureResources ||
+      this.#captureResources.width !== width ||
+      this.#captureResources.height !== height) {
+      if (this.#captureResources) {
+        if (this.#captureResources.fb) gl.deleteFramebuffer(this.#captureResources.fb);
+        if (this.#captureResources.rb) gl.deleteRenderbuffer(this.#captureResources.rb);
+      }
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      const rb = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA4, width, height);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const flipCanvas = document.createElement('canvas');
+      flipCanvas.width = width;
+      flipCanvas.height = height;
+      const pixels = new Uint8ClampedArray(width * height * 4);
+      this.#captureResources = {
+        width, height, fb, rb, tempCanvas, flipCanvas, pixels,
+        tempCtx: tempCanvas.getContext('2d'),
+        flipCtx: flipCanvas.getContext('2d')
+      };
+    }
+    const res = this.#captureResources;
+    const originalMvp = this.#mvp.copy();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, res.fb);
     const oldViewport = gl.getParameter(gl.VIEWPORT);
     gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
@@ -762,31 +833,27 @@ export class SpineRenderer {
     this.#shader.bind();
     this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
     this.#batcher.begin(this.#shader);
-    this.#skeletonRenderer.draw(this.#batcher, skeleton);
+    for (const key of Object.keys(this.#skeletons).reverse()) {
+      const skel = this.#skeletons[key].skeleton;
+      this.#syncHiddenAttachments();
+      this.#skeletonRenderer.draw(this.#batcher, skel);
+    }
     this.#batcher.end();
     this.#shader.unbind();
-    const pixels = new Uint8ClampedArray(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, res.pixels);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
-    gl.deleteFramebuffer(fb);
-    gl.deleteRenderbuffer(rb);
     gl.viewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
     this.#mvp.set(originalMvp);
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = width;
-    finalCanvas.height = height;
-    const ctx = finalCanvas.getContext('2d');
-    const imageData = new ImageData(pixels, width, height);
-    const flipCanvas = document.createElement('canvas');
-    flipCanvas.width = width;
-    flipCanvas.height = height;
-    const flipCtx = flipCanvas.getContext('2d');
-    flipCtx.putImageData(imageData, 0, 0);
-    ctx.scale(1, -1);
-    ctx.drawImage(flipCanvas, 0, -height);
-    return finalCanvas;
+    const imageData = new ImageData(res.pixels, width, height);
+    res.flipCtx.putImageData(imageData, 0, 0);
+    res.tempCtx.clearRect(0, 0, width, height);
+    res.tempCtx.save();
+    res.tempCtx.scale(1, -1);
+    res.tempCtx.drawImage(res.flipCanvas, 0, -height);
+    res.tempCtx.restore();
+    return res.tempCanvas;
   }
+
   #getParameterItems() {
     const skel = this.#skeletons['0']?.skeleton;
     if (!skel) return [];
@@ -884,6 +951,7 @@ export class SpineRenderer {
     this._parameterItems = items;
     return items;
   }
+
   #updateParameter(name, index, value) {
     if (!this._parameterItems) {
       this.#getParameterItems();
@@ -892,37 +960,29 @@ export class SpineRenderer {
     if (!item) return;
     item._target[item._prop] = value;
     item.value = value;
+    this.parameterOverrides.set(item.name, value);
   }
+
+  #applyParameterOverrides(skel) {
+    if (this.parameterOverrides.size === 0) return;
+    const items = this.#getParameterItems();
+    for (const [name, value] of this.parameterOverrides.entries()) {
+      const item = items.find(i => i.name === name);
+      if (item && item._target && item._prop) {
+        item._target[item._prop] = value;
+      }
+    }
+  }
+
   isSkinsDisabled() {
     const skel = this.#skeletons['0']?.skeleton;
     return !skel || skel.data.skins.length <= 1;
   }
-  getAnimationStates() {
-    return this.#animationStates;
-  }
-  #parseAtlasDeclaredSizes(atlasText) {
-    const sizes = new Map();
-    const lines = atlasText.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line.endsWith('.png') && !line.endsWith('.jpg') && !line.endsWith('.jpeg') && !line.endsWith('.webp')) continue;
-      const pageName = line;
-      for (let j = i + 1; j < lines.length; j++) {
-        const entry = lines[j].trim();
-        if (!entry || (!entry.includes(':') && (entry.endsWith('.png') || entry.endsWith('.jpg')))) break;
-        const sizeMatch = entry.match(/^size\s*:\s*(\d+)\s*,\s*(\d+)/);
-        if (sizeMatch) {
-          sizes.set(pageName, { width: parseInt(sizeMatch[1]), height: parseInt(sizeMatch[2]) });
-          break;
-        }
-      }
-    }
-    return sizes;
-  }
+
   #resizeAtlasPages(atlas, atlasPath, isWebUrl) {
     let atlasText = null;
     try {
-      const url = isWebUrl ? atlasPath : convertFileSrc(atlasPath);
+      const url = isWebUrl ? this.#dirName + atlasPath : convertFileSrc(atlasPath);
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url, false);
       xhr.send();
@@ -956,7 +1016,6 @@ export class SpineRenderer {
       page.width = declared.width;
       page.height = declared.height;
       resizedPages.add(page);
-      console.log(`[SpineRenderer] Resized ${page.name} from ${img.width}x${img.height} to ${declared.width}x${declared.height}`);
     }
     if (resizedPages.size > 0 && atlas.regions) {
       for (const region of atlas.regions) {
@@ -975,5 +1034,25 @@ export class SpineRenderer {
         }
       }
     }
+  }
+
+  #parseAtlasDeclaredSizes(atlasText) {
+    const sizes = new Map();
+    const lines = atlasText.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line.endsWith('.png') && !line.endsWith('.jpg') && !line.endsWith('.jpeg') && !line.endsWith('.webp')) continue;
+      const pageName = line;
+      for (let j = i + 1; j < lines.length; j++) {
+        const entry = lines[j].trim();
+        if (!entry || (!entry.includes(':') && (entry.endsWith('.png') || entry.endsWith('.jpg')))) break;
+        const sizeMatch = entry.match(/^size\s*:\s*(\d+)\s*,\s*(\d+)/);
+        if (sizeMatch) {
+          sizes.set(pageName, { width: parseInt(sizeMatch[1]), height: parseInt(sizeMatch[2]) });
+          break;
+        }
+      }
+    }
+    return sizes;
   }
 }

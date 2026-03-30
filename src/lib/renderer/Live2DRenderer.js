@@ -1,13 +1,48 @@
+import { BaseRenderer } from './BaseRenderer.js';
 import { createSorter } from '../utils.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { showNotification } from '../notificationStore.svelte.js';
 
 const sortByText = createSorter(item => item.name);
 const sortById = createSorter(item => item.id);
 
-let sharedApp = null;
-let sharedAppUsageCount = 0;
+class PixiAppManager {
+  static #sharedApp = null;
+  static #usageCount = 0;
 
-export class Live2DRenderer {
+  static acquire() {
+    if (!this.#sharedApp) {
+      const cvs = document.createElement('canvas');
+      cvs.style.display = 'none';
+      cvs.style.verticalAlign = 'top';
+      cvs.style.opacity = '0';
+      this.#sharedApp = new PIXI.Application({
+        view: cvs,
+        preserveDrawingBuffer: true,
+        transparent: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+      this.#sharedApp.resizeTo = window;
+    }
+    this.#usageCount++;
+    return this.#sharedApp;
+  }
+
+  static release() {
+    this.#usageCount--;
+    if (this.#usageCount === 0 && this.#sharedApp) {
+      this.#sharedApp.destroy(false, { children: true });
+      this.#sharedApp = null;
+    }
+  }
+
+  static get app() {
+    return this.#sharedApp;
+  }
+}
+
+export class Live2DRenderer extends BaseRenderer {
   #canvas;
   #app;
   #model = null;
@@ -18,35 +53,28 @@ export class Live2DRenderer {
   #isExport = false;
   #animations = [];
   #disposed = false;
+  #renderTexture = null;
+
   constructor(isExport = false) {
+    super(isExport);
     this.#isExport = isExport;
-    if (!sharedApp) {
-      const cvs = document.createElement('canvas');
-      cvs.style.display = 'none';
-      cvs.style.verticalAlign = 'top';
-      cvs.style.opacity = '0';
-      sharedApp = new PIXI.Application({
-        view: cvs,
-        preserveDrawingBuffer: true,
-        transparent: true,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-      });
-      sharedApp.resizeTo = window;
-    }
-    this.#app = sharedApp;
-    sharedAppUsageCount++;
-    if (!isExport) {
-      this.#canvas = this.#app.view;
-    } else {
-      this.#canvas = null;
-    }
+    this.#app = PixiAppManager.acquire();
+    this.#canvas = this.#app.view;
   }
+
   getCanvas() {
     return this.#canvas;
   }
+
   async load(dirName, fileNames) {
     if (this.#disposed) return;
+    if (this.#model) {
+      if (!this.#isExport && this.#app && this.#app.stage) {
+        this.#app.stage.removeChild(this.#model);
+      }
+      this.#model.destroy();
+      this.#model = null;
+    }
     if (!this.#isExport && this.#canvas) {
       this.#canvas.style.display = 'block';
     }
@@ -97,10 +125,11 @@ export class Live2DRenderer {
       };
       this.#model._spive2dSpeed = this.#speed;
     } catch (err) {
-      alert("Live2DRenderer Error: " + (err.message || err));
+      showNotification("Live2DRenderer Error: " + (err.message || err), 'error');
       console.error(err);
     }
   }
+
   dispose() {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -114,17 +143,19 @@ export class Live2DRenderer {
       this.#model.destroy();
       this.#model = null;
     }
-    sharedAppUsageCount--;
-    if (sharedAppUsageCount === 0 && sharedApp) {
-      sharedApp.destroy(false, { children: true });
-      sharedApp = null;
+    if (this.#renderTexture) {
+      this.#renderTexture.destroy(true);
+      this.#renderTexture = null;
     }
+    PixiAppManager.release();
     this.#app = null;
   }
+
   resize(width, height) {
     if (this.#isExport || !this.#app) return;
     this.#app.renderer.resize(width, height);
   }
+
   getOriginalSize() {
     if (!this.#model) return { width: 0, height: 0 };
     return {
@@ -132,12 +163,10 @@ export class Live2DRenderer {
       height: Math.round(this.#model.internalModel.originalHeight),
     };
   }
+
   applyTransform(scale, moveX, moveY, rotate) {
+    super.applyTransform(scale, moveX, moveY, rotate);
     if (!this.#model) return;
-    this._scale = scale;
-    this._moveX = moveX;
-    this._moveY = moveY;
-    this._rotate = rotate;
     const { innerWidth: w, innerHeight: h } = window;
     const baseScale = Math.min(
       w / this.#model.internalModel.originalWidth,
@@ -147,12 +176,10 @@ export class Live2DRenderer {
     this.#model.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
     this.#model.rotation = rotate;
   }
+
   resetTransform(width = window.innerWidth, height = window.innerHeight) {
+    super.resetTransform();
     if (!this.#model) return;
-    this._scale = 1;
-    this._moveX = 0;
-    this._moveY = 0;
-    this._rotate = 0;
     const s = Math.min(
       width / this.#model.internalModel.originalWidth,
       height / this.#model.internalModel.originalHeight
@@ -161,6 +188,7 @@ export class Live2DRenderer {
     this.#model.position.set(width * 0.5, height * 0.5);
     this.#model.rotation = 0;
   }
+
   captureFrame(width, height, options = {}) {
     if (!this.#model) return null;
     width = Math.round(width);
@@ -193,18 +221,24 @@ export class Live2DRenderer {
       this.#model.position.set(width * 0.5 + userMoveX * scaleFactor, height * 0.5 + userMoveY * scaleFactor);
       this.#model.rotation = userRotate;
     }
-    const renderTexture = PIXI.RenderTexture.create({ width, height });
-    this.#app.renderer.render(this.#model, { renderTexture });
-    const canvas = this.#app.renderer.extract.canvas(renderTexture);
+    if (!this.#renderTexture ||
+      this.#renderTexture.width !== width ||
+      this.#renderTexture.height !== height) {
+      if (this.#renderTexture) this.#renderTexture.destroy(true);
+      this.#renderTexture = PIXI.RenderTexture.create({ width, height });
+    }
+    this.#app.renderer.render(this.#model, { renderTexture: this.#renderTexture });
+    const canvas = this.#app.renderer.extract.canvas(this.#renderTexture);
     this.#model.scale.copyFrom(originalScale);
     this.#model.position.copyFrom(originalPosition);
     this.#model.rotation = originalRotation;
-    renderTexture.destroy(true);
     return canvas;
   }
+
   getAnimations() {
     return this.#animations;
   }
+
   async #filterAnimations() {
     if (!this.#model) return [];
     const motions = this.#model.internalModel.motionManager.definitions;
@@ -232,6 +266,7 @@ export class Live2DRenderer {
     }
     return result.sort(sortByText);
   }
+
   async setAnimation(value) {
     if (this.#disposed || !this.#model) return;
     const [group, index] = value.split(',');
@@ -242,6 +277,7 @@ export class Live2DRenderer {
       console.error('Failed to set animation:', e);
     }
   }
+
   getExpressions() {
     if (!this.#model) return null;
     const expressions = this.#model.internalModel.motionManager.expressionManager?.definitions;
@@ -256,6 +292,7 @@ export class Live2DRenderer {
         .sort(sortByText),
     ];
   }
+
   setExpression(value) {
     if (!this.#model) return;
     if (value === '') {
@@ -266,9 +303,11 @@ export class Live2DRenderer {
       this.#model.expression(Number(value));
     }
   }
+
   getPropertyCategories() {
     return ['parameters', 'parts', 'drawables'];
   }
+
   getPropertyItems(category) {
     if (!this.#model) return [];
     const coreModel = this.#model.internalModel.coreModel;
@@ -315,18 +354,23 @@ export class Live2DRenderer {
     }
     return [];
   }
+
   updatePropertyItem(category, name, index, value) {
     if (!this.#model) return;
     const coreModel = this.#model.internalModel.coreModel;
     if (category === 'parameters') {
       coreModel._parameterValues[index] = value;
+      this.parameterOverrides.set(index, value);
     } else if (category === 'parts') {
       coreModel.setPartOpacityById(name, value ? 1 : 0);
+      this.partOverrides.set(name, value ? 1 : 0);
     } else if (category === 'drawables') {
       if (value) {
         this.#hiddenDrawables.delete(index);
+        this.drawableOverrides.set(index, true);
       } else {
         this.#hiddenDrawables.add(index);
+        this.drawableOverrides.set(index, false);
       }
       if (!this.#opacities && coreModel._model?.drawables?.opacities) {
         const wasmOpacities = coreModel._model.drawables.opacities;
@@ -346,6 +390,7 @@ export class Live2DRenderer {
       this.render();
     }
   }
+
   getAnimationDuration() {
     if (!this.#model) return 0;
     const mqm = this.#model.internalModel.motionManager?.queueManager;
@@ -360,6 +405,7 @@ export class Live2DRenderer {
     }
     return 0;
   }
+
   seekAnimation(progress) {
     if (!this.#model) return;
     const mm = this.#model.internalModel.motionManager;
@@ -371,7 +417,7 @@ export class Live2DRenderer {
         (motion._motionData && motion._motionData.duration) ||
         (motion.getDuration ? motion.getDuration() : -1);
       if (duration > 0 || duration === -1) {
-        if (duration === -1) duration = 3000; // static looping models
+        if (duration === -1) duration = 3000;
         const targetTime = progress * duration;
         const internalModel = this.#model.internalModel;
         if (entry._motion) {
@@ -387,6 +433,7 @@ export class Live2DRenderer {
         const savedStateTime = entry._stateTimeSeconds;
         entry._startTimeSeconds = savedStateTime - targetTime;
         mm.update(internalModel.coreModel, savedStateTime);
+        this.#applyOverrides();
         entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
         internalModel.coreModel.update();
         this.#model.deltaTime = 0;
@@ -397,6 +444,7 @@ export class Live2DRenderer {
       }
     }
   }
+
   getCurrentTime() {
     if (!this.#model) return 0;
     const mqm = this.#model.internalModel.motionManager?.queueManager;
@@ -410,23 +458,43 @@ export class Live2DRenderer {
     }
     return 0;
   }
+
   getFPS() {
-    if (!this.#model) return 30;
+    if (!this.#model) return 60;
     const mqm = this.#model.internalModel.motionManager?.queueManager;
     if (mqm?._motions?.length > 0) {
       const motion = mqm._motions[0]._motion;
       if (motion) {
-        return motion._fps || (motion._motionData && motion._motionData.fps) || 30;
+        return Math.max(60, motion._fps || (motion._motionData && motion._motionData.fps) || 60);
       }
     }
-    return 30;
+    return 60;
   }
+
   setSpeed(speed) {
     this.#speed = speed;
     if (this.#model) {
       this.#model._spive2dSpeed = speed;
     }
   }
+
+  getSyncState() {
+    return {
+      ...super.getSyncState(),
+    };
+  }
+
+  applySyncState(state) {
+    if (!state) return;
+    super.applySyncState(state);
+    if (state.drawableOverrides) {
+      for (const [index, visible] of this.drawableOverrides) {
+        if (visible) this.#hiddenDrawables.delete(index);
+        else this.#hiddenDrawables.add(index);
+      }
+    }
+  }
+
   setPaused(paused) {
     if (!this.#model) return;
     if (paused) {
@@ -442,66 +510,35 @@ export class Live2DRenderer {
       }
     }
   }
-  resumeFromProgress(progress) {
-    if (!this.#model) return;
-    const { group, index } = this.#currentMotion;
-    if (group !== null && index !== null) {
-      this.#model.motion(group, index, 3).then(() => {
-        const mqm = this.#model.internalModel?.motionManager?.queueManager;
-        const entry = mqm?._motions?.[0];
-        if (entry?._motion) {
-          const motion = entry._motion;
-          const duration = motion._loopDurationSeconds ||
-            (motion._motionData && motion._motionData.duration) ||
-            (motion.getDuration ? motion.getDuration() : 0);
-          if (duration > 0) {
-            const targetTime = progress * duration;
-            entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
-          }
-        }
-        if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
-      });
-    } else {
-      if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
-    }
-  }
+
   render() {
     if (this.#model) {
+      this.#applyOverrides();
       this.#model.internalModel.coreModel.update();
     }
     if (this.#app) {
       this.#app.render();
     }
   }
-  stepAnimation(deltaSeconds) {
+
+  #applyOverrides() {
     if (!this.#model) return;
-    const mqm = this.#model.internalModel?.motionManager?.queueManager;
-    const currentMotion = mqm?._motions?.[0]?._motion;
-    if (currentMotion) {
-      currentMotion._fadeInSeconds = 0;
-      currentMotion._fadeOutSeconds = 0;
-      if (currentMotion._motionData?.curves) {
-        for (const curve of currentMotion._motionData.curves) {
-          curve.fadeInTime = -1;
-          curve.fadeOutTime = -1;
-        }
-      }
+    const coreModel = this.#model.internalModel.coreModel;
+    for (const [index, value] of this.parameterOverrides) {
+      coreModel._parameterValues[index] = value;
     }
-    const dtMs = deltaSeconds * 1000.0;
-    this.#model.update(dtMs);
-    this.render();
-    if (this.#app && !this.#model.autoUpdate) {
-      this.#app.render();
+    for (const [name, opacity] of this.partOverrides) {
+      coreModel.setPartOpacityById(name, opacity);
+    }
+    if (this.drawableOverrides.size > 0 && !this.#opacities) {
+      this.getPropertyItems('drawables');
     }
   }
-  async setAlphaMode(_alphaMode) {
-  }
-  setResizeTo(target) {
-    this.#app.resizeTo = target;
-  }
+
   getModel() {
     return this.#model;
   }
+
   getCurrentMotion() {
     return { ...this.#currentMotion };
   }

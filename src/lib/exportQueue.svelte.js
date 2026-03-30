@@ -24,4 +24,8 @@ export const exportQueue = $state({
       }
     }
   },
+  updateWorker(id, worker) {
+    const item = this.items.find(i => i.id === id);
+    if (item) item.worker = worker;
+  },
 });

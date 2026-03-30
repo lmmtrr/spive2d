@@ -6,7 +6,6 @@
   function handleCancel(id) {
     const item = exportQueue.items.find(i => i.id === id);
     if (!item) return;
-    
     if (item.status === 'processing' && item.worker) {
       item.worker.postMessage({ type: 'CANCEL', id });
       item.worker.terminate();
@@ -35,10 +34,11 @@
         </div>
         
         {#if item.status === 'processing'}
+          {@const displayProgress = Math.min(100, Math.max(0, Math.round(item.progress)))}
           <div class="progress-bar-container">
-            <div class="progress-bar" style="width: {item.progress}%;"></div>
+            <div class="progress-bar" style="width: {displayProgress}%;"></div>
           </div>
-          <div class="status-text">{Math.round(item.progress)}%</div>
+          <div class="status-text">{displayProgress}%</div>
         {:else if item.status === 'completed'}
           <div class="status-row">
             <div class="status-text success">{t('completed') || 'Completed'}</div>
@@ -147,7 +147,6 @@
   .progress-bar {
     height: 100%;
     background: #3498db;
-    transition: width 0.1s linear;
   }
 
   .status-text {
