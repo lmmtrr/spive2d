@@ -5,12 +5,12 @@ let currentTasks = {};
 let libsLoaded = false;
 let libsLoadedVersion = null;
 
-async function loadLibraries(rendererType, version = null) {
+async function loadLibraries(rendererType, version = null, libraryBaseUrl = null) {
   if (libsLoaded === rendererType && (rendererType !== 'spine' || libsLoadedVersion === version)) return;
   const isLive2D = rendererType === 'live2d';
   const isSpine = rendererType === 'spine';
   try {
-    const origin = self.location.origin;
+    const origin = libraryBaseUrl || self.location.origin;
     setupWorkerEnv(self);
     if (isLive2D) {
       const scripts = [
@@ -626,8 +626,8 @@ async function processRenderQueue(id) {
 }
 
 async function handleStartTask(id, type, payload) {
-  const { width, height, bitrate, fps, modelUrl, animName, exprName, rendererType, bgBitmap, bgColor, spineVersion, selectedDir, fileNames, isFileJson, marginX, marginY } = payload;
-  await loadLibraries(rendererType, spineVersion);
+  const { width, height, bitrate, fps, modelUrl, animName, exprName, rendererType, bgBitmap, bgColor, spineVersion, selectedDir, fileNames, isFileJson, marginX, marginY, libraryBaseUrl } = payload;
+  await loadLibraries(rendererType, spineVersion, libraryBaseUrl);
   const canvas = new OffscreenCanvas(width, height);
   let renderer = null;
   let renderCanvas = canvas;

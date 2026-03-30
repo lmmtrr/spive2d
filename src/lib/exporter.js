@@ -13,6 +13,8 @@ import {
   createOffscreenCanvas,
   drawBackground
 } from './exportUtils.js';
+import ExporterWorker from './exporter.worker.js?worker';
+import PngEncoderWorker from './pngEncoder.worker.js?worker';
 
 const RECORDING_BITRATE = 12000000;
 const RECORDING_FRAME_RATE = 60;
@@ -20,12 +22,12 @@ const RECORDING_FRAME_RATE = 60;
 let taskIdCounter = 0;
 
 class WorkerPool {
-  constructor(workerUrl, size) {
+  constructor(WorkerClass, size) {
     this.workers = [];
     this.idleWorkers = [];
     this.queue = [];
     for (let i = 0; i < size; i++) {
-      const worker = new Worker(workerUrl, { type: 'module' });
+      const worker = new WorkerClass();
       worker.onmessage = (e) => this._onMessage(i, e);
       this.workers.push({ worker, currentTask: null });
       this.idleWorkers.push(i);
@@ -63,7 +65,7 @@ class WorkerPool {
 
 const hardwareConcurrency = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4;
 const encoderPoolSize = Math.max(2, Math.min(8, hardwareConcurrency - 1));
-const encoderPool = new WorkerPool(new URL('./pngEncoder.worker.js', import.meta.url), encoderPoolSize);
+const encoderPool = new WorkerPool(PngEncoderWorker, encoderPoolSize);
 
 async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
   const safeName = animationName ? animationName.split('.')[0] : 'snapshot';
@@ -147,13 +149,13 @@ export async function exportImage(sceneText, animationName) {
   }
 }
 
-async function prepareExportContext(taskId, baseFilename, workerUrl) {
+async function prepareExportContext(taskId, baseFilename, WorkerClass) {
   const modelInfo = resolveModelInfo();
   if (!modelInfo) {
     exportQueue.updateStatus(taskId, 'error');
     return null;
   }
-  const worker = new Worker(workerUrl, { type: 'module' });
+  const worker = new WorkerClass();
   exportQueue.updateWorker(taskId, worker);
   let backgroundImageToRender = null;
   const backgroundColor = document.body.style.backgroundColor;
@@ -226,7 +228,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     progress: 0,
     status: 'processing'
   });
-  const ctx = await prepareExportContext(taskId, baseFilename, new URL('./exporter.worker.js', import.meta.url));
+  const ctx = await prepareExportContext(taskId, baseFilename, ExporterWorker);
   if (!ctx) return;
   const { rendererType, modelUrl, worker, backgroundImageToRender, backgroundColor, activeRenderer, transform, syncState, spineVersion, selectedDir, fileNames, isFileJson } = ctx;
   const bgBitmap = backgroundImageToRender ? await createImageBitmap(backgroundImageToRender) : null;
@@ -324,7 +326,8 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     fileNames,
     isFileJson,
     marginX,
-    marginY
+    marginY,
+    libraryBaseUrl: window.location.origin
   };
   const cleanVideoPayload = JSON.parse(JSON.stringify(videoPayload));
   cleanVideoPayload.selectedDir = ctx.selectedDirUrl || selectedDir;
@@ -343,7 +346,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     progress: 0,
     status: 'processing'
   });
-  const ctx = await prepareExportContext(taskId, baseFilename, new URL('./exporter.worker.js', import.meta.url));
+  const ctx = await prepareExportContext(taskId, baseFilename, ExporterWorker);
   if (!ctx) return;
   const { rendererType, modelUrl, worker, backgroundImageToRender, backgroundColor, activeRenderer, transform, syncState, spineVersion, selectedDir, fileNames, isFileJson } = ctx;
   const bgBitmap = backgroundImageToRender ? await createImageBitmap(backgroundImageToRender) : null;
@@ -446,7 +449,8 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     fileNames,
     isFileJson,
     marginX,
-    marginY
+    marginY,
+    libraryBaseUrl: window.location.origin
   };
   const cleanPngPayload = JSON.parse(JSON.stringify(pngPayload));
   cleanPngPayload.selectedDir = ctx.selectedDirUrl || selectedDir;
