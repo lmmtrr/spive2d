@@ -685,7 +685,7 @@ async function handleStartTask(id, type, payload) {
       return;
     }
   }
-  currentTasks[id] = {
+  currentTasks.set(id, {
     canvas,
     renderCanvas,
     compositeCtx: (renderCanvas !== canvas) ? canvas.getContext('2d') : null,
@@ -701,7 +701,7 @@ async function handleStartTask(id, type, payload) {
     renderQueue: [],
     isRendering: false,
     rendererType
-  };
+  });
   const finalDuration = renderer ? (renderer._currentDuration || 0.1) : (payload.duration || 0.1);
   const finalFps = (renderer && renderer.getFPS) ? renderer.getFPS() : (payload.fps || 60);
   self.postMessage({ type: 'READY', id, duration: finalDuration, fps: finalFps });
@@ -709,7 +709,7 @@ async function handleStartTask(id, type, payload) {
 }
 
 async function handleFinishVideo(id) {
-  const task = currentTasks[id];
+  const task = currentTasks.get(id);
   if (!task || task.cancelled) return;
   try {
     await task.output.finalize();
@@ -719,7 +719,7 @@ async function handleFinishVideo(id) {
     self.postMessage({ type: 'ERROR', id, error: err.message });
   } finally {
     if (task.renderer) task.renderer.dispose();
-    delete currentTasks[id];
+    currentTasks.delete(id);
   }
 }
 
