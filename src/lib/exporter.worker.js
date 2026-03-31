@@ -1,7 +1,7 @@
 import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
 
-let currentTasks = {};
+let currentTasks = new Map();
 let libsLoaded = false;
 let libsLoadedVersion = null;
 
@@ -575,7 +575,7 @@ class WorkerSpineRenderer {
 }
 
 async function processRenderQueue(id) {
-  const task = currentTasks[id];
+  const task = currentTasks.get(id);
   if (!task || task.isRendering || task.renderQueue.length === 0) return;
   task.isRendering = true;
   try {
@@ -724,7 +724,7 @@ async function handleFinishVideo(id) {
 }
 
 async function handleCancelTask(id) {
-  const task = currentTasks[id];
+  const task = currentTasks.get(id);
   if (!task) return;
   task.cancelled = true;
   if (task.output) {
@@ -734,7 +734,7 @@ async function handleCancelTask(id) {
     task.renderer.dispose();
   }
   task.renderQueue = [];
-  delete currentTasks[id];
+  currentTasks.delete(id);
 }
 
 self.onmessage = async (e) => {
@@ -748,7 +748,7 @@ self.onmessage = async (e) => {
       await handleStartTask(id, type, payload);
       break;
     case 'RENDER_FRAME': {
-      const task = currentTasks[id];
+      const task = currentTasks.get(id);
       if (!task || task.cancelled || !task.ready) return;
       task.renderQueue.push(payload);
       processRenderQueue(id);
@@ -756,7 +756,7 @@ self.onmessage = async (e) => {
     }
     case 'ADD_FRAME_VIDEO':
     case 'PROCESS_FRAME_PNG': {
-      const task = currentTasks[id];
+      const task = currentTasks.get(id);
       if (!task || task.cancelled || !task.ready) return;
       const { bitmap, containerTime, frameIndex } = payload;
       const ctx = task.canvas.getContext('2d');
@@ -784,9 +784,9 @@ self.onmessage = async (e) => {
       await handleFinishVideo(id);
       break;
     case 'FINISH_PNG_SEQUENCE': {
-      const task = currentTasks[id];
+      const task = currentTasks.get(id);
       if (task && task.renderer) task.renderer.dispose();
-      delete currentTasks[id];
+      currentTasks.delete(id);
       break;
     }
   }
