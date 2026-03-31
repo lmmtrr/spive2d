@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.19] - 2026-03-31
+
+### Fixed
+
+- Resolve worker bundling and library loading issues in production environments
+
 ## [0.1.18] - 2026-03-30
 
 ### Added
