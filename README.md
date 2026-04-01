@@ -30,7 +30,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | 💾 Export Animation      | `C`                        |
 | ⚙️ Open/Close Settings   | `E`                        |
 | 📝 Append to List        | `V`                        |
-| ❌ Exit            | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
+| ❌ Exit                  | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
 
@@ -61,8 +61,7 @@ To set up a local development environment, you'll need to install the following 
 
 **Prerequisites:**
 
-- **Node.js & npm**: [Download & Install](https://nodejs.org/en/download)
-  - _See also: [npm documentation](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)_
+- **Bun**: [Install Bun](https://bun.sh)
 - **Rust**: [Install Rust](https://www.rust-lang.org/tools/install)
 - **Tauri**: Follow the [Tauri setup guide](https://v2.tauri.app/start/prerequisites/) for your specific OS.
 
@@ -78,18 +77,19 @@ To set up a local development environment, you'll need to install the following 
 2.  **Install dependencies:**
 
     ```bash
-    npm install
+    bun install
     ```
 
 3.  **Run the development server:**
 
     ```bash
-    npm run tauri dev
+    bun run tauri dev
     ```
 
 4.  **Build the application:**
+
     ```bash
-    npm run tauri build
+    bun run tauri build
     ```
 
 ## 🌐 Supported Versions

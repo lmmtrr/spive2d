@@ -61,8 +61,7 @@ chmod +x /path/to/spive2d_linux_x64
 
 **前提条件:**
 
-- **Node.js & npm**: [ダウンロード＆インストール](https://nodejs.org/ja/download)
-  - _参考: [npm ドキュメント](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)_
+- **Bun**: [Bun のインストール](https://bun.sh)
 - **Rust**: [Rust のインストール](https://www.rust-lang.org/ja/tools/install)
 - **Tauri**: お使いのOSに合わせて [Tauri セットアップガイド](https://v2.tauri.app/start/prerequisites/) を参照してください。
 
@@ -78,18 +77,19 @@ chmod +x /path/to/spive2d_linux_x64
 2.  **依存関係をインストール:**
 
     ```bash
-    npm install
+    bun install
     ```
 
 3.  **開発サーバーを起動:**
 
     ```bash
-    npm run tauri dev
+    bun run tauri dev
     ```
 
 4.  **アプリケーションをビルド:**
+
     ```bash
-    npm run tauri build
+    bun run tauri build
     ```
 
 ## 🌐 対応バージョン

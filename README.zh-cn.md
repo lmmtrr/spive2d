@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/c8ad28e7-8414-4153-9585-e8c9a8039354
 | 💾 导出动画      | `C`                        |
 | ⚙️ 打开/关闭设置 | `E`                        |
 | 📝 添加到列表    | `V`                        |
-| ❌ 退出     | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
+| ❌ 退出          | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **添加到列表**: 将当前场景文本保存到列表中。请参考 [`py/copy_by_list.py`](py/copy_by_list.py) 来处理导出的列表。
 
@@ -61,10 +61,9 @@ chmod +x /path/to/spive2d_linux_x64
 
 **环境准备:**
 
-- **Node.js & npm**: [下载并安装](https://nodejs.org/zh-cn/download)
-  - _另请参阅: [npm 文档](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)_
+- **Bun**: [安装 Bun](https://bun.sh)
 - **Rust**: [安装 Rust](https://www.rust-lang.org/zh-CN/tools/install)
-- **Tauri**: 根据您的操作系统，遵循 [Tauri 设置指南](https://v2.tauri.app/zh-cn/start/prerequisites/)。
+- **Tauri**: 根据您的操作系统，遵循 [Tauri 设置指南](https://v2.tauri.app/start/prerequisites/)。
 
 **设置步骤:**
 
@@ -78,19 +77,19 @@ chmod +x /path/to/spive2d_linux_x64
 2.  **安装依赖:**
 
     ```bash
-    npm install
+    bun install
     ```
 
 3.  **运行开发服务器:**
 
     ```bash
-    npm run tauri dev
+    bun run tauri dev
     ```
 
 4.  **构建应用程序:**
 
     ```bash
-    npm run tauri build
+    bun run tauri build
     ```
 
 ## 🌐 支持版本
