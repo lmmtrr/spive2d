@@ -9,6 +9,7 @@ export function setupWorkerEnv(self) {
       this.width = 0;
       this.height = 0;
       this.complete = false;
+      this.premultiplyAlpha = self.useNonePMA ? 'none' : 'premultiply';
     }
     set src(url) {
       this._src = url;
@@ -19,7 +20,7 @@ export function setupWorkerEnv(self) {
           if (!res.ok) throw new Error(`Failed to load image: ${url}`);
           return res.blob();
         })
-        .then(blob => createImageBitmap(blob))
+        .then(blob => createImageBitmap(blob, { premultiplyAlpha: this.premultiplyAlpha }))
         .then(bitmap => {
           this.width = bitmap.width;
           this.height = bitmap.height;

@@ -19,28 +19,14 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
         origin + '/lib/live2d.min.js',
         origin + '/lib/index.min.js'
       ];
-      const oldLog = console.log;
-      console.log = (...args) => {
-        const firstArg = args[0];
-        if (typeof firstArg === 'string' && (firstArg.includes('[CSM]') || firstArg.includes('Live2D Cubism') || firstArg.includes('Live2D 2.1'))) {
-          return;
-        }
-        oldLog.apply(console, args);
-      };
-      try {
-        for (const url of scripts) {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-          let code = await response.text();
-          code += "\n;if(typeof PIXI !== 'undefined') self.PIXI = PIXI; if(typeof Live2DCubismCore !== 'undefined') self.Live2DCubismCore = Live2DCubismCore; if(typeof Live2D !== 'undefined') self.Live2D = Live2D;";
-          (0, eval)(code);
-        }
-      } finally {
-        console.log = oldLog;
+      for (const url of scripts) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+        let code = await response.text();
+        code += "\n;if(typeof PIXI !== 'undefined') self.PIXI = PIXI; if(typeof Live2DCubismCore !== 'undefined') self.Live2DCubismCore = Live2DCubismCore; if(typeof Live2D !== 'undefined') self.Live2D = Live2D;";
+        (0, eval)(code);
       }
-      if (!self.PIXI) {
-        throw new Error('PIXI failed to initialize after eval');
-      }
+      if (!self.PIXI) throw new Error('PIXI failed to initialize');
       self.setupPIXISettings(self.PIXI);
     } else if (isSpine && version) {
       const url = `${origin}/lib/spine-webgl-${version}.js`;
@@ -49,73 +35,12 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
       let code = await response.text();
       code += "\n;if(typeof spine !== 'undefined') self.spine = spine;";
       (0, eval)(code);
-      if (!self.spine) {
-        throw new Error(`Spine failed to initialize after eval (version: ${version})`);
-      }
+      if (!self.spine) throw new Error(`Spine failed to initialize`);
       if (version[0] === '3') {
-        if (self.spine.webgl) {
-          Object.assign(self.spine, self.spine.webgl);
-        }
-        if (!self.spine.core) {
-          self.spine.core = self.spine;
-        }
+        if (self.spine.webgl) Object.assign(self.spine, self.spine.webgl);
+        if (!self.spine.core) self.spine.core = self.spine;
       }
       self.spineLib = self.spine;
-      if (version && parseFloat(version) === 4.2) {
-        const AMB = self.spine.AssetManagerBase || self.spine.AssetManager;
-        if (AMB && AMB.prototype && AMB.prototype.remove) {
-          const resolveAssetStore = function (manager) {
-            if (manager && manager.cache && manager.cache.assets) {
-              return {
-                assets: manager.cache.assets,
-                assetsLoaded: manager.cache.assetsLoaded,
-                assetsRefCount: manager.cache.assetsRefCount,
-                reset: () => {
-                  manager.cache.assets = {};
-                  if (manager.cache.assetsLoaded) manager.cache.assetsLoaded = {};
-                  if (manager.cache.assetsRefCount) manager.cache.assetsRefCount = {};
-                }
-              };
-            }
-            if (manager && manager.assets) {
-              return {
-                assets: manager.assets,
-                reset: () => {
-                  manager.assets = {};
-                }
-              };
-            }
-            return null;
-          };
-          AMB.prototype.remove = function (path) {
-            let fullPath = path;
-            if (this.pathPrefix && path.indexOf(this.pathPrefix) !== 0) {
-              fullPath = this.pathPrefix + path;
-            }
-            const store = resolveAssetStore(this);
-            if (!store || !store.assets) return null;
-            const asset = store.assets[fullPath];
-            if (asset) {
-              if (typeof asset.dispose === 'function' && !asset._disposed) {
-                asset._disposed = true;
-                asset.dispose();
-              }
-              delete store.assets[fullPath];
-              if (store.assetsRefCount) delete store.assetsRefCount[fullPath];
-              if (store.assetsLoaded) delete store.assetsLoaded[fullPath];
-            }
-            return asset;
-          };
-          AMB.prototype.removeAll = function () {
-            const store = resolveAssetStore(this);
-            if (!store || !store.assets) return;
-            for (let path in store.assets) {
-              this.remove(path);
-            }
-            store.reset();
-          };
-        }
-      }
       libsLoadedVersion = version;
     }
     libsLoaded = rendererType;
@@ -153,8 +78,6 @@ class WorkerLive2DRenderer {
       }
     };
     this.model = null;
-    this.bgSprite = null;
-    this.bgRect = null;
     this._currentDuration = 0.1;
     this.parameterOverrides = new Map();
     this.partOverrides = new Map();
@@ -163,33 +86,7 @@ class WorkerLive2DRenderer {
     this.opacities = null;
     this.marginX = 0;
     this.marginY = 0;
-  }
-
-  setupBackground(bgBitmap, bgColor) {
-    if (bgColor) {
-      this.bgRect = new PIXI.Graphics();
-      this.bgRect.beginFill(this.parseColor(bgColor));
-      this.bgRect.drawRect(0, 0, this.app.view.width, this.app.view.height);
-      this.bgRect.endFill();
-      this.app.stage.addChildAt(this.bgRect, 0);
-    }
-    if (bgBitmap) {
-      const texture = PIXI.Texture.from(bgBitmap);
-      this.bgSprite = new PIXI.Sprite(texture);
-      this.bgSprite.width = this.app.view.width;
-      this.bgSprite.height = this.app.view.height;
-      this.app.stage.addChildAt(this.bgSprite, bgColor ? 1 : 0);
-    }
-  }
-
-  parseColor(colorStr) {
-    if (!colorStr) return 0x000000;
-    if (colorStr.startsWith('#')) return parseInt(colorStr.slice(1), 16);
-    if (colorStr.startsWith('rgb')) {
-      const match = colorStr.match(/\d+/g);
-      if (match) return (match[0] << 16) | (match[1] << 8) | match[2];
-    }
-    return 0x000000;
+    this._lastSeekTime = 0;
   }
 
   applySyncState(state) {
@@ -269,7 +166,8 @@ class WorkerLive2DRenderer {
       }
       try {
         await this.model.motion(group, index, PIXI.live2d.MotionPriority.FORCE);
-        const mqm = this.model.internalModel.motionManager?.queueManager;
+        const mm = this.model.internalModel.motionManager;
+        const mqm = mm?.queueManager;
         if (mqm?._motions?.length > 0) {
           const entry = mqm._motions[0];
           const m = entry._motion;
@@ -277,6 +175,14 @@ class WorkerLive2DRenderer {
             this._currentDuration = m._loopDurationSeconds ||
               (m._motionData && m._motionData.duration) ||
               (m.getDuration ? m.getDuration() : 0.1);
+            m._fadeInSeconds = 0;
+            m._fadeOutSeconds = 0;
+            if (m._motionData?.curves) {
+              for (const curve of m._motionData.curves) {
+                curve.fadeInTime = -1;
+                curve.fadeOutTime = -1;
+              }
+            }
           }
         } else {
           this._currentDuration = 0.1;
@@ -316,6 +222,24 @@ class WorkerLive2DRenderer {
     this.model.rotation = rotation || 0;
   }
 
+  seek(progress) {
+    if (this.model) {
+      const mm = this.model.internalModel.motionManager;
+      const mqm = mm?.queueManager;
+      const entry = mqm?._motions?.[0];
+      if (entry?._motion) {
+        const targetTime = progress * this._currentDuration;
+        const savedStateTime = entry._stateTimeSeconds;
+        entry._startTimeSeconds = savedStateTime - targetTime;
+        mm.update(this.model.internalModel.coreModel, savedStateTime);
+        this.applyOverrides();
+        entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
+        this.model.internalModel.coreModel.update();
+        this.model.deltaTime = 0;
+      }
+    }
+  }
+
   render() {
     this.app.render();
   }
@@ -325,17 +249,7 @@ class WorkerLive2DRenderer {
       this.app.stage.removeChild(this.model);
       this.model.destroy();
     }
-    if (this.bgSprite) {
-      this.app.stage.removeChild(this.bgSprite);
-      this.bgSprite.destroy(true);
-    }
-    if (this.bgRect) {
-      this.app.stage.removeChild(this.bgRect);
-      this.bgRect.destroy();
-    }
-    if (this.app) {
-      this.app.destroy(false);
-    }
+    this.app.destroy(true);
   }
 }
 
@@ -350,157 +264,189 @@ class WorkerSpineRenderer {
     this.mvp = new spineLib.Matrix4();
     this.assetManager = null;
     this.skeletons = {};
-    this.alphaMode = 'unpack';
+    this.dirName = '';
+    this.fileNames = [];
     this.transform = { scale: 1, x: 0, y: 0, rotation: 0 };
-    this.syncState = null;
-    this.parameterOverrides = new Map();
-    this.partOverrides = new Map();
-    this.drawableOverrides = new Map();
     this._currentDuration = 0.1;
     this.attachmentsCache = {};
-    this.dirName = '';
     this.marginX = 0;
     this.marginY = 0;
-    this.bgColor = null;
-    this.bgBitmap = null;
-    this.fileNames = [];
+    this.alphaMode = 'unpack';
   }
 
-  setupBackground(bgBitmap, bgColor) {
-    this.bgBitmap = bgBitmap;
-    this.bgColor = bgColor;
-  }
-
-  async load(dirName, fileNames, isFileJson) {
+  async load(dirName, fileNames, isFileJson, alphaMode = 'unpack') {
+    this.dirName = dirName;
     this.fileNames = fileNames;
-    const isWebUrl = dirName.startsWith('http://') || dirName.startsWith('https://') || dirName.startsWith('asset://');
+    this.alphaMode = alphaMode;
+    const isWebUrl = dirName.startsWith('http');
     this.assetManager = new this.spine.AssetManager(this.ctx.gl, isWebUrl ? dirName : '');
+    const gl = this.ctx.gl;
+    if (gl) {
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
+    }
     const baseName = fileNames[0];
     const skelExt = fileNames[1];
     const atlasExt = fileNames[2];
-    const makePath = (name, ext) => isWebUrl ? `${name}${ext}` : `${dirName}${name}${ext}`;
-
     const loadModel = (name) => {
-      if (!isFileJson) this.assetManager.loadBinary(makePath(name, skelExt));
-      else this.assetManager.loadText(makePath(name, skelExt));
-      this.assetManager.loadTextureAtlas(makePath(name, atlasExt));
+      if (!isFileJson) this.assetManager.loadBinary(name + skelExt);
+      else this.assetManager.loadText(name + skelExt);
+      this.assetManager.loadTextureAtlas(name + atlasExt);
     };
-
-    loadModel(baseName);
-    for (let i = 3; i < fileNames.length; i++) {
-      const name2 = `${baseName}${fileNames[i].split('.')[0]}`;
-      loadModel(name2);
+    if (baseName === 'MERGED') {
+      for (let i = 3; i < fileNames.length; i++) loadModel(fileNames[i]);
+    } else {
+      loadModel(baseName);
+      for (let i = 3; i < fileNames.length; i++) loadModel(baseName + fileNames[i].split('.')[0]);
     }
-
-    await new Promise(resolve => {
+    await new Promise((resolve, reject) => {
+      const start = Date.now();
       const check = () => {
-        if (this.assetManager.isLoadingComplete()) resolve();
-        else setTimeout(check, 10);
+        if (this.assetManager.isLoadingComplete()) {
+          const errors = this.assetManager.getErrors();
+          if (Object.keys(errors).length > 0) reject(new Error("Loading failed: " + JSON.stringify(errors)));
+          else resolve();
+        } else if (Date.now() - start > 10000) reject(new Error("Loading timeout"));
+        else setTimeout(check, 100);
       };
       check();
     });
-
-    this.skeletons['0'] = this._loadSkeleton(baseName, fileNames, isFileJson);
-    for (let i = 3; i < fileNames.length; i++) {
-      const name2 = `${baseName}${fileNames[i].split('.')[0]}`;
-      this.skeletons[String(i - 2)] = this._loadSkeleton(name2, fileNames, isFileJson);
+    if (baseName === 'MERGED') {
+      for (let i = 3; i < fileNames.length; i++) {
+        this.skeletons[String(i - 3)] = await this._loadSkeleton(fileNames[i], fileNames, isFileJson);
+      }
+    } else {
+      this.skeletons['0'] = await this._loadSkeleton(baseName, fileNames, isFileJson);
+      for (let i = 3; i < fileNames.length; i++) {
+        const name2 = baseName + fileNames[i].split('.')[0];
+        this.skeletons[String(i - 2)] = await this._loadSkeleton(name2, fileNames, isFileJson);
+      }
     }
     this._currentDuration = this.getAnimationDuration();
   }
 
-  _loadSkeleton(fileName, fileNames, isFileJson) {
-    const atlasPath = this.dirName.startsWith('http') ? `${fileName}${fileNames[2]}` : `${this.dirName}${fileName}${fileNames[2]}`;
-    const atlas = this.assetManager.get(atlasPath);
-    const atlasLoader = new this.spine.AtlasAttachmentLoader(atlas);
-    const skeletonLoader = isFileJson ? new this.spine.SkeletonJson(atlasLoader) : new this.spine.SkeletonBinary(atlasLoader);
-    const skeletonData = skeletonLoader.readSkeletonData(this.assetManager.get(this.dirName.startsWith('http') ? `${fileName}${fileNames[1]}` : `${this.dirName}${fileName}${fileNames[1]}`));
+  async _loadSkeleton(fileName, fileNames, isFileJson) {
+    const skelFile = fileName + fileNames[1];
+    const atlasFile = fileName + fileNames[2];
+    const atlas = this.assetManager.get(atlasFile);
+    if (!atlas) throw new Error("Atlas not found: " + atlasFile);
+
+    if (atlas.regions) {
+      atlas.regions.forEach(r => { if (r.name) r.name = r.name.trim(); });
+      const orig = atlas.findRegion;
+      atlas.findRegion = function(name) {
+        let res = orig.call(this, name);
+        if (!res && name) res = orig.call(this, name.trim());
+        return res;
+      };
+    }
+
+    await this._resizeAtlasPages(atlas, atlasFile);
+
+    const skeletonData = (isFileJson ? new this.spine.SkeletonJson(new this.spine.AtlasAttachmentLoader(atlas)) : new this.spine.SkeletonBinary(new this.spine.AtlasAttachmentLoader(atlas))).readSkeletonData(this.assetManager.get(skelFile));
     const skeleton = new this.spine.Skeleton(skeletonData);
     let initialSkinName;
-    if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1)
-      initialSkinName = skeleton.data.skins[1].name;
-    else
-      initialSkinName = skeleton.data.skins[0].name;
+    if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1) initialSkinName = skeleton.data.skins[1].name;
+    else initialSkinName = skeleton.data.skins[0].name;
     const newSkin = new this.spine.Skin('_');
     const initialSkin = skeleton.data.findSkin(initialSkinName);
     if (initialSkin) newSkin.addSkin(initialSkin);
     skeleton.setSkin(newSkin);
-    const bounds = this._calculateBounds(skeleton);
-    skeleton.setToSetupPose();
     skeleton.updateWorldTransform(2);
-    const stateData = new this.spine.AnimationStateData(skeleton.data);
-    const state = new this.spine.AnimationState(stateData);
-    return { skeleton, state, bounds };
-  }
-
-  _calculateBounds(skeleton) {
-    const offset = new this.spine.Vector2();
-    const size = new this.spine.Vector2();
-    skeleton.setToSetupPose();
-    skeleton.updateWorldTransform(2);
+    const state = new this.spine.AnimationState(new this.spine.AnimationStateData(skeleton.data));
+    const offset = new this.spine.Vector2(), size = new this.spine.Vector2();
     skeleton.getBounds(offset, size, []);
-    return { offset, size };
+    return { skeleton, state, bounds: { offset, size } };
   }
 
-  applySyncState(state) {
-    if (!state) return;
-    this.syncState = state;
-    if (state.activeSkins) {
-      const names = state.activeSkins;
-      for (const key in this.skeletons) {
-        const skeleton = this.skeletons[key]?.skeleton;
-        if (skeleton) {
-          const newSkin = new this.spine.Skin('_');
-          for (const skinName of names) {
-            const skin = skeleton.data.findSkin(skinName);
-            if (skin) newSkin.addSkin(skin);
-          }
-          skeleton.setSkin(newSkin);
-          skeleton.setToSetupPose();
+  async _resizeAtlasPages(atlas, atlasPath) {
+    let atlasText = null;
+    try {
+      const isWebUrl = this.dirName.startsWith('http');
+      const url = isWebUrl ? this.dirName + atlasPath : atlasPath;
+      const res = await fetch(url);
+      if (res.ok) atlasText = await res.text();
+    } catch (e) {
+      console.warn('[WorkerSpineRenderer] Could not fetch atlas text for resize check:', e);
+    }
+    if (!atlasText) return;
+
+    const declaredSizes = this._parseAtlasDeclaredSizes(atlasText);
+    const gl = this.ctx.gl;
+    const resizedPages = new Set();
+    for (const page of atlas.pages) {
+      const tex = page.texture;
+      if (!tex || !tex.getImage) continue;
+      const img = tex.getImage();
+      if (!img) continue;
+      const declared = declaredSizes.get(page.name);
+      if (!declared) continue;
+      if (img.width === declared.width && img.height === declared.height) continue;
+
+      const canvas = new OffscreenCanvas(declared.width, declared.height);
+      const ctx2d = canvas.getContext('2d');
+      ctx2d.imageSmoothingEnabled = false;
+      ctx2d.drawImage(img, 0, 0, declared.width, declared.height);
+      tex._image = canvas;
+      tex.bind();
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+      page.width = declared.width;
+      page.height = declared.height;
+      resizedPages.add(page);
+    }
+    if (resizedPages.size > 0 && atlas.regions) {
+      for (const region of atlas.regions) {
+        if (!resizedPages.has(region.page)) continue;
+        const pw = region.page.width;
+        const ph = region.page.height;
+        region.u = region.x / pw;
+        region.v = region.y / ph;
+        const isRotated = region.degrees === 90 || region.rotate === true;
+        if (isRotated) {
+          region.u2 = (region.x + region.height) / pw;
+          region.v2 = (region.y + region.width) / ph;
+        } else {
+          region.u2 = (region.x + region.width) / pw;
+          region.v2 = (region.y + region.height) / ph;
         }
       }
     }
-    if (state.attachmentsCache) {
-      this.attachmentsCache = state.attachmentsCache;
-    }
-    if (state.parameterOverrides) {
-      this.parameterOverrides = new Map(state.parameterOverrides);
-    }
-    if (state.partOverrides) {
-      this.partOverrides = new Map(state.partOverrides);
-    }
-    if (state.drawableOverrides) {
-      this.drawableOverrides = new Map(state.drawableOverrides);
-    }
   }
 
-  async setAnimation(value) {
-    if (!value) return;
-    for (const key in this.skeletons) {
-      const { skeleton, state } = this.skeletons[key];
-      state.setAnimation(0, value, true);
+  _parseAtlasDeclaredSizes(atlasText) {
+    const sizes = new Map();
+    const lines = atlasText.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line.endsWith('.png') && !line.endsWith('.jpg') && !line.endsWith('.jpeg') && !line.endsWith('.webp')) continue;
+      const pageName = line;
+      for (let j = i + 1; j < lines.length; j++) {
+        const entry = lines[j].trim();
+        if (!entry || (!entry.includes(':') && (entry.endsWith('.png') || entry.endsWith('.jpg')))) break;
+        const sizeMatch = entry.match(/^size\s*:\s*(\d+)\s*,\s*(\d+)/);
+        if (sizeMatch) {
+          sizes.set(pageName, { width: parseInt(sizeMatch[1]), height: parseInt(sizeMatch[2]) });
+          break;
+        }
+      }
     }
+    return sizes;
+  }
+
+  getAnimationDuration() {
+    const s = this.skeletons['0']?.state;
+    return (s && s.tracks[0]?.animation?.duration) || 0.1;
+  }
+
+  setAnimation(value) {
+    for (const k in this.skeletons) this.skeletons[k].state.setAnimation(0, value, true);
     this._currentDuration = this.getAnimationDuration();
   }
 
-  setExpression(value) { }
-
-  getAnimationDuration() {
-    const state = this.skeletons['0']?.state;
-    if (state && state.tracks[0] && state.tracks[0].animation) {
-      return state.tracks[0].animation.duration;
-    }
-    return 0.1;
-  }
-
-  getFPS() { return 60; }
-
-  setTransform(scale, x, y, rotation) {
-    this.transform = { scale, x, y, rotation };
-  }
+  setTransform(scale, x, y, rotation) { this.transform = { scale, x, y, rotation }; }
 
   seek(progress) {
-    for (const key in this.skeletons) {
-      const { skeleton, state } = this.skeletons[key];
+    for (const k in this.skeletons) {
+      const { skeleton, state } = this.skeletons[k];
       const entry = state.tracks[0];
       if (entry) {
         entry.trackTime = entry.animation.duration * progress;
@@ -511,357 +457,134 @@ class WorkerSpineRenderer {
   }
 
   render() {
-    const gl = this.ctx.gl;
-    const { width, height } = this.canvas;
-    const dpr = 1;
-    this._updateMVP(width, height, dpr);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    const sortedKeys = Object.keys(this.skeletons).sort((a, b) => {
-      const getLayer = (k) => {
-        if (k === '0') return 0;
-        const index = parseInt(k) + 2;
-        const name = (this.fileNames[index] || '').toLowerCase();
-        if (name.includes('_fg')) return 1;
-        if (name.includes('_bg')) return -1;
-        return -0.5;
+    const gl = this.ctx.gl, { width, height } = this.canvas;
+    this._updateMVP(width, height);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    const baseName = this.fileNames[0];
+    const keys = Object.keys(this.skeletons).sort((a, b) => {
+      const getL = (k) => {
+        if (baseName !== 'MERGED' && k === '0') return 0;
+        const name = (this.fileNames[baseName === 'MERGED' ? parseInt(k) + 3 : parseInt(k) + 2] || '').toLowerCase();
+        return name.includes('_fg') ? 1 : (name.includes('_bg') ? -1 : 0);
       };
-      const la = getLayer(a);
-      const lb = getLayer(b);
-      if (la !== lb) return la - lb;
-      return parseInt(b) - parseInt(a);
+      const la = getL(a), lb = getL(b);
+      return la !== lb ? la - lb : parseInt(a) - parseInt(b);
     });
-    for (const key of sortedKeys) {
-      const { skeleton, state } = this.skeletons[key];
-      this._syncHiddenAttachments(skeleton, key);
-      this.applyOverrides(skeleton);
+    for (const k of keys) {
+      const { skeleton } = this.skeletons[k];
+      this._syncHidden(skeleton, k);
       this.shader.bind();
       this.shader.setUniformi(this.spine.Shader.SAMPLER, 0);
       this.shader.setUniform4x4f(this.spine.Shader.MVP_MATRIX, this.mvp.values);
       this.batcher.begin(this.shader);
-      this.skeletonRenderer.premultipliedAlpha = true;
+      this.skeletonRenderer.premultipliedAlpha = (this.alphaMode === 'unpack' || this.alphaMode === 'pma');
       this.skeletonRenderer.draw(this.batcher, skeleton);
       this.batcher.end();
-      this.shader.unbind();
     }
   }
 
-  _updateMVP(canvasWidth, canvasHeight, dpr) {
-    const logicalWidth = canvasWidth / dpr;
-    const logicalHeight = canvasHeight / dpr;
+  _updateMVP(w, h) {
     const bounds = this.skeletons['0'].bounds;
-    const centerX = bounds.offset.x + bounds.size.x * 0.5;
-    const centerY = bounds.offset.y + bounds.size.y * 0.5;
-    const scaleX = bounds.size.x / (logicalWidth - 2 * this.marginX);
-    const scaleY = bounds.size.y / (logicalHeight - 2 * this.marginY);
-    let scale = Math.max(scaleX, scaleY);
-    const { scale: userScale, x: userMoveX, y: userMoveY, rotation: userRotate } = this.transform;
-    scale /= userScale;
-    const width = logicalWidth * scale;
-    const height = logicalHeight * scale;
-    const viewCenterX = centerX - userMoveX * scale;
-    const viewCenterY = centerY + userMoveY * scale;
-    this.mvp.ortho2d(viewCenterX - width * 0.5, viewCenterY - height * 0.5, width, height);
-    if (userRotate) {
-      const cos = Math.cos(Math.PI * userRotate);
-      const sin = Math.sin(Math.PI * userRotate);
-      const t1 = new this.spine.Matrix4();
-      t1.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, centerX, centerY, 0, 1]);
-      const rot = new this.spine.Matrix4();
-      rot.set([cos, -sin, 0, 0, sin, cos, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-      const t2 = new this.spine.Matrix4();
-      t2.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -centerX, -centerY, 0, 1]);
-      this.mvp.multiply(t1);
-      this.mvp.multiply(rot);
-      this.mvp.multiply(t2);
+    const { scale, x, y, rotation } = this.transform;
+    const centerX = bounds.offset.x + bounds.size.x * 0.5, centerY = bounds.offset.y + bounds.size.y * 0.5;
+    let s = Math.max(bounds.size.x / (w - 2 * this.marginX), bounds.size.y / (h - 2 * this.marginY)) / scale;
+    this.mvp.ortho2d(centerX - x * s - (w * s) * 0.5, centerY + y * s - (h * s) * 0.5, w * s, h * s);
+    if (rotation) {
+      const cos = Math.cos(Math.PI * rotation), sin = Math.sin(Math.PI * rotation);
+      const t1 = new this.spine.Matrix4(); t1.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, centerX, centerY, 0, 1]);
+      const rot = new this.spine.Matrix4(); rot.set([cos, -sin, 0, 0, sin, cos, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      const t2 = new this.spine.Matrix4(); t2.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -centerX, -centerY, 0, 1]);
+      this.mvp.multiply(t1); this.mvp.multiply(rot); this.mvp.multiply(t2);
     }
-    this.ctx.gl.viewport(0, 0, canvasWidth, canvasHeight);
+    this.ctx.gl.viewport(0, 0, w, h);
   }
 
-  _syncHiddenAttachments(skeleton, id) {
-    if (!this.attachmentsCache) return;
-    Object.values(this.attachmentsCache).forEach(([slotIndex, cachedAttachment]) => {
-      if (cachedAttachment.isSkeleton) return;
-      const targetSkelId = cachedAttachment.skeletonId || '0';
-      if (String(targetSkelId) !== String(id)) return;
-      const slot = skeleton.slots[slotIndex];
-      if (slot && slot.attachment && (slot.attachment.name === cachedAttachment.name)) {
-        slot.attachment = null;
-      }
+  _syncHidden(skeleton, id) {
+    Object.values(this.attachmentsCache).forEach(([idx, att]) => {
+      if (!att.isSkeleton && String(att.skeletonId || '0') === String(id) && skeleton.slots[idx]?.attachment?.name === att.name) skeleton.slots[idx].attachment = null;
     });
-  }
-
-  applyOverrides(skeleton) {
-    if (this.parameterOverrides.size > 0) {
-      const items = this._getParameterItems(skeleton);
-      for (const [name, value] of this.parameterOverrides.entries()) {
-        const item = items.find(i => i.name === name);
-        if (item && item._target && item._prop) {
-          item._target[item._prop] = value;
-        }
-      }
-    }
-  }
-
-  _getParameterItems(skel) {
-    if (!skel) return [];
-    const items = [];
-    if (skel.ikConstraints) {
-      for (const ik of skel.ikConstraints) {
-        items.push({ name: `IK: ${ik.data.name}`, _target: ik, _prop: 'mix' });
-      }
-    }
-    if (skel.transformConstraints) {
-      for (const tc of skel.transformConstraints) {
-        for (const prop of ['mixRotate', 'mixX', 'mixY', 'mixScaleX', 'mixScaleY', 'mixShearY']) {
-          if (tc[prop] !== undefined) {
-            const label = prop.replace(/([A-Z])/g, ' $1').trim();
-            items.push({ name: `TF ${tc.data.name}: ${label}`, _target: tc, _prop: prop });
-          }
-        }
-      }
-    }
-    if (skel.pathConstraints) {
-      for (const pc of skel.pathConstraints) {
-        for (const prop of ['mixRotate', 'mixX', 'mixY']) {
-          if (pc[prop] !== undefined) {
-            const label = prop.replace(/([A-Z])/g, ' $1').trim();
-            items.push({ name: `Path ${pc.data.name}: ${label}`, _target: pc, _prop: prop });
-          }
-        }
-      }
-    }
-    if (skel.bones) {
-      for (const bone of skel.bones) {
-        items.push({ name: `Bone ${bone.data.name}: x`, _target: bone, _prop: 'x' });
-        items.push({ name: `Bone ${bone.data.name}: y`, _target: bone, _prop: 'y' });
-      }
-    }
-    return items;
-  }
-
-  dispose() {
-    if (this.assetManager && typeof this.assetManager.dispose === 'function') this.assetManager.dispose();
-    if (this.batcher && typeof this.batcher.dispose === 'function') this.batcher.dispose();
-    if (this.shader && typeof this.shader.dispose === 'function') this.shader.dispose();
-    if (this.ctx && typeof this.ctx.dispose === 'function') this.ctx.dispose();
   }
 }
 
-async function processRenderQueue(id) {
-  const task = currentTasks.get(id);
-  if (!task || task.isRendering || task.renderQueue.length === 0) return;
-  task.isRendering = true;
+async function processQueue(id) {
+  const t = currentTasks.get(id);
+  if (!t || t.isRendering || t.renderQueue.length === 0) return;
+  t.isRendering = true;
   try {
-    while (task.renderQueue.length > 0) {
-      const payload = task.renderQueue.shift();
-      const { sampleTime, containerTime, sequence } = payload;
-      const delta = (sampleTime - task.lastSampleTime) * 1000;
-      task.lastSampleTime = sampleTime;
-      if (task.renderer) {
-        if (task.rendererType === 'live2d' && task.renderer.model) {
-          task.renderer.model.update(delta);
-          task.renderer.applyOverrides();
-        } else if (task.rendererType === 'spine') {
-          task.renderer.seek(sampleTime / (task.renderer._currentDuration || 0.1));
-        }
-        task.renderer.render();
+    while (t.renderQueue.length > 0) {
+      const { sampleTime, containerTime, sequence } = t.renderQueue.shift();
+      if (t.renderer) {
+        t.renderer.seek(sampleTime / (t.renderer._currentDuration || 0.1));
+        t.renderer.render();
       }
-      if (task.compositeCtx) {
-        const ctx = task.compositeCtx;
-        ctx.clearRect(0, 0, task.canvas.width, task.canvas.height);
-        if (task.bgBitmap) {
-          ctx.drawImage(task.bgBitmap, 0, 0, task.canvas.width, task.canvas.height);
-        } else if (task.bgColor) {
-          ctx.fillStyle = task.bgColor;
-          ctx.fillRect(0, 0, task.canvas.width, task.canvas.height);
-        }
-        ctx.drawImage(task.renderCanvas, 0, 0);
+      if (t.compositeCtx) {
+        t.compositeCtx.clearRect(0, 0, t.canvas.width, t.canvas.height);
+        if (t.bgBitmap) t.compositeCtx.drawImage(t.bgBitmap, 0, 0, t.canvas.width, t.canvas.height);
+        else if (t.bgColor) { t.compositeCtx.fillStyle = t.bgColor; t.compositeCtx.fillRect(0, 0, t.canvas.width, t.canvas.height); }
+        t.compositeCtx.drawImage(t.renderCanvas, 0, 0);
       }
-      if (task.videoSource) {
-        try {
-          await task.videoSource.add(containerTime, 1 / task.fps);
-          self.postMessage({ type: 'FRAME_ADDED', id });
-        } catch (err) {
-          self.postMessage({ type: 'ERROR', id, error: err.message });
-        }
+      if (t.videoSource) {
+        await t.videoSource.add(containerTime, 1 / t.fps);
+        self.postMessage({ type: 'FRAME_ADDED', id });
       } else {
-        try {
-          const bitmap = await createImageBitmap(task.canvas);
-          self.postMessage({ type: 'FRAME_RENDERED', id, frameIndex: sequence, bitmap }, { transfer: [bitmap] });
-        } catch (err) {
-          self.postMessage({ type: 'ERROR', id, error: err.message });
-        }
+        const bitmap = await createImageBitmap(t.canvas);
+        self.postMessage({ type: 'FRAME_RENDERED', id, frameIndex: sequence, bitmap }, { transfer: [bitmap] });
       }
     }
-  } finally {
-    task.isRendering = false;
-  }
-}
-
-async function handleStartTask(id, type, payload) {
-  const { width, height, bitrate, fps, modelUrl, animName, exprName, rendererType, bgBitmap, bgColor, spineVersion, selectedDir, fileNames, isFileJson, marginX, marginY, libraryBaseUrl } = payload;
-  await loadLibraries(rendererType, spineVersion, libraryBaseUrl);
-  const canvas = new OffscreenCanvas(width, height);
-  let renderer = null;
-  let renderCanvas = canvas;
-  if (rendererType === 'live2d') {
-    renderer = new WorkerLive2DRenderer(canvas);
-    renderer.setupBackground(bgBitmap, bgColor);
-    await renderer.load(modelUrl);
-    if (payload.transform) {
-      const { scale, x, y, rotation, originalWidth, originalHeight, screenBaseScale } = payload.transform;
-      renderer.marginX = marginX || 0;
-      renderer.marginY = marginY || 0;
-      renderer.setTransform(scale, x, y, rotation, originalWidth, originalHeight, screenBaseScale);
-    }
-    if (payload.syncState) {
-      renderer.applySyncState(payload.syncState);
-    }
-    if (animName) await renderer.setAnimation(animName);
-    if (exprName) renderer.setExpression(exprName);
-    renderer.applyOverrides();
-  } else if (rendererType === 'spine') {
-    renderCanvas = new OffscreenCanvas(width, height);
-    renderer = new WorkerSpineRenderer(renderCanvas, self.spineLib);
-    renderer.dirName = selectedDir;
-    renderer.setupBackground(bgBitmap, bgColor);
-    await renderer.load(selectedDir, fileNames, isFileJson);
-    if (payload.transform) {
-      const { scale, x, y, rotation } = payload.transform;
-      renderer.marginX = marginX || 0;
-      renderer.marginY = marginY || 0;
-      renderer.setTransform(scale, x, y, rotation);
-    }
-    if (payload.syncState) {
-      renderer.applySyncState(payload.syncState);
-    }
-    if (animName) await renderer.setAnimation(animName);
-    renderer.render();
-  }
-  let output = null;
-  let videoSource = null;
-  if (type === 'START_VIDEO') {
-    output = new Output({
-      format: new WebMOutputFormat(),
-      target: new BufferTarget()
-    });
-    try {
-      videoSource = new CanvasSource(canvas, {
-        codec: 'vp9',
-        bitrate: bitrate,
-      });
-      output.addVideoTrack(videoSource);
-      await output.start();
-    } catch (err) {
-      console.error('Worker: Failed to initialize video output', err);
-      self.postMessage({ type: 'ERROR', id, error: err.message });
-      return;
-    }
-  }
-  currentTasks.set(id, {
-    canvas,
-    renderCanvas,
-    compositeCtx: (renderCanvas !== canvas) ? canvas.getContext('2d') : null,
-    bgBitmap,
-    bgColor,
-    renderer,
-    output,
-    videoSource,
-    fps,
-    lastSampleTime: 0,
-    cancelled: false,
-    ready: true,
-    renderQueue: [],
-    isRendering: false,
-    rendererType
-  });
-  const finalDuration = renderer ? (renderer._currentDuration || 0.1) : (payload.duration || 0.1);
-  const finalFps = (renderer && renderer.getFPS) ? renderer.getFPS() : (payload.fps || 60);
-  self.postMessage({ type: 'READY', id, duration: finalDuration, fps: finalFps });
-  self.postMessage({ type: 'STARTED', id });
-}
-
-async function handleFinishVideo(id) {
-  const task = currentTasks.get(id);
-  if (!task || task.cancelled) return;
-  try {
-    await task.output.finalize();
-    const buffer = task.output.target.buffer;
-    self.postMessage({ type: 'DONE_VIDEO', id, buffer }, { transfer: [buffer] });
-  } catch (err) {
-    self.postMessage({ type: 'ERROR', id, error: err.message });
-  } finally {
-    if (task.renderer) task.renderer.dispose();
-    currentTasks.delete(id);
-  }
-}
-
-async function handleCancelTask(id) {
-  const task = currentTasks.get(id);
-  if (!task) return;
-  task.cancelled = true;
-  if (task.output) {
-    try { await task.output.finalize(); } catch (err) { }
-  }
-  if (task.renderer) {
-    task.renderer.dispose();
-  }
-  task.renderQueue = [];
-  currentTasks.delete(id);
+  } catch (err) { self.postMessage({ type: 'ERROR', id, error: err.message }); }
+  finally { t.isRendering = false; }
 }
 
 self.onmessage = async (e) => {
-  const { type, id, ...payload } = e.data;
-  switch (type) {
-    case 'CANCEL':
-      await handleCancelTask(id);
-      break;
-    case 'START_VIDEO':
-    case 'START_PNG_SEQUENCE':
-      await handleStartTask(id, type, payload);
-      break;
-    case 'RENDER_FRAME': {
-      const task = currentTasks.get(id);
-      if (!task || task.cancelled || !task.ready) return;
-      task.renderQueue.push(payload);
-      processRenderQueue(id);
-      break;
-    }
-    case 'ADD_FRAME_VIDEO':
-    case 'PROCESS_FRAME_PNG': {
-      const task = currentTasks.get(id);
-      if (!task || task.cancelled || !task.ready) return;
-      const { bitmap, containerTime, frameIndex } = payload;
-      const ctx = task.canvas.getContext('2d');
-      if (ctx && bitmap) {
-        ctx.clearRect(0, 0, task.canvas.width, task.canvas.height);
-        ctx.drawImage(bitmap, 0, 0);
-        bitmap.close();
-      }
-      if (type === 'ADD_FRAME_VIDEO') {
-        if (task.output) {
-          try {
-            await task.videoSource.add(containerTime, 1 / task.fps);
-            self.postMessage({ type: 'FRAME_ADDED', id });
-          } catch (err) {
-            console.error('Worker: ADD_FRAME_VIDEO error', err);
-            self.postMessage({ type: 'ERROR', id, error: err.message });
-          }
+  const { type, id, ...p } = e.data;
+  try {
+    if (type === 'START_VIDEO' || type === 'START_PNG_SEQUENCE') {
+      await loadLibraries(p.rendererType, p.spineVersion, p.libraryBaseUrl);
+      self.useNonePMA = (p.rendererType === 'spine' && p.alphaMode !== 'unpack');
+      const canvas = new OffscreenCanvas(p.width, p.height);
+      const renderCanvas = new OffscreenCanvas(p.width, p.height);
+      let renderer;
+      if (p.rendererType === 'live2d') {
+        renderer = new WorkerLive2DRenderer(renderCanvas);
+        await renderer.load(p.modelUrl, p.alphaMode);
+        if (p.transform) {
+          renderer.marginX = p.marginX || 0;
+          renderer.marginY = p.marginY || 0;
+          renderer.setTransform(p.transform.scale, p.transform.x, p.transform.y, p.transform.rotation, p.transform.originalWidth, p.transform.originalHeight, p.transform.screenBaseScale);
         }
+        if (p.syncState) renderer.applySyncState(p.syncState);
+        if (p.animName) await renderer.setAnimation(p.animName);
+        if (p.exprName) renderer.setExpression(p.exprName);
+        renderer.applyOverrides();
       } else {
-        self.postMessage({ type: 'FRAME_RENDERED', id, frameIndex, bitmap }, { transfer: [bitmap] });
+        renderer = new WorkerSpineRenderer(renderCanvas, self.spineLib);
+        await renderer.load(p.selectedDir, p.fileNames, p.isFileJson, p.alphaMode);
+        renderer.setTransform(p.transform?.scale, p.transform?.x, p.transform?.y, p.transform?.rotation);
+        if (p.syncState) {
+          if (p.syncState.activeSkins) {
+            const s = renderer.skeletons['0'].skeleton, st = renderer.skeletons['0'].state, nk = new renderer.spine.Skin('_');
+            for (const sn of p.syncState.activeSkins) { const sk = s.data.findSkin(sn); if (sk) nk.addSkin(sk); }
+            s.setSkin(nk); s.setToSetupPose(); st.apply(s);
+          }
+          renderer.attachmentsCache = p.syncState.attachmentsCache || {};
+        }
+        if (p.animName) await renderer.setAnimation(p.animName);
       }
-      break;
+      let output = null, videoSource = null;
+      if (type === 'START_VIDEO') {
+        output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
+        videoSource = new CanvasSource(canvas, { codec: 'vp9', bitrate: p.bitrate });
+        output.addVideoTrack(videoSource);
+        await output.start();
+      }
+      currentTasks.set(id, { canvas, renderCanvas, compositeCtx: renderCanvas !== canvas ? canvas.getContext('2d') : null, bgBitmap: p.bgBitmap, bgColor: p.bgColor, renderer, output, videoSource, fps: p.fps, lastSampleTime: 0, ready: true, renderQueue: [], isRendering: false });
+      self.postMessage({ type: 'READY', id, duration: renderer._currentDuration, fps: renderer.getFPS ? renderer.getFPS() : 60 });
+    } else if (type === 'RENDER_FRAME') {
+      const t = currentTasks.get(id);
+      if (t) { t.renderQueue.push(p); processQueue(id); }
+    } else if (type === 'FINISH_VIDEO') {
+      const t = currentTasks.get(id);
+      if (t) { await t.output.finalize(); const buffer = t.output.target.buffer; self.postMessage({ type: 'DONE_VIDEO', id, buffer }, { transfer: [buffer] }); currentTasks.delete(id); }
     }
-    case 'FINISH_VIDEO':
-      await handleFinishVideo(id);
-      break;
-    case 'FINISH_PNG_SEQUENCE': {
-      const task = currentTasks.get(id);
-      if (task && task.renderer) task.renderer.dispose();
-      currentTasks.delete(id);
-      break;
-    }
-  }
+  } catch (err) { self.postMessage({ type: 'ERROR', id, error: err.message }); }
 };

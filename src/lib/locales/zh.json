@@ -62,6 +62,7 @@
   "transformMoveX": "模型移动 X:",
   "transformMoveY": "模型移动 Y:",
   "transformRotate": "模型旋转:",
+  "mergeSequential": "将连番文件合并为一个模型",
   "clearCache": "清理缓存",
   "clearCacheSuccess": "缓存清理成功"
 }

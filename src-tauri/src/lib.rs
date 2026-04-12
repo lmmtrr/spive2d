@@ -114,12 +114,13 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
 #[tauri::command]
 async fn handle_dropped_path(
     path: String,
+    merge_sequential: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
     app_handle.emit("progress", true).unwrap();
     let path_obj = Path::new(&path);
     if path_obj.is_dir() {
-        get_subdir_files(path, app_handle)
+        get_subdir_files(path, merge_sequential, app_handle)
     } else if path_obj.is_file() {
         match path_obj
             .extension()
@@ -143,7 +144,7 @@ async fn handle_dropped_path(
                         final_path = entries[0].path().to_string_lossy().into_owned();
                     }
                 }
-                let result = get_subdir_files(final_path, app_handle.clone());
+                let result = get_subdir_files(final_path, merge_sequential, app_handle.clone());
                 let state = app_handle.state::<AppState>();
                 let mut temp_dirs = state.temp_dirs.lock().unwrap();
                 temp_dirs.push(temp_dir);
@@ -163,6 +164,7 @@ async fn handle_dropped_path(
 #[tauri::command]
 fn get_subdir_files(
     folder_path: String,
+    merge_sequential: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
     let root_path = Path::new(&folder_path);
@@ -171,7 +173,7 @@ fn get_subdir_files(
         app_handle.emit("progress", false).unwrap();
         return Ok(dir_files_map);
     }
-    match process_directory_with_subdirs(root_path, root_path) {
+    match process_directory_with_subdirs(root_path, root_path, merge_sequential) {
         Ok(subdir_map) => {
             dir_files_map.extend(subdir_map);
         }
@@ -210,9 +212,10 @@ async fn clear_cache(app_handle: AppHandle) -> Result<(), String> {
 fn process_directory_with_subdirs(
     dir_path: &Path,
     base_path: &Path,
+    merge_sequential: bool,
 ) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
     let mut dir_files_map = HashMap::new();
-    let current_file_groups = process_files(dir_path, base_path)?;
+    let current_file_groups = process_files(dir_path, base_path, merge_sequential)?;
     if !current_file_groups.is_empty() {
         let mut normalized_path = dir_path
             .to_string_lossy()
@@ -226,7 +229,7 @@ fn process_directory_with_subdirs(
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
         if entry_path.is_dir() {
-            let subdir_file_groups = process_directory(&entry_path, base_path)?;
+            let subdir_file_groups = process_directory(&entry_path, base_path, merge_sequential)?;
             if !subdir_file_groups.is_empty() {
                 let mut normalized_subdir_path = entry_path
                     .to_string_lossy()
@@ -241,7 +244,7 @@ fn process_directory_with_subdirs(
     Ok(dir_files_map)
 }
 
-fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, String> {
+fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<Vec<String>>, String> {
     let mut file_groups = Vec::new();
     let mut atlas_bases = HashSet::with_capacity(64);
     let mut atlas_original_extensions: HashMap<String, String> = HashMap::with_capacity(64);
@@ -416,6 +419,40 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
         }
     }
     file_groups.sort_unstable_by(|a, b| a[0].cmp(&b[0]));
+    if merge_sequential && file_groups.len() > 1 {
+        if file_groups.len() > 20 {
+            file_groups.truncate(20);
+        }
+        let mut merged_group = Vec::new();
+        let mut main_ext = String::new();
+        let mut atlas_ext = String::new();
+        let mut all_bases = Vec::new();
+        let mut is_compatible = true;
+        for group in &file_groups {
+            if group.len() < 3 {
+                is_compatible = false;
+                break;
+            }
+            if main_ext.is_empty() {
+                main_ext = group[1].clone();
+                atlas_ext = group[2].clone();
+            } else if main_ext != group[1] || atlas_ext != group[2] {
+                is_compatible = false;
+                break;
+            }
+            all_bases.push(group[0].clone());
+            for i in 3..group.len() {
+                all_bases.push(format!("{}{}", group[0], group[i].split('.').next().unwrap_or(&group[i])));
+            }
+        }
+        if is_compatible && !all_bases.is_empty() {
+            merged_group.push("MERGED".to_string());
+            merged_group.push(main_ext);
+            merged_group.push(atlas_ext);
+            merged_group.extend(all_bases);
+            return Ok(vec![merged_group]);
+        }
+    }
     Ok(file_groups)
 }
 
@@ -452,15 +489,15 @@ fn find_extra_files(
     extra_files
 }
 
-fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, String> {
+fn process_directory(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<Vec<String>>, String> {
     let mut all_file_groups = Vec::new();
-    let current_file_groups = process_files(dir_path, base_path)?;
+    let current_file_groups = process_files(dir_path, base_path, merge_sequential)?;
     all_file_groups.extend(current_file_groups);
     for entry in fs::read_dir(dir_path).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
         if entry_path.is_dir() {
-            let subdir_file_groups = process_directory(&entry_path, base_path)?;
+            let subdir_file_groups = process_directory(&entry_path, base_path, merge_sequential)?;
             all_file_groups.extend(subdir_file_groups);
         }
     }

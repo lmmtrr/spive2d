@@ -36,6 +36,7 @@ let exportScale = $state(100);
 let exportMarginX = $state(0);
 let exportMarginY = $state(0);
 let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'unpack'));
+let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
 const SCALE_MAX = 8;
 const SCALE_MIN = 0.5;
 export const appState = {
@@ -65,6 +66,8 @@ export const appState = {
   set exportMarginY(v) { exportMarginY = v; },
   get alphaMode() { return alphaMode; },
   set alphaMode(v) { alphaMode = v; },
+  get mergeSequential() { return mergeSequential; },
+  set mergeSequential(v) { mergeSequential = v; },
   SCALE_MAX,
   SCALE_MIN,
   resetTransform() {

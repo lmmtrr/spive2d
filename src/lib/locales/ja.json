@@ -62,6 +62,7 @@
   "transformMoveX": "モデルの移動 X:",
   "transformMoveY": "モデルの移動 Y:",
   "transformRotate": "モデルの回転:",
+  "mergeSequential": "連番ファイルを重ねて読み込む",
   "clearCache": "キャッシュを削除",
   "clearCacheSuccess": "キャッシュを削除しました"
 }

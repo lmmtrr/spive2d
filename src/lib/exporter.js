@@ -193,7 +193,8 @@ async function prepareExportContext(taskId, baseFilename, WorkerClass) {
     transform,
     syncState: activeRenderer?.getSyncState() || null,
     spineVersion,
-    isFileJson
+    isFileJson,
+    alphaMode: appState.alphaMode
   };
 }
 
@@ -230,7 +231,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
   });
   const ctx = await prepareExportContext(taskId, baseFilename, ExporterWorker);
   if (!ctx) return;
-  const { rendererType, modelUrl, worker, backgroundImageToRender, backgroundColor, activeRenderer, transform, syncState, spineVersion, selectedDir, fileNames, isFileJson } = ctx;
+  const { rendererType, modelUrl, worker, backgroundImageToRender, backgroundColor, activeRenderer, transform, syncState, spineVersion, selectedDir, fileNames, isFileJson, alphaMode } = ctx;
   const bgBitmap = backgroundImageToRender ? await createImageBitmap(backgroundImageToRender) : null;
   const speed = appState.animation.speed || 1.0;
   let baseDuration = 0.1;
@@ -325,6 +326,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     selectedDir,
     fileNames,
     isFileJson,
+    alphaMode,
     marginX,
     marginY,
     libraryBaseUrl: window.location.origin
@@ -348,7 +350,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
   });
   const ctx = await prepareExportContext(taskId, baseFilename, ExporterWorker);
   if (!ctx) return;
-  const { rendererType, modelUrl, worker, backgroundImageToRender, backgroundColor, activeRenderer, transform, syncState, spineVersion, selectedDir, fileNames, isFileJson } = ctx;
+  const { rendererType, modelUrl, worker, backgroundImageToRender, backgroundColor, activeRenderer, transform, syncState, spineVersion, selectedDir, fileNames, isFileJson, alphaMode } = ctx;
   const bgBitmap = backgroundImageToRender ? await createImageBitmap(backgroundImageToRender) : null;
   const speed = appState.animation.speed || 1.0;
   let baseDuration = 0.1;
@@ -448,6 +450,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     selectedDir,
     fileNames,
     isFileJson,
+    alphaMode,
     marginX,
     marginY,
     libraryBaseUrl: window.location.origin

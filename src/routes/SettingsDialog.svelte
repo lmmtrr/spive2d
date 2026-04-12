@@ -604,6 +604,16 @@
         <button onclick={handleRemoveImage}>{t('removeImage')}</button>
       </div>
       <hr>
+      <div class="input-row" style="margin-top: 5px;">
+        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
+          <input type="checkbox" checked={appState.mergeSequential} onchange={(e) => {
+            appState.mergeSequential = e.target.checked;
+            saveSetting('spive2d_merge_sequential', e.target.checked);
+          }} style="width: auto; margin: 0;">
+          <span style="font-size: 14px; letter-spacing: 0.08em; font-weight: 500;">{t('mergeSequential')}</span>
+        </label>
+      </div>
+      <hr>
       <div class="button-group">
         <button onclick={handleClearCache}>{t('clearCache')}</button>
       </div>

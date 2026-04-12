@@ -136,7 +136,7 @@
           ]
         };
       } else {
-        dirFiles = await invoke('handle_dropped_path', { path: inputPath });
+        dirFiles = await invoke('handle_dropped_path', { path: inputPath, mergeSequential: appState.mergeSequential });
       }
       const dirs = Object.keys(dirFiles);
       dirs.sort((a, b) => {

@@ -62,6 +62,7 @@
   "transformMoveX": "Model Move X:",
   "transformMoveY": "Model Move Y:",
   "transformRotate": "Model Rotate:",
+  "mergeSequential": "Merge sequential files into one model",
   "clearCache": "Clear Cache",
   "clearCacheSuccess": "Cache cleared successfully"
 }
