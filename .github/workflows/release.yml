@@ -41,6 +41,9 @@ jobs:
       - name: install app dependencies
         run: bun install
 
+      - name: audit dependencies
+        run: bun audit
+
       - name: Build & Release (macOS / Linux)
         if: matrix.platform != 'windows-latest'
         uses: tauri-apps/tauri-action@v0
@@ -68,4 +71,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
-        run: gh release upload '$env:TAG_NAME' spive2d-windows.zip --clobber
+        run: |
+          gh release view "$env:TAG_NAME" >$null 2>&1
+          if ($LASTEXITCODE -ne 0) {
+              gh release create "$env:TAG_NAME" --generate-notes
+          }
+          gh release upload "$env:TAG_NAME" spive2d-windows.zip --clobber
