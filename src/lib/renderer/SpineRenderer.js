@@ -307,7 +307,21 @@ export class SpineRenderer extends BaseRenderer {
     const dpr = window.devicePixelRatio || 1;
     this.#updateMVP(this.#canvas.width, this.#canvas.height, dpr);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    for (const key of Object.keys(this.#skeletons).reverse()) {
+    const sortedKeys = Object.keys(this.#skeletons).sort((a, b) => {
+      const getLayer = (k) => {
+        if (k === '0') return 0;
+        const index = parseInt(k) + 2;
+        const name = (this.#fileNames[index] || '').toLowerCase();
+        if (name.includes('_fg')) return 1;
+        if (name.includes('_bg')) return -1;
+        return -0.5;
+      };
+      const la = getLayer(a);
+      const lb = getLayer(b);
+      if (la !== lb) return la - lb;
+      return parseInt(b) - parseInt(a);
+    });
+    for (const key of sortedKeys) {
       const skel = this.#skeletons[key].skeleton;
       const state = this.#skeletons[key].state;
       if (delta > 0 && !this.#seeking && !this.#paused) {
@@ -316,7 +330,7 @@ export class SpineRenderer extends BaseRenderer {
       state.apply(skel);
       this.#applyParameterOverrides(skel);
       skel.updateWorldTransform(2);
-      this.#syncHiddenAttachments();
+      this.#syncHiddenAttachments(skel, key);
       this.#shader.bind();
       this.#shader.setUniformi(this.#spine.Shader.SAMPLER, 0);
       this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
@@ -561,89 +575,94 @@ export class SpineRenderer extends BaseRenderer {
   }
 
   #getAttachmentItems() {
-    const skeleton = this.#skeletons['0']?.skeleton;
-    if (!skeleton) return [];
-    const animationAttachmentMap = new Map();
-    const state = this.#skeletons['0']?.state;
-    const addSkinAttachments = (skin) => {
-      if (!skin) return;
-      if (typeof skin.getAttachments === 'function') {
-        const entries = skin.getAttachments();
-        if (Array.isArray(entries)) {
-          for (let i = 0; i < entries.length; i++) {
-            const entry = entries[i];
-            if (entry && entry.slotIndex !== undefined && entry.name !== undefined) {
-              animationAttachmentMap.set(`${entry.name}##${entry.slotIndex}`, entry.slotIndex);
+    const allItems = [];
+    for (const skeletonId in this.#skeletons) {
+      const skelEntry = this.#skeletons[skeletonId];
+      const skeleton = skelEntry.skeleton;
+      const state = skelEntry.state;
+      const idNum = parseInt(skeletonId);
+      const fileLabel = idNum === 0 ? '' : `[${this.#fileNames[idNum + 2] || skeletonId}] `;
+      const animationAttachmentMap = new Map();
+      const addSkinAttachments = (skin) => {
+        if (!skin) return;
+        if (typeof skin.getAttachments === 'function') {
+          const entries = skin.getAttachments();
+          if (Array.isArray(entries)) {
+            for (let i = 0; i < entries.length; i++) {
+              const entry = entries[i];
+              if (entry && entry.slotIndex !== undefined && entry.name !== undefined) {
+                animationAttachmentMap.set(`${entry.name}##${entry.slotIndex}`, entry.slotIndex);
+              }
             }
           }
         }
-      }
-      if (skin.attachments) {
-        if (Array.isArray(skin.attachments)) {
-          for (let i = 0; i < skin.attachments.length; i++) {
-            const item = skin.attachments[i];
-            if (!item) continue;
-            if (item.slotIndex !== undefined && item.name !== undefined) {
-              animationAttachmentMap.set(`${item.name}##${item.slotIndex}`, item.slotIndex);
-            } else {
+        if (skin.attachments) {
+          if (Array.isArray(skin.attachments)) {
+            for (let i = 0; i < skin.attachments.length; i++) {
+              const item = skin.attachments[i];
+              if (!item) continue;
+              if (item.slotIndex !== undefined && item.name !== undefined) {
+                animationAttachmentMap.set(`${item.name}##${item.slotIndex}`, item.slotIndex);
+              } else {
+                for (const name in item) {
+                  animationAttachmentMap.set(`${name}##${i}`, i);
+                }
+              }
+            }
+          } else if (typeof skin.attachments === 'object') {
+            for (const slotIndex in skin.attachments) {
+              const item = skin.attachments[slotIndex];
+              if (!item) continue;
               for (const name in item) {
-                animationAttachmentMap.set(`${name}##${i}`, i);
+                animationAttachmentMap.set(`${name}##${slotIndex}`, parseInt(slotIndex));
               }
             }
           }
-        } else if (typeof skin.attachments === 'object') {
-          for (const slotIndex in skin.attachments) {
-            const item = skin.attachments[slotIndex];
-            if (!item) continue;
-            for (const name in item) {
-              animationAttachmentMap.set(`${name}##${slotIndex}`, parseInt(slotIndex));
-            }
-          }
         }
-      }
-    };
-    if (skeleton.data.defaultSkin) addSkinAttachments(skeleton.data.defaultSkin);
-    if (skeleton.skin) addSkinAttachments(skeleton.skin);
-    skeleton.slots.forEach((slot, index) => {
-      let attachmentNames = [];
-      if (slot.attachment) {
-        attachmentNames.push(slot.attachment.name);
-      }
-      if (slot.data.attachmentName && !attachmentNames.includes(slot.data.attachmentName)) {
-        attachmentNames.push(slot.data.attachmentName);
-      }
-      attachmentNames.forEach(name => {
-        const compositeKey = `${name}##${index}`;
-        animationAttachmentMap.set(compositeKey, index);
+      };
+      if (skeleton.data.defaultSkin) addSkinAttachments(skeleton.data.defaultSkin);
+      if (skeleton.skin) addSkinAttachments(skeleton.skin);
+      skeleton.slots.forEach((slot, index) => {
+        let attachmentNames = [];
+        if (slot.attachment) {
+          attachmentNames.push(slot.attachment.name);
+        }
+        if (slot.data.attachmentName && !attachmentNames.includes(slot.data.attachmentName)) {
+          attachmentNames.push(slot.data.attachmentName);
+        }
+        attachmentNames.forEach(name => {
+          const key = `${name}##${index}`;
+          animationAttachmentMap.set(key, index);
+        });
       });
-    });
-    if (state?.tracks[0]) {
-      const animation = state.tracks[0].animation;
-      if (animation.timelines) {
-        for (const timeline of animation.timelines) {
-          if (timeline.attachmentNames) {
-            const slotIndex = timeline.slotIndex;
-            for (const name of timeline.attachmentNames) {
-              if (name) {
-                const compositeKey = `${name}##${slotIndex}`;
-                animationAttachmentMap.set(compositeKey, slotIndex);
+      if (state?.tracks[0]) {
+        const animation = state.tracks[0].animation;
+        if (animation.timelines) {
+          for (const timeline of animation.timelines) {
+            if (timeline.attachmentNames) {
+              const slotIndex = timeline.slotIndex;
+              for (const name of timeline.attachmentNames) {
+                if (name) {
+                  const key = `${name}##${slotIndex}`;
+                  animationAttachmentMap.set(key, slotIndex);
+                }
               }
             }
           }
         }
       }
-    }
-    return Array.from(animationAttachmentMap.entries())
-      .map(([compositeKey, index]) => {
-        const [name] = compositeKey.split('##');
-        return {
-          name,
-          index,
+      animationAttachmentMap.forEach((slotIndex, key) => {
+        const [name] = key.split('##');
+        const compositeKey = `${skeletonId}##${name}##${slotIndex}`;
+        allItems.push({
+          name: `${fileLabel}${name}`,
+          index: idNum * 10000 + slotIndex,
           type: 'checkbox',
           checked: !this.#attachmentsCache[compositeKey],
-        };
-      })
-      .sort(sortByName);
+        });
+      });
+    }
+    return allItems.sort(sortByName);
   }
 
   #getSkinItems() {
@@ -670,26 +689,31 @@ export class SpineRenderer extends BaseRenderer {
     }));
   }
 
-  #toggleAttachment(name, slotIndex, checked) {
-    const skeleton = this.#skeletons['0'].skeleton;
-    const compositeKey = `${name}##${slotIndex}`;
+  #toggleAttachment(displayName, uniqueIndex, checked) {
+    const idNum = Math.floor(uniqueIndex / 10000);
+    const skeletonId = String(idNum);
+    const slotIndex = uniqueIndex % 10000;
+    const skeleton = this.#skeletons[skeletonId]?.skeleton;
+    if (!skeleton) return;
+    let originalName = displayName;
+    if (idNum !== 0) {
+      const fileLabel = `[${this.#fileNames[idNum + 2] || skeletonId}] `;
+      if (displayName.startsWith(fileLabel)) {
+        originalName = displayName.substring(fileLabel.length);
+      }
+    }
+    const compositeKey = `${skeletonId}##${originalName}##${slotIndex}`;
     if (checked) {
       if (this.#attachmentsCache[compositeKey]) {
         delete this.#attachmentsCache[compositeKey];
         skeleton.setToSetupPose();
-        const state = this.#skeletons['0'].state;
+        const state = this.#skeletons[skeletonId].state;
         if (state) state.apply(skeleton);
       }
     } else {
       const slot = skeleton.slots[slotIndex];
-      let att = null;
-      if (slot && slot.attachment && slot.attachment.name === name) {
-        att = slot.attachment;
-      } else {
-        att = { name: name };
-      }
-      this.#attachmentsCache[compositeKey] = [slotIndex, { name: name }];
-      if (slot && slot.attachment && slot.attachment.name === name) {
+      this.#attachmentsCache[compositeKey] = [slotIndex, { name: originalName, skeletonId: skeletonId }];
+      if (slot && slot.attachment && slot.attachment.name === originalName) {
         slot.attachment = null;
       }
     }
@@ -731,13 +755,15 @@ export class SpineRenderer extends BaseRenderer {
     const state = this.#skeletons['0'].state;
     state.apply(skeleton);
     skeleton.updateWorldTransform(2);
-    this.#syncHiddenAttachments();
+    this.#syncHiddenAttachments(skeleton);
   }
 
-  #syncHiddenAttachments() {
-    const skeleton = this.#skeletons['0']?.skeleton;
+  #syncHiddenAttachments(skeleton, id) {
     if (!skeleton) return;
     Object.values(this.#attachmentsCache).forEach(([slotIndex, cachedAttachment]) => {
+      if (cachedAttachment.isSkeleton) return;
+      const targetSkelId = cachedAttachment.skeletonId || '0';
+      if (String(targetSkelId) !== String(id)) return;
       const slot = skeleton.slots[slotIndex];
       if (slot && slot.attachment && (slot.attachment.name === cachedAttachment.name)) {
         slot.attachment = null;
@@ -833,9 +859,23 @@ export class SpineRenderer extends BaseRenderer {
     this.#shader.bind();
     this.#shader.setUniform4x4f(this.#spine.Shader.MVP_MATRIX, this.#mvp.values);
     this.#batcher.begin(this.#shader);
-    for (const key of Object.keys(this.#skeletons).reverse()) {
+    const sortedKeys = Object.keys(this.#skeletons).sort((a, b) => {
+      const getLayer = (k) => {
+        if (k === '0') return 0;
+        const index = parseInt(k) + 2;
+        const name = this.#fileNames[index].toLowerCase();
+        if (name.includes('_fg')) return 1;
+        if (name.includes('_bg')) return -1;
+        return -1;
+      };
+      const la = getLayer(a);
+      const lb = getLayer(b);
+      if (la !== lb) return la - lb;
+      return parseInt(b) - parseInt(a);
+    });
+    for (const key of sortedKeys) {
       const skel = this.#skeletons[key].skeleton;
-      this.#syncHiddenAttachments();
+      this.#syncHiddenAttachments(skel);
       this.#skeletonRenderer.draw(this.#batcher, skel);
     }
     this.#batcher.end();
@@ -965,9 +1005,15 @@ export class SpineRenderer extends BaseRenderer {
 
   #applyParameterOverrides(skel) {
     if (this.parameterOverrides.size === 0) return;
-    const items = this.#getParameterItems();
+    if (!skel._paramCache) {
+      const items = this.#getParameterItems();
+      const map = new Map();
+      for (const item of items) map.set(item.name, item);
+      skel._paramCache = map;
+    }
+    const cache = skel._paramCache;
     for (const [name, value] of this.parameterOverrides.entries()) {
-      const item = items.find(i => i.name === name);
+      const item = cache.get(name);
       if (item && item._target && item._prop) {
         item._target[item._prop] = value;
       }

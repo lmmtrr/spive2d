@@ -300,27 +300,31 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
             }
         }
     }
-    let mut potential_bg_atlases = HashSet::new();
+    let mut potential_extra_atlases = HashSet::new();
     for (base_name, extension) in &all_atlas_info {
-        if base_name.to_lowercase().contains("_bg") {
-            potential_bg_atlases.insert(base_name.clone());
+        let base_name_lower = base_name.to_lowercase();
+        if base_name_lower.contains("_bg") || base_name_lower.contains("_fg") {
+            potential_extra_atlases.insert(base_name.clone());
         } else {
             atlas_bases.insert(base_name.clone());
             atlas_original_extensions.insert(base_name.clone(), extension.clone());
         }
     }
-    for bg_base_name in potential_bg_atlases {
-        let bg_base_name_lower = bg_base_name.to_lowercase();
-        if let Some(pos) = bg_base_name_lower.rfind("_bg") {
-            let corresponding_base_name_lower = &bg_base_name_lower[..pos];
-            let has_corresponding_normal_atlas = atlas_bases
-                .iter()
-                .any(|b| b.to_lowercase() == *corresponding_base_name_lower);
-            if !has_corresponding_normal_atlas {
-                atlas_bases.insert(bg_base_name.clone());
-                if let Some(extension) = all_atlas_info.get(&bg_base_name) {
-                    atlas_original_extensions.insert(bg_base_name.clone(), extension.clone());
+    for extra_base_name in potential_extra_atlases {
+        let extra_base_name_lower = extra_base_name.to_lowercase();
+        for suffix in ["_bg", "_fg"] {
+            if let Some(pos) = extra_base_name_lower.rfind(suffix) {
+                let corresponding_base_name_lower = &extra_base_name_lower[..pos];
+                let has_corresponding_normal_atlas = atlas_bases
+                    .iter()
+                    .any(|b| b.to_lowercase() == *corresponding_base_name_lower);
+                if !has_corresponding_normal_atlas {
+                    atlas_bases.insert(extra_base_name.clone());
+                    if let Some(extension) = all_atlas_info.get(&extra_base_name) {
+                        atlas_original_extensions.insert(extra_base_name.clone(), extension.clone());
+                    }
                 }
+                break;
             }
         }
     }
@@ -404,8 +408,10 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
                 main_extension.clone(),
                 atlas_extension,
             ];
-            let bg_files = find_background_files(&base_lower, &file_paths, &main_extension);
+            let bg_files = find_extra_files(&base_lower, "_bg", &file_paths, &main_extension);
             file_group.extend(bg_files);
+            let fg_files = find_extra_files(&base_lower, "_fg", &file_paths, &main_extension);
+            file_group.extend(fg_files);
             file_groups.push(file_group);
         }
     }
@@ -413,22 +419,23 @@ fn process_files(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, 
     Ok(file_groups)
 }
 
-fn find_background_files(
+fn find_extra_files(
     base_name_lower: &str,
+    suffix: &str,
     file_paths: &HashMap<String, String>,
     main_model_extension: &str,
 ) -> Vec<String> {
-    let mut bg_files = Vec::new();
-    let bg_prefix_for_match = format!("{}_bg", base_name_lower);
+    let mut extra_files = Vec::new();
+    let prefix_for_match = format!("{}{}", base_name_lower, suffix);
     let main_model_extension_lower = main_model_extension.to_lowercase();
     for (filename_lower, path) in file_paths {
-        if filename_lower.starts_with(&bg_prefix_for_match)
+        if filename_lower.starts_with(&prefix_for_match)
             && filename_lower.ends_with(&main_model_extension_lower)
         {
             let stem_part_lower =
                 &filename_lower[..filename_lower.len() - main_model_extension_lower.len()];
-            if stem_part_lower.starts_with(&bg_prefix_for_match)
-                && stem_part_lower.len() >= bg_prefix_for_match.len()
+            if stem_part_lower.starts_with(&prefix_for_match)
+                && stem_part_lower.len() >= prefix_for_match.len()
             {
                 let filename_part_original_case = if let Some(last_slash) = path.rfind('/') {
                     &path[last_slash + 1..]
@@ -436,13 +443,13 @@ fn find_background_files(
                     path
                 };
                 if base_name_lower.len() <= filename_part_original_case.len() {
-                    bg_files.push(filename_part_original_case[base_name_lower.len()..].to_string());
+                    extra_files.push(filename_part_original_case[base_name_lower.len()..].to_string());
                 }
             }
         }
     }
-    bg_files.sort_unstable();
-    bg_files
+    extra_files.sort_unstable();
+    extra_files
 }
 
 fn process_directory(dir_path: &Path, base_path: &Path) -> Result<Vec<Vec<String>>, String> {

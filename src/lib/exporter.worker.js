@@ -308,6 +308,7 @@ class WorkerSpineRenderer {
     this.marginY = 0;
     this.bgColor = null;
     this.bgBitmap = null;
+    this.fileNames = [];
   }
 
   setupBackground(bgBitmap, bgColor) {
@@ -316,6 +317,7 @@ class WorkerSpineRenderer {
   }
 
   async load(dirName, fileNames, isFileJson) {
+    this.fileNames = fileNames;
     const isWebUrl = dirName.startsWith('http://') || dirName.startsWith('https://') || dirName.startsWith('asset://');
     this.assetManager = new this.spine.AssetManager(this.ctx.gl, isWebUrl ? dirName : '');
     const baseName = fileNames[0];
@@ -460,9 +462,23 @@ class WorkerSpineRenderer {
     this._updateMVP(width, height, dpr);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    for (const key of Object.keys(this.skeletons).reverse()) {
+    const sortedKeys = Object.keys(this.skeletons).sort((a, b) => {
+      const getLayer = (k) => {
+        if (k === '0') return 0;
+        const index = parseInt(k) + 2;
+        const name = (this.fileNames[index] || '').toLowerCase();
+        if (name.includes('_fg')) return 1;
+        if (name.includes('_bg')) return -1;
+        return -0.5;
+      };
+      const la = getLayer(a);
+      const lb = getLayer(b);
+      if (la !== lb) return la - lb;
+      return parseInt(b) - parseInt(a);
+    });
+    for (const key of sortedKeys) {
       const { skeleton, state } = this.skeletons[key];
-      this._syncHiddenAttachments(skeleton);
+      this._syncHiddenAttachments(skeleton, key);
       this.applyOverrides(skeleton);
       this.shader.bind();
       this.shader.setUniformi(this.spine.Shader.SAMPLER, 0);
@@ -507,9 +523,12 @@ class WorkerSpineRenderer {
     this.ctx.gl.viewport(0, 0, canvasWidth, canvasHeight);
   }
 
-  _syncHiddenAttachments(skeleton) {
+  _syncHiddenAttachments(skeleton, id) {
     if (!this.attachmentsCache) return;
     Object.values(this.attachmentsCache).forEach(([slotIndex, cachedAttachment]) => {
+      if (cachedAttachment.isSkeleton) return;
+      const targetSkelId = cachedAttachment.skeletonId || '0';
+      if (String(targetSkelId) !== String(id)) return;
       const slot = skeleton.slots[slotIndex];
       if (slot && slot.attachment && (slot.attachment.name === cachedAttachment.name)) {
         slot.attachment = null;
@@ -582,7 +601,7 @@ async function processRenderQueue(id) {
     while (task.renderQueue.length > 0) {
       const payload = task.renderQueue.shift();
       const { sampleTime, containerTime, sequence } = payload;
-      const delta = (sampleTime - task.lastSampleTime) * 1000; // to ms
+      const delta = (sampleTime - task.lastSampleTime) * 1000;
       task.lastSampleTime = sampleTime;
       if (task.renderer) {
         if (task.rendererType === 'live2d' && task.renderer.model) {
