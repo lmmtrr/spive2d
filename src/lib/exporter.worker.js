@@ -61,6 +61,61 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
         }
       }
       self.spineLib = self.spine;
+      if (version && parseFloat(version) === 4.2) {
+        const AMB = self.spine.AssetManagerBase || self.spine.AssetManager;
+        if (AMB && AMB.prototype && AMB.prototype.remove) {
+          const resolveAssetStore = function (manager) {
+            if (manager && manager.cache && manager.cache.assets) {
+              return {
+                assets: manager.cache.assets,
+                assetsLoaded: manager.cache.assetsLoaded,
+                assetsRefCount: manager.cache.assetsRefCount,
+                reset: () => {
+                  manager.cache.assets = {};
+                  if (manager.cache.assetsLoaded) manager.cache.assetsLoaded = {};
+                  if (manager.cache.assetsRefCount) manager.cache.assetsRefCount = {};
+                }
+              };
+            }
+            if (manager && manager.assets) {
+              return {
+                assets: manager.assets,
+                reset: () => {
+                  manager.assets = {};
+                }
+              };
+            }
+            return null;
+          };
+          AMB.prototype.remove = function (path) {
+            let fullPath = path;
+            if (this.pathPrefix && path.indexOf(this.pathPrefix) !== 0) {
+              fullPath = this.pathPrefix + path;
+            }
+            const store = resolveAssetStore(this);
+            if (!store || !store.assets) return null;
+            const asset = store.assets[fullPath];
+            if (asset) {
+              if (typeof asset.dispose === 'function' && !asset._disposed) {
+                asset._disposed = true;
+                asset.dispose();
+              }
+              delete store.assets[fullPath];
+              if (store.assetsRefCount) delete store.assetsRefCount[fullPath];
+              if (store.assetsLoaded) delete store.assetsLoaded[fullPath];
+            }
+            return asset;
+          };
+          AMB.prototype.removeAll = function () {
+            const store = resolveAssetStore(this);
+            if (!store || !store.assets) return;
+            for (let path in store.assets) {
+              this.remove(path);
+            }
+            store.reset();
+          };
+        }
+      }
       libsLoadedVersion = version;
     }
     libsLoaded = rendererType;
