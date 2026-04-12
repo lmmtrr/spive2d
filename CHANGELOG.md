@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.20] - 2026-04-12
+
+### Added
+
+- Support merging sequential Spine assets
+- Support foreground layer sorting via `_fg` filename suffix
+
 ## [0.1.19] - 2026-03-31
 
 ### Fixed
