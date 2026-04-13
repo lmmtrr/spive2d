@@ -88,7 +88,7 @@ export class SpineRenderer extends BaseRenderer {
       if (isWebUrl) return `${name}${ext}`;
       return `${dirName}${name}${ext}`;
     };
-    if (baseName === 'MERGED') {
+    if (baseName.startsWith('\u200B')) {
       for (let i = 3; i < fileNames.length; i++) {
         const name = fileNames[i];
         if (!this.#isFileJson)
@@ -316,8 +316,9 @@ export class SpineRenderer extends BaseRenderer {
     const baseName = this.#fileNames[0];
     return Object.keys(this.#skeletons).sort((a, b) => {
       const getLayer = (k) => {
-        if (baseName !== 'MERGED' && k === '0') return 0;
-        const index = baseName === 'MERGED' ? parseInt(k) + 3 : parseInt(k) + 2;
+        const isMerged = baseName.startsWith('\u200B');
+        if (!isMerged && k === '0') return 0;
+        const index = isMerged ? parseInt(k) + 3 : parseInt(k) + 2;
         const name = (this.#fileNames[index] || '').toLowerCase();
         if (name.includes('_fg')) return 1;
         if (name.includes('_bg')) return -1;
@@ -380,7 +381,7 @@ export class SpineRenderer extends BaseRenderer {
     if (this.#assetManager.isLoadingComplete()) {
       const allSkipped = [];
       const baseName = this.#fileNames[0];
-      if (baseName === 'MERGED') {
+      if (baseName.startsWith('\u200B')) {
         for (let i = 3; i < this.#fileNames.length; i++) {
           const name = this.#fileNames[i];
           this.#skeletons[String(i - 3)] = this.#loadSkeleton(name);
@@ -606,7 +607,8 @@ export class SpineRenderer extends BaseRenderer {
       const skeleton = skelEntry.skeleton;
       const state = skelEntry.state;
       const idNum = parseInt(skeletonId);
-      const fileLabel = baseName === 'MERGED'
+      const isMerged = baseName.startsWith('\u200B');
+      const fileLabel = isMerged
         ? `[${this.#fileNames[idNum + 3] || skeletonId}] `
         : (idNum === 0 ? '' : `[${this.#fileNames[idNum + 2] || skeletonId}] `);
       const animationAttachmentMap = new Map();
@@ -724,7 +726,8 @@ export class SpineRenderer extends BaseRenderer {
     if (!skeleton) return;
     const baseName = this.#fileNames[0];
     let originalName = displayName;
-    if (baseName === 'MERGED') {
+    const isMerged = baseName.startsWith('\u200B');
+    if (isMerged) {
       const fileLabel = `[${this.#fileNames[idNum + 3] || skeletonId}] `;
       if (displayName.startsWith(fileLabel)) {
         originalName = displayName.substring(fileLabel.length);

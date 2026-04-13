@@ -31,7 +31,7 @@ export class SpineVersionManager {
 
   static async detectVersion(dirName, fileNames) {
     let baseName = fileNames[0];
-    if (baseName === 'MERGED' && fileNames.length > 3) {
+    if (baseName.startsWith('\u200B') && fileNames.length > 3) {
       baseName = fileNames[3];
     }
     const rawUrl = `${dirName}${baseName}${fileNames[1]}`;

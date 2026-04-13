@@ -292,7 +292,8 @@ class WorkerSpineRenderer {
       else this.assetManager.loadText(name + skelExt);
       this.assetManager.loadTextureAtlas(name + atlasExt);
     };
-    if (baseName === 'MERGED') {
+    const isMerged = baseName.startsWith('\u200B');
+    if (isMerged) {
       for (let i = 3; i < fileNames.length; i++) loadModel(fileNames[i]);
     } else {
       loadModel(baseName);
@@ -310,7 +311,8 @@ class WorkerSpineRenderer {
       };
       check();
     });
-    if (baseName === 'MERGED') {
+    const isMerged2 = baseName.startsWith('\u200B');
+    if (isMerged2) {
       for (let i = 3; i < fileNames.length; i++) {
         this.skeletons[String(i - 3)] = await this._loadSkeleton(fileNames[i], fileNames, isFileJson);
       }
@@ -463,8 +465,9 @@ class WorkerSpineRenderer {
     const baseName = this.fileNames[0];
     const keys = Object.keys(this.skeletons).sort((a, b) => {
       const getL = (k) => {
-        if (baseName !== 'MERGED' && k === '0') return 0;
-        const name = (this.fileNames[baseName === 'MERGED' ? parseInt(k) + 3 : parseInt(k) + 2] || '').toLowerCase();
+        const isMerged = baseName.startsWith('\u200B');
+        if (!isMerged && k === '0') return 0;
+        const name = (this.fileNames[isMerged ? parseInt(k) + 3 : parseInt(k) + 2] || '').toLowerCase();
         return name.includes('_fg') ? 1 : (name.includes('_bg') ? -1 : 0);
       };
       const la = getL(a), lb = getL(b);

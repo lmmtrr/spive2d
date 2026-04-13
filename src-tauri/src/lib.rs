@@ -446,7 +446,16 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             }
         }
         if is_compatible && !all_bases.is_empty() {
-            merged_group.push("MERGED".to_string());
+            let folder_name = dir_path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    all_bases[0]
+                        .trim_end_matches(|c: char| c.is_ascii_digit() || c == '_' || c == '-')
+                        .to_string()
+                });
+            merged_group.push(format!("\u{200B}{}", folder_name));
             merged_group.push(main_ext);
             merged_group.push(atlas_ext);
             merged_group.extend(all_bases);
