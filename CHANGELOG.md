@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.21] - 2026-04-13
+
+### Added
+
+- Use folder name for merged assets instead of generic label
+
+### Fixed
+
+- Improved Spine sequential skeleton loading and asset handling
+- Numerical sorting for sequential assets
+- Sanitization of malformed Spine atlas files
+
 ## [0.1.20] - 2026-04-12
 
 ### Added
