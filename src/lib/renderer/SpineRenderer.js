@@ -83,8 +83,19 @@ export class SpineRenderer extends BaseRenderer {
     const target = this.#assetManager.downloader || this.#assetManager;
     const original = target.downloadText.bind(target);
     target.downloadText = (url, success, error) => original(url, (text) => {
-      if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/))
-        text = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).join('\n');
+      if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/)) {
+        const lines = text.split(/\r?\n/).map(line => line.trim());
+        const cleaned = [];
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.length === 0) continue;
+          if (cleaned.length > 0 && line.match(/\.(png|jpg|jpeg|webp)$/i)) {
+            cleaned.push('');
+          }
+          cleaned.push(line);
+        }
+        text = cleaned.join('\n');
+      }
       success?.(text);
     }, error);
     this.#mvp = new this.#spine.Matrix4();
@@ -111,12 +122,14 @@ export class SpineRenderer extends BaseRenderer {
         this.#assetManager.loadText(makePath(baseName, skelExt));
       this.#assetManager.loadTextureAtlas(makePath(baseName, atlasExt));
       for (let i = 3; i < fileNames.length; i++) {
+        const extraFile = fileNames[i];
+        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
         if (!this.#isFileJson)
-          this.#assetManager.loadBinary(makePath(baseName, fileNames[i]));
+          this.#assetManager.loadBinary(makePath(baseName, extraFile));
         else
-          this.#assetManager.loadText(makePath(baseName, fileNames[i]));
+          this.#assetManager.loadText(makePath(baseName, extraFile));
         this.#assetManager.loadTextureAtlas(
-          makePath(baseName, `${fileNames[i].split('.')[0]}${atlasExt}`)
+          makePath(baseName, `${extraFile.split('.')[0]}${atlasExt}`)
         );
       }
     }
@@ -391,16 +404,27 @@ export class SpineRenderer extends BaseRenderer {
       if (baseName.startsWith('\u200B')) {
         for (let i = 3; i < this.#fileNames.length; i++) {
           const name = this.#fileNames[i];
-          this.#skeletons[String(i - 3)] = this.#loadSkeleton(name);
-          allSkipped.push(...(this.#skeletons[String(i - 3)].skippedAttachments || []));
+          const skelData = this.#loadSkeleton(name);
+          if (skelData) {
+            this.#skeletons[String(i - 3)] = skelData;
+            allSkipped.push(...(skelData.skippedAttachments || []));
+          }
         }
       } else {
-        this.#skeletons['0'] = this.#loadSkeleton(baseName);
-        allSkipped.push(...(this.#skeletons['0'].skippedAttachments || []));
+        const skelData0 = this.#loadSkeleton(baseName);
+        if (skelData0) {
+          this.#skeletons['0'] = skelData0;
+          allSkipped.push(...(skelData0.skippedAttachments || []));
+        }
         for (let i = 3; i < this.#fileNames.length; i++) {
-          const name2 = `${baseName}${this.#fileNames[i].split('.')[0]}`;
-          this.#skeletons[String(i - 2)] = this.#loadSkeleton(name2);
-          allSkipped.push(...(this.#skeletons[String(i - 2)].skippedAttachments || []));
+          const extraFile = this.#fileNames[i];
+          if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
+          const name2 = `${baseName}${extraFile.split('.')[0]}`;
+          const skelDataN = this.#loadSkeleton(name2);
+          if (skelDataN) {
+            this.#skeletons[String(i - 2)] = skelDataN;
+            allSkipped.push(...(skelDataN.skippedAttachments || []));
+          }
         }
       }
       if (allSkipped.length > 0) {
@@ -1060,6 +1084,7 @@ export class SpineRenderer extends BaseRenderer {
   }
 
   #resizeAtlasPages(atlas, atlasPath, isWebUrl) {
+    if (!atlas) return;
     let atlasText = null;
     try {
       const url = isWebUrl ? this.#dirName + atlasPath : convertFileSrc(atlasPath);

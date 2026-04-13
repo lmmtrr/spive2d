@@ -322,10 +322,13 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         let filename_lower = filename.to_lowercase();
         file_paths.insert(filename_lower.clone(), relative_path.clone());
         if filename_lower.contains(".atlas") {
-            if let Some(idx) = filename_lower.find(".atlas") {
-                let base_name_part = &filename[..idx];
-                let extension_part = &filename[idx..];
-                all_atlas_info.insert(base_name_part.to_string(), extension_part.to_string());
+            let is_image = filename_lower.ends_with(".png") || filename_lower.ends_with(".jpg") || filename_lower.ends_with(".jpeg") || filename_lower.ends_with(".webp");
+            if !is_image {
+                if let Some(idx) = filename_lower.rfind(".atlas") {
+                    let base_name_part = &filename[..idx];
+                    let extension_part = &filename[idx..];
+                    all_atlas_info.insert(base_name_part.to_string(), extension_part.to_string());
+                }
             }
         } else if filename_lower.contains(".moc3") {
             let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
