@@ -80,6 +80,13 @@ export class SpineRenderer extends BaseRenderer {
     this.#skeletonRenderer = new this.#spine.SkeletonRenderer(this.#ctx);
     const isWebUrl = dirName.startsWith('http://') || dirName.startsWith('https://');
     this.#assetManager = new this.#spine.AssetManager(this.#ctx.gl, isWebUrl ? dirName : '');
+    const target = this.#assetManager.downloader || this.#assetManager;
+    const original = target.downloadText.bind(target);
+    target.downloadText = (url, success, error) => original(url, (text) => {
+      if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/))
+        text = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).join('\n');
+      success?.(text);
+    }, error);
     this.#mvp = new this.#spine.Matrix4();
     const baseName = fileNames[0];
     const skelExt = fileNames[1];
