@@ -209,6 +209,56 @@ async fn clear_cache(app_handle: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn compare_natural(a: &str, b: &str) -> std::cmp::Ordering {
+    let mut a_chars = a.chars().peekable();
+    let mut b_chars = b.chars().peekable();
+    loop {
+        match (a_chars.peek(), b_chars.peek()) {
+            (Some(a_c), Some(b_c)) => {
+                if a_c.is_ascii_digit() && b_c.is_ascii_digit() {
+                    let mut a_num = 0u64;
+                    let mut a_len = 0;
+                    while let Some(&c) = a_chars.peek() {
+                        if let Some(digit) = c.to_digit(10) {
+                            a_num = a_num.wrapping_mul(10).wrapping_add(digit as u64);
+                            a_chars.next();
+                            a_len += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    let mut b_num = 0u64;
+                    let mut b_len = 0;
+                    while let Some(&c) = b_chars.peek() {
+                        if let Some(digit) = c.to_digit(10) {
+                            b_num = b_num.wrapping_mul(10).wrapping_add(digit as u64);
+                            b_chars.next();
+                            b_len += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    if a_num != b_num {
+                        return a_num.cmp(&b_num);
+                    }
+                    if a_len != b_len {
+                        return a_len.cmp(&b_len);
+                    }
+                } else {
+                    let ac = a_chars.next().unwrap();
+                    let bc = b_chars.next().unwrap();
+                    if ac != bc {
+                        return ac.cmp(&bc);
+                    }
+                }
+            }
+            (None, None) => return std::cmp::Ordering::Equal,
+            (None, _) => return std::cmp::Ordering::Less,
+            (_, None) => return std::cmp::Ordering::Greater,
+        }
+    }
+}
+
 fn process_directory_with_subdirs(
     dir_path: &Path,
     base_path: &Path,
@@ -418,7 +468,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             file_groups.push(file_group);
         }
     }
-    file_groups.sort_unstable_by(|a, b| a[0].cmp(&b[0]));
+    file_groups.sort_unstable_by(|a, b| compare_natural(&a[0], &b[0]));
     if merge_sequential && file_groups.len() > 1 {
         if file_groups.len() > 20 {
             file_groups.truncate(20);
@@ -494,7 +544,7 @@ fn find_extra_files(
             }
         }
     }
-    extra_files.sort_unstable();
+    extra_files.sort_unstable_by(|a, b| compare_natural(a, b));
     extra_files
 }
 
@@ -510,7 +560,7 @@ fn process_directory(dir_path: &Path, base_path: &Path, merge_sequential: bool) 
             all_file_groups.extend(subdir_file_groups);
         }
     }
-    all_file_groups.sort_unstable_by(|a, b| a[0].cmp(&b[0]));
+    all_file_groups.sort_unstable_by(|a, b| compare_natural(&a[0], &b[0]));
     Ok(all_file_groups)
 }
 
