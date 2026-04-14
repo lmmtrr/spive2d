@@ -113,6 +113,22 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
 
 export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson) {
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
+  const originalNewRegionAttachment = atlasLoader.newRegionAttachment;
+  atlasLoader.newRegionAttachment = function (skin, name, path) {
+    if (!atlas.findRegion(path)) {
+      console.warn(`[Spine] Skipping missing region attachment: ${path}`);
+      return null;
+    }
+    return originalNewRegionAttachment.call(atlasLoader, skin, name, path);
+  };
+  const originalNewMeshAttachment = atlasLoader.newMeshAttachment;
+  atlasLoader.newMeshAttachment = function (skin, name, path) {
+    if (!atlas.findRegion(path)) {
+      console.warn(`[Spine] Skipping missing mesh attachment: ${path}`);
+      return null;
+    }
+    return originalNewMeshAttachment.call(atlasLoader, skin, name, path);
+  };
   const skeletonLoader = !isFileJson
     ? new spine.SkeletonBinary(atlasLoader)
     : new spine.SkeletonJson(atlasLoader);
