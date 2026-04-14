@@ -3,6 +3,7 @@ import { createSorter } from '../utils.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { showNotification } from '../notificationStore.svelte.js';
 import { SpineVersionManager } from './SpineVersionManager.js';
+import { normalizeAtlasText, setupAtlas, parseAtlasDeclaredSizes, updateAtlasRegions } from '../atlasUtils.js';
 
 const sortByName = createSorter(item => item[0] || item.name || '');
 
@@ -84,17 +85,7 @@ export class SpineRenderer extends BaseRenderer {
     const original = target.downloadText.bind(target);
     target.downloadText = (url, success, error) => original(url, (text) => {
       if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/)) {
-        const lines = text.split(/\r?\n/).map(line => line.trim());
-        const cleaned = [];
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.length === 0) continue;
-          if (cleaned.length > 0 && line.match(/\.(png|jpg|jpeg|webp)$/i)) {
-            cleaned.push('');
-          }
-          cleaned.push(line);
-        }
-        text = cleaned.join('\n');
+        text = normalizeAtlasText(text);
       }
       success?.(text);
     }, error);
@@ -458,17 +449,7 @@ export class SpineRenderer extends BaseRenderer {
     const atlasPath = makePath(fileName, atlasExt);
     const atlas = this.#assetManager.get(atlasPath);
     if (atlas && atlas.regions) {
-      atlas.regions.forEach((region) => {
-        if (region.name) region.name = region.name.trim();
-      });
-      const originalFindRegion = atlas.findRegion;
-      atlas.findRegion = function (name) {
-        let region = originalFindRegion.call(this, name);
-        if (!region && name) {
-          region = originalFindRegion.call(this, name.trim());
-        }
-        return region;
-      };
+      setupAtlas(atlas);
     }
     this.#resizeAtlasPages(atlas, atlasPath, isWebUrl);
     for (const page of atlas.pages) {
@@ -1097,8 +1078,12 @@ export class SpineRenderer extends BaseRenderer {
     } catch (e) {
       console.warn('[SpineRenderer] Could not fetch atlas text for resize check:', e);
     }
-    if (!atlasText) return;
-    const declaredSizes = this.#parseAtlasDeclaredSizes(atlasText);
+    if (atlasText) {
+      atlasText = normalizeAtlasText(atlasText);
+    } else {
+      return;
+    }
+    const declaredSizes = parseAtlasDeclaredSizes(atlasText);
     const gl = this.#ctx.gl;
     const resizedPages = new Set();
     for (const page of atlas.pages) {
@@ -1123,41 +1108,8 @@ export class SpineRenderer extends BaseRenderer {
       resizedPages.add(page);
     }
     if (resizedPages.size > 0 && atlas.regions) {
-      for (const region of atlas.regions) {
-        if (!resizedPages.has(region.page)) continue;
-        const pw = region.page.width;
-        const ph = region.page.height;
-        region.u = region.x / pw;
-        region.v = region.y / ph;
-        const isRotated = region.degrees === 90 || region.rotate === true;
-        if (isRotated) {
-          region.u2 = (region.x + region.height) / pw;
-          region.v2 = (region.y + region.width) / ph;
-        } else {
-          region.u2 = (region.x + region.width) / pw;
-          region.v2 = (region.y + region.height) / ph;
-        }
-      }
+      updateAtlasRegions(atlas, resizedPages);
     }
   }
 
-  #parseAtlasDeclaredSizes(atlasText) {
-    const sizes = new Map();
-    const lines = atlasText.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line.endsWith('.png') && !line.endsWith('.jpg') && !line.endsWith('.jpeg') && !line.endsWith('.webp')) continue;
-      const pageName = line;
-      for (let j = i + 1; j < lines.length; j++) {
-        const entry = lines[j].trim();
-        if (!entry || (!entry.includes(':') && (entry.endsWith('.png') || entry.endsWith('.jpg')))) break;
-        const sizeMatch = entry.match(/^size\s*:\s*(\d+)\s*,\s*(\d+)/);
-        if (sizeMatch) {
-          sizes.set(pageName, { width: parseInt(sizeMatch[1]), height: parseInt(sizeMatch[2]) });
-          break;
-        }
-      }
-    }
-    return sizes;
-  }
 }

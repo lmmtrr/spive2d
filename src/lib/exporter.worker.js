@@ -1,5 +1,6 @@
 import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
+import { normalizeAtlasText, setupAtlas, parseAtlasDeclaredSizes, updateAtlasRegions } from './atlasUtils.js';
 
 let currentTasks = new Map();
 let libsLoaded = false;
@@ -280,6 +281,14 @@ class WorkerSpineRenderer {
     this.alphaMode = alphaMode;
     const isWebUrl = dirName.startsWith('http');
     this.assetManager = new this.spine.AssetManager(this.ctx.gl, isWebUrl ? dirName : '');
+    const target = this.assetManager.downloader || this.assetManager;
+    const originalDownloadText = target.downloadText.bind(target);
+    target.downloadText = (url, success, error) => originalDownloadText(url, (text) => {
+      if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/)) {
+        text = normalizeAtlasText(text);
+      }
+      success?.(text);
+    }, error);
     const gl = this.ctx.gl;
     if (gl) {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
@@ -331,19 +340,10 @@ class WorkerSpineRenderer {
     const atlasFile = fileName + fileNames[2];
     const atlas = this.assetManager.get(atlasFile);
     if (!atlas) throw new Error("Atlas not found: " + atlasFile);
-
     if (atlas.regions) {
-      atlas.regions.forEach(r => { if (r.name) r.name = r.name.trim(); });
-      const orig = atlas.findRegion;
-      atlas.findRegion = function(name) {
-        let res = orig.call(this, name);
-        if (!res && name) res = orig.call(this, name.trim());
-        return res;
-      };
+      setupAtlas(atlas);
     }
-
     await this._resizeAtlasPages(atlas, atlasFile);
-
     const skeletonData = (isFileJson ? new this.spine.SkeletonJson(new this.spine.AtlasAttachmentLoader(atlas)) : new this.spine.SkeletonBinary(new this.spine.AtlasAttachmentLoader(atlas))).readSkeletonData(this.assetManager.get(skelFile));
     const skeleton = new this.spine.Skeleton(skeletonData);
     let initialSkinName;
@@ -370,9 +370,12 @@ class WorkerSpineRenderer {
     } catch (e) {
       console.warn('[WorkerSpineRenderer] Could not fetch atlas text for resize check:', e);
     }
-    if (!atlasText) return;
-
-    const declaredSizes = this._parseAtlasDeclaredSizes(atlasText);
+    if (atlasText) {
+      atlasText = normalizeAtlasText(atlasText);
+    } else {
+      return;
+    }
+    const declaredSizes = parseAtlasDeclaredSizes(atlasText);
     const gl = this.ctx.gl;
     const resizedPages = new Set();
     for (const page of atlas.pages) {
@@ -383,7 +386,6 @@ class WorkerSpineRenderer {
       const declared = declaredSizes.get(page.name);
       if (!declared) continue;
       if (img.width === declared.width && img.height === declared.height) continue;
-
       const canvas = new OffscreenCanvas(declared.width, declared.height);
       const ctx2d = canvas.getContext('2d');
       ctx2d.imageSmoothingEnabled = false;
@@ -396,43 +398,10 @@ class WorkerSpineRenderer {
       resizedPages.add(page);
     }
     if (resizedPages.size > 0 && atlas.regions) {
-      for (const region of atlas.regions) {
-        if (!resizedPages.has(region.page)) continue;
-        const pw = region.page.width;
-        const ph = region.page.height;
-        region.u = region.x / pw;
-        region.v = region.y / ph;
-        const isRotated = region.degrees === 90 || region.rotate === true;
-        if (isRotated) {
-          region.u2 = (region.x + region.height) / pw;
-          region.v2 = (region.y + region.width) / ph;
-        } else {
-          region.u2 = (region.x + region.width) / pw;
-          region.v2 = (region.y + region.height) / ph;
-        }
-      }
+      updateAtlasRegions(atlas, resizedPages);
     }
   }
 
-  _parseAtlasDeclaredSizes(atlasText) {
-    const sizes = new Map();
-    const lines = atlasText.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line.endsWith('.png') && !line.endsWith('.jpg') && !line.endsWith('.jpeg') && !line.endsWith('.webp')) continue;
-      const pageName = line;
-      for (let j = i + 1; j < lines.length; j++) {
-        const entry = lines[j].trim();
-        if (!entry || (!entry.includes(':') && (entry.endsWith('.png') || entry.endsWith('.jpg')))) break;
-        const sizeMatch = entry.match(/^size\s*:\s*(\d+)\s*,\s*(\d+)/);
-        if (sizeMatch) {
-          sizes.set(pageName, { width: parseInt(sizeMatch[1]), height: parseInt(sizeMatch[2]) });
-          break;
-        }
-      }
-    }
-    return sizes;
-  }
 
   getAnimationDuration() {
     const s = this.skeletons['0']?.state;
