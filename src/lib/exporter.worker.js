@@ -290,10 +290,11 @@ class WorkerSpineRenderer extends SpineRendererBase {
     this._currentDuration = this.getAnimationDuration();
   }
 
-  setTransform(scale, x, y, rotation, ignoreTransform, contentWidth, contentHeight) {
+  setTransform(scale, x, y, rotation, ignoreTransform, contentWidth, contentHeight, screenBaseScale) {
     this.ignoreTransform = ignoreTransform;
     this.contentWidth = contentWidth;
     this.contentHeight = contentHeight;
+    this.screenBaseScale = screenBaseScale;
     if (ignoreTransform) {
       this.applyTransform(1, 0, 0, 0);
     } else {
@@ -310,7 +311,8 @@ class WorkerSpineRenderer extends SpineRendererBase {
       marginX: this.marginX,
       marginY: this.marginY,
       contentWidth: this.contentWidth,
-      contentHeight: this.contentHeight
+      contentHeight: this.contentHeight,
+      screenBaseScale: this.screenBaseScale
     });
   }
 }
@@ -388,7 +390,8 @@ self.onmessage = async (e) => {
           p.transform?.rotation,
           p.transform?.ignoreTransform,
           p.contentWidth,
-          p.contentHeight
+          p.contentHeight,
+          p.transform?.screenBaseScale
         );
         if (!renderer._skeletons['0']) throw new Error('Main skeleton failed to load');
         if (p.syncState) {

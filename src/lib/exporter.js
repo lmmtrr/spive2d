@@ -173,7 +173,9 @@ async function prepareExportContext(taskId, baseFilename, WorkerClass) {
     spineVersion = v.version;
     isFileJson = v.isJson;
   }
-  const screenBaseScale = Math.min(window.innerWidth / originalSize.width, window.innerHeight / originalSize.height);
+  const screenBaseScale = modelInfo.rendererType === 'spine'
+    ? Math.max(originalSize.width / window.innerWidth, originalSize.height / window.innerHeight)
+    : Math.min(window.innerWidth / originalSize.width, window.innerHeight / originalSize.height);
   const transform = {
     scale: activeRenderer?._scale || 1,
     x: activeRenderer?._moveX || 0,

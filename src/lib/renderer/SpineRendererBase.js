@@ -312,12 +312,20 @@ export class SpineRendererBase extends BaseRenderer {
     if (!this._ctx) return;
     const firstSkel = this._skeletons['0'] || Object.values(this._skeletons)[0];
     if (!firstSkel) return;
+    let screenBaseScale = options.screenBaseScale;
+    if (!screenBaseScale && !this.isExport) {
+      const bounds = firstSkel.bounds;
+      screenBaseScale = Math.max(
+        bounds.size.x / (window.innerWidth),
+        bounds.size.y / (window.innerHeight)
+      );
+    }
     calculateSpineMVP(this._spine, this._mvp, this._canvas.width, this._canvas.height, firstSkel.bounds, {
       scale: this._scale,
       x: this._moveX,
       y: this._moveY,
       rotation: this._rotate
-    }, options);
+    }, { ...options, screenBaseScale });
     this._ctx.gl.viewport(0, 0, this._canvas.width, this._canvas.height);
   }
 
@@ -379,7 +387,17 @@ export class SpineRendererBase extends BaseRenderer {
       this._moveY = 0;
       this._rotate = 0;
     }
-    const renderOptions = { ...options, dpr: options.dpr || 1 };
+    let screenBaseScale = options.screenBaseScale;
+    if (!screenBaseScale && typeof window !== 'undefined') {
+      const firstSkel = this._skeletons['0'] || Object.values(this._skeletons)[0];
+      if (firstSkel) {
+        screenBaseScale = Math.max(
+          firstSkel.bounds.size.x / window.innerWidth,
+          firstSkel.bounds.size.y / window.innerHeight
+        );
+      }
+    }
+    const renderOptions = { ...options, dpr: options.dpr || 1, screenBaseScale };
     this.render(0, renderOptions);
     const captureCanvas = createCanvas(this._canvas.width, this._canvas.height);
     const ctx = captureCanvas.getContext('2d');

@@ -158,21 +158,23 @@ export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson)
 
 export function calculateSpineMVP(spine, mvp, canvasWidth, canvasHeight, bounds, transform, options = {}) {
   const { scale: userScale = 1, x: userMoveX = 0, y: userMoveY = 0, rotation: userRotate = 0 } = transform;
-  const { marginX = 0, marginY = 0, dpr = 1, contentWidth, contentHeight } = options;
+  const { marginX = 0, marginY = 0, dpr = 1, contentWidth, contentHeight, screenBaseScale } = options;
   const logicalWidth = canvasWidth / dpr;
   const logicalHeight = canvasHeight / dpr;
   const centerX = bounds.offset.x + bounds.size.x * 0.5;
   const centerY = bounds.offset.y + bounds.size.y * 0.5;
   const usedWidth = (contentWidth && contentHeight) ? (contentWidth / dpr) : (logicalWidth - 2 * marginX / dpr);
   const usedHeight = (contentWidth && contentHeight) ? (contentHeight / dpr) : (logicalHeight - 2 * marginY / dpr);
-  let scale = Math.max(
+  const baseScale = Math.max(
     bounds.size.x / usedWidth,
     bounds.size.y / usedHeight
-  ) / userScale;
+  );
+  let scale = baseScale / userScale;
   const width = logicalWidth * scale;
   const height = logicalHeight * scale;
-  const viewCenterX = centerX - userMoveX * scale;
-  const viewCenterY = centerY + userMoveY * scale;
+  const scaleFactor = screenBaseScale ? (screenBaseScale / baseScale) : 1;
+  const viewCenterX = centerX - userMoveX * scale * scaleFactor;
+  const viewCenterY = centerY + userMoveY * scale * scaleFactor;
   mvp.ortho2d(
     viewCenterX - width * 0.5,
     viewCenterY - height * 0.5,
