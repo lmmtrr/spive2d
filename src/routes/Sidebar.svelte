@@ -232,9 +232,9 @@
     {#if appState.propertyCategory === 'skins'}
       <div id="skin-panel">
         {#each propertyItems as item (item.name + '_' + item.index)}
-          <div class="item" style:display={matchesFilter(item.name) ? 'flex' : 'none'}>
-            <label title={item.name}>
-              {item.name}
+          <div class="item" style:display={matchesFilter(item.displayName || item.name) ? 'flex' : 'none'}>
+            <label title={item.displayName || item.name}>
+              {item.displayName || item.name}
               <input type="checkbox" data-name={item.name} data-old-index={item.index} checked={item.checked}>
             </label>
           </div>
@@ -242,12 +242,12 @@
       </div>
     {:else}
       {#each propertyItems as item (item.name + '_' + item.index)}
-        <div class="item" style:display={matchesFilter(item.name) ? 'flex' : 'none'}>
+        <div class="item" style:display={matchesFilter(item.displayName || item.name) ? 'flex' : 'none'}>
           {#if item.type === 'range'}
-            <label title={item.name}><span class="label-text">{item.name}</span><input type="range" data-name={item.name} data-old-index={item.index} max={item.max} min={item.min} step={item.step} value={item.value}></label>
+            <label title={item.displayName || item.name}><span class="label-text">{item.displayName || item.name}</span><input type="range" data-name={item.name} data-old-index={item.index} max={item.max} min={item.min} step={item.step} value={item.value}></label>
           {:else}
-            <label title={item.name}>
-              {item.name}
+            <label title={item.displayName || item.name}>
+              {item.displayName || item.name}
               <input type="checkbox" data-name={item.name} data-old-index={item.index} checked={item.checked}>
             </label>
           {/if}

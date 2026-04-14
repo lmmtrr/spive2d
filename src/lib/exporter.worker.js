@@ -1,6 +1,6 @@
 import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
-import { normalizeAtlasText, setupAtlas, parseAtlasDeclaredSizes, updateAtlasRegions } from './atlasUtils.js';
+import { SpineRendererBase } from './renderer/SpineRendererBase.js';
 
 let currentTasks = new Map();
 let libsLoaded = false;
@@ -87,6 +87,9 @@ class WorkerLive2DRenderer {
     this.opacities = null;
     this.marginX = 0;
     this.marginY = 0;
+    this.contentWidth = 0;
+    this.contentHeight = 0;
+    this.ignoreTransform = false;
     this._lastSeekTime = 0;
   }
 
@@ -213,14 +216,22 @@ class WorkerLive2DRenderer {
     return 60;
   }
 
-  setTransform(scale, x, y, rotation, originalWidth, originalHeight, screenBaseScale) {
+  setTransform(scale, x, y, rotation, originalWidth, originalHeight, screenBaseScale, ignoreTransform, contentWidth, contentHeight) {
     if (!this.model) return;
     const { width: canvasWidth, height: canvasHeight } = this.app.view;
-    const baseScale = Math.min((canvasWidth - 2 * this.marginX) / originalWidth, (canvasHeight - 2 * this.marginY) / originalHeight);
-    const scaleFactor = screenBaseScale ? (baseScale / screenBaseScale) : 1;
-    this.model.scale.set(baseScale * (scale || 1));
-    this.model.position.set(canvasWidth * 0.5 + (x || 0) * scaleFactor, canvasHeight * 0.5 + (y || 0) * scaleFactor);
-    this.model.rotation = rotation || 0;
+    const baseScale = (contentWidth && contentHeight)
+      ? Math.min(contentWidth / originalWidth, contentHeight / originalHeight)
+      : Math.min((canvasWidth - 2 * this.marginX) / originalWidth, (canvasHeight - 2 * this.marginY) / originalHeight);
+    if (ignoreTransform) {
+      this.model.scale.set(baseScale);
+      this.model.position.set(canvasWidth * 0.5, canvasHeight * 0.5);
+      this.model.rotation = 0;
+    } else {
+      const scaleFactor = screenBaseScale ? (baseScale / screenBaseScale) : 1;
+      this.model.scale.set(baseScale * (scale || 1));
+      this.model.position.set(canvasWidth * 0.5 + (x || 0) * scaleFactor, canvasHeight * 0.5 + (y || 0) * scaleFactor);
+      this.model.rotation = rotation || 0;
+    }
   }
 
   seek(progress) {
@@ -254,242 +265,52 @@ class WorkerLive2DRenderer {
   }
 }
 
-class WorkerSpineRenderer {
+class WorkerSpineRenderer extends SpineRendererBase {
+  _currentDuration = 0.1;
+  marginX = 0;
+  marginY = 0;
+  contentWidth = 0;
+  contentHeight = 0;
+  ignoreTransform = false;
+
   constructor(canvas, spineLib) {
-    this.canvas = canvas;
-    this.spine = spineLib;
-    this.ctx = new spineLib.ManagedWebGLRenderingContext(canvas, { preserveDrawingBuffer: true });
-    this.shader = spineLib.Shader.newTwoColoredTextured(this.ctx);
-    this.batcher = new spineLib.PolygonBatcher(this.ctx);
-    this.skeletonRenderer = new spineLib.SkeletonRenderer(this.ctx);
-    this.mvp = new spineLib.Matrix4();
-    this.assetManager = null;
-    this.skeletons = {};
-    this.dirName = '';
-    this.fileNames = [];
-    this.transform = { scale: 1, x: 0, y: 0, rotation: 0 };
-    this._currentDuration = 0.1;
-    this.attachmentsCache = {};
-    this.marginX = 0;
-    this.marginY = 0;
-    this.alphaMode = 'unpack';
+    super(canvas, spineLib, true);
   }
 
   async load(dirName, scene, isFileJson, alphaMode = 'unpack') {
-    this.dirName = dirName;
-    this.fileNames = scene;
-    this.alphaMode = alphaMode;
-    const isWebUrl = dirName.startsWith('http');
-    this.assetManager = new this.spine.AssetManager(this.ctx.gl, isWebUrl ? dirName : '');
-    const target = this.assetManager.downloader || this.assetManager;
-    const originalDownloadText = target.downloadText.bind(target);
-    target.downloadText = (url, success, error) => originalDownloadText(url, (text) => {
-      if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/)) {
-        text = normalizeAtlasText(text);
-      }
-      success?.(text);
-    }, error);
-    const originalLoadTexture = this.assetManager.loadTexture.bind(this.assetManager);
-    this.assetManager.loadTexture = (url, success, error) => {
-      originalLoadTexture(url, success, (path, msg) => {
-        const canvas = new OffscreenCanvas(1, 1);
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#cccccc';
-        ctx.fillRect(0, 0, 1, 1);
-        const texture = new this.spine.GLTexture(this.ctx.gl, canvas);
-        this.assetManager.assets[path] = texture;
-        if (this.assetManager.errors) delete this.assetManager.errors[path];
-        success?.(path, texture);
-      });
-    };
-    const gl = this.ctx.gl;
-    if (gl) {
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
-    }
-    const mainExt = scene.mainExt;
-    const atlasExt = scene.atlasExt;
-    const loadModel = (name) => {
-      if (!isFileJson) this.assetManager.loadBinary(name + mainExt);
-      else this.assetManager.loadText(name + mainExt);
-      this.assetManager.loadTextureAtlas(name + atlasExt);
-    };
-    if (scene.isMerged) {
-      for (const name of scene.files) loadModel(name);
-    } else {
-      loadModel(scene.name);
-      for (const extraFile of scene.files) {
-        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-        loadModel(scene.name + extraFile.split('.')[0]);
-      }
-    }
-    await new Promise((resolve, reject) => {
-      const start = Date.now();
-      const check = () => {
-        if (this.assetManager.isLoadingComplete()) {
-          const errors = this.assetManager.getErrors();
-          if (Object.keys(errors).length > 0) reject(new Error("Loading failed: " + JSON.stringify(errors)));
-          else resolve();
-        } else if (Date.now() - start > 10000) reject(new Error("Loading timeout"));
-        else setTimeout(check, 100);
-      };
-      check();
-    });
-    if (scene.isMerged) {
-      for (let i = 0; i < scene.files.length; i++) {
-        this.skeletons[String(i)] = await this._loadSkeleton(scene.files[i], scene, isFileJson);
-      }
-    } else {
-      this.skeletons['0'] = await this._loadSkeleton(scene.name, scene, isFileJson);
-      for (let i = 0; i < scene.files.length; i++) {
-        const extraFile = scene.files[i];
-        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-        const name2 = scene.name + extraFile.split('.')[0];
-        this.skeletons[String(i + 1)] = await this._loadSkeleton(name2, scene, isFileJson);
-      }
-    }
+    await this.initCtx(alphaMode);
+    await this.loadAssets(dirName, scene, isFileJson);
+    await this._waitForAssets();
+    await this.processLoadedAssets();
     this._currentDuration = this.getAnimationDuration();
-  }
-
-  async _loadSkeleton(fileName, scene, isFileJson) {
-    const mainExt = scene.mainExt;
-    const atlasExt = scene.atlasExt;
-    const atlasFile = fileName + atlasExt;
-    const skelFile = fileName + mainExt;
-    const atlas = this.assetManager.get(atlasFile);
-    if (!atlas) throw new Error("Atlas not found: " + atlasFile);
-    if (atlas.regions) {
-      setupAtlas(atlas);
-    }
-    await this._resizeAtlasPages(atlas, atlasFile);
-    const skeletonData = (isFileJson ? new this.spine.SkeletonJson(new this.spine.AtlasAttachmentLoader(atlas)) : new this.spine.SkeletonBinary(new this.spine.AtlasAttachmentLoader(atlas))).readSkeletonData(this.assetManager.get(skelFile));
-    const skeleton = new this.spine.Skeleton(skeletonData);
-    let initialSkinName;
-    if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1) initialSkinName = skeleton.data.skins[1].name;
-    else initialSkinName = skeleton.data.skins[0].name;
-    const newSkin = new this.spine.Skin('_');
-    const initialSkin = skeleton.data.findSkin(initialSkinName);
-    if (initialSkin) newSkin.addSkin(initialSkin);
-    skeleton.setSkin(newSkin);
-    skeleton.updateWorldTransform(2);
-    const state = new this.spine.AnimationState(new this.spine.AnimationStateData(skeleton.data));
-    const offset = new this.spine.Vector2(), size = new this.spine.Vector2();
-    skeleton.getBounds(offset, size, []);
-    return { skeleton, state, bounds: { offset, size } };
-  }
-
-  async _resizeAtlasPages(atlas, atlasPath) {
-    let atlasText = null;
-    try {
-      const isWebUrl = this.dirName.startsWith('http');
-      const url = isWebUrl ? this.dirName + atlasPath : atlasPath;
-      const res = await fetch(url);
-      if (res.ok) atlasText = await res.text();
-    } catch (e) {
-      console.warn('[WorkerSpineRenderer] Could not fetch atlas text for resize check:', e);
-    }
-    if (atlasText) {
-      atlasText = normalizeAtlasText(atlasText);
-    } else {
-      return;
-    }
-    const declaredSizes = parseAtlasDeclaredSizes(atlasText);
-    const gl = this.ctx.gl;
-    const resizedPages = new Set();
-    for (const page of atlas.pages) {
-      const tex = page.texture;
-      if (!tex || !tex.getImage) continue;
-      const img = tex.getImage();
-      if (!img) continue;
-      const declared = declaredSizes.get(page.name);
-      if (!declared) continue;
-      if (img.width === declared.width && img.height === declared.height) continue;
-      const canvas = new OffscreenCanvas(declared.width, declared.height);
-      const ctx2d = canvas.getContext('2d');
-      ctx2d.imageSmoothingEnabled = false;
-      ctx2d.drawImage(img, 0, 0, declared.width, declared.height);
-      tex._image = canvas;
-      tex.bind();
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-      page.width = declared.width;
-      page.height = declared.height;
-      resizedPages.add(page);
-    }
-    if (resizedPages.size > 0 && atlas.regions) {
-      updateAtlasRegions(atlas, resizedPages);
-    }
-  }
-
-
-  getAnimationDuration() {
-    const s = this.skeletons['0']?.state;
-    return (s && s.tracks[0]?.animation?.duration) || 0.1;
   }
 
   setAnimation(value) {
-    for (const k in this.skeletons) this.skeletons[k].state.setAnimation(0, value, true);
+    super.setAnimation(value);
     this._currentDuration = this.getAnimationDuration();
   }
 
-  setTransform(scale, x, y, rotation) { this.transform = { scale, x, y, rotation }; }
+  setTransform(scale, x, y, rotation, ignoreTransform, contentWidth, contentHeight) {
+    this.ignoreTransform = ignoreTransform;
+    this.contentWidth = contentWidth;
+    this.contentHeight = contentHeight;
+    if (ignoreTransform) {
+      this.applyTransform(1, 0, 0, 0);
+    } else {
+      this.applyTransform(scale, x, y, rotation);
+    }
+  }
 
   seek(progress) {
-    for (const k in this.skeletons) {
-      const { skeleton, state } = this.skeletons[k];
-      const entry = state.tracks[0];
-      if (entry) {
-        entry.trackTime = entry.animation.duration * progress;
-        state.apply(skeleton);
-        skeleton.updateWorldTransform(2);
-      }
-    }
+    this.seekAnimation(progress);
   }
 
   render() {
-    const gl = this.ctx.gl, { width, height } = this.canvas;
-    this._updateMVP(width, height);
-    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-    const sceneInfo = this.fileNames;
-    const keys = Object.keys(this.skeletons).sort((a, b) => {
-      const getL = (k) => {
-        if (!sceneInfo.isMerged && k === '0') return 0;
-        const name = (sceneInfo.isMerged ? sceneInfo.files[parseInt(k)] : sceneInfo.files[parseInt(k) - 1] || '').toLowerCase();
-        return name.includes('_fg') ? 1 : (name.includes('_bg') ? -1 : 0);
-      };
-      const la = getL(a), lb = getL(b);
-      return la !== lb ? la - lb : parseInt(a) - parseInt(b);
-    });
-    for (const k of keys) {
-      const { skeleton } = this.skeletons[k];
-      this._syncHidden(skeleton, k);
-      this.shader.bind();
-      this.shader.setUniformi(this.spine.Shader.SAMPLER, 0);
-      this.shader.setUniform4x4f(this.spine.Shader.MVP_MATRIX, this.mvp.values);
-      this.batcher.begin(this.shader);
-      this.skeletonRenderer.premultipliedAlpha = (this.alphaMode === 'unpack' || this.alphaMode === 'pma');
-      this.skeletonRenderer.draw(this.batcher, skeleton);
-      this.batcher.end();
-    }
-  }
-
-  _updateMVP(w, h) {
-    const bounds = this.skeletons['0'].bounds;
-    const { scale, x, y, rotation } = this.transform;
-    const centerX = bounds.offset.x + bounds.size.x * 0.5, centerY = bounds.offset.y + bounds.size.y * 0.5;
-    let s = Math.max(bounds.size.x / (w - 2 * this.marginX), bounds.size.y / (h - 2 * this.marginY)) / scale;
-    this.mvp.ortho2d(centerX - x * s - (w * s) * 0.5, centerY + y * s - (h * s) * 0.5, w * s, h * s);
-    if (rotation) {
-      const cos = Math.cos(Math.PI * rotation), sin = Math.sin(Math.PI * rotation);
-      const t1 = new this.spine.Matrix4(); t1.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, centerX, centerY, 0, 1]);
-      const rot = new this.spine.Matrix4(); rot.set([cos, -sin, 0, 0, sin, cos, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-      const t2 = new this.spine.Matrix4(); t2.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -centerX, -centerY, 0, 1]);
-      this.mvp.multiply(t1); this.mvp.multiply(rot); this.mvp.multiply(t2);
-    }
-    this.ctx.gl.viewport(0, 0, w, h);
-  }
-
-  _syncHidden(skeleton, id) {
-    Object.values(this.attachmentsCache).forEach(([idx, att]) => {
-      if (!att.isSkeleton && String(att.skeletonId || '0') === String(id) && skeleton.slots[idx]?.attachment?.name === att.name) skeleton.slots[idx].attachment = null;
+    super.render(0, {
+      marginX: this.marginX,
+      marginY: this.marginY,
+      contentWidth: this.contentWidth,
+      contentHeight: this.contentHeight
     });
   }
 }
@@ -538,7 +359,18 @@ self.onmessage = async (e) => {
         if (p.transform) {
           renderer.marginX = p.marginX || 0;
           renderer.marginY = p.marginY || 0;
-          renderer.setTransform(p.transform.scale, p.transform.x, p.transform.y, p.transform.rotation, p.transform.originalWidth, p.transform.originalHeight, p.transform.screenBaseScale);
+          renderer.setTransform(
+            p.transform.scale,
+            p.transform.x,
+            p.transform.y,
+            p.transform.rotation,
+            p.transform.originalWidth,
+            p.transform.originalHeight,
+            p.transform.screenBaseScale,
+            p.transform.ignoreTransform,
+            p.contentWidth,
+            p.contentHeight
+          );
         }
         if (p.syncState) renderer.applySyncState(p.syncState);
         if (p.animName) await renderer.setAnimation(p.animName);
@@ -547,21 +379,30 @@ self.onmessage = async (e) => {
       } else {
         renderer = new WorkerSpineRenderer(renderCanvas, self.spineLib);
         await renderer.load(p.selectedDir, p.fileNames, p.isFileJson, p.alphaMode);
-        renderer.setTransform(p.transform?.scale, p.transform?.x, p.transform?.y, p.transform?.rotation);
+        renderer.marginX = p.marginX || 0;
+        renderer.marginY = p.marginY || 0;
+        renderer.setTransform(
+          p.transform?.scale,
+          p.transform?.x,
+          p.transform?.y,
+          p.transform?.rotation,
+          p.transform?.ignoreTransform,
+          p.contentWidth,
+          p.contentHeight
+        );
+        if (!renderer._skeletons['0']) throw new Error('Main skeleton failed to load');
         if (p.syncState) {
           if (p.syncState.activeSkins) {
-            const s = renderer.skeletons['0'].skeleton, st = renderer.skeletons['0'].state, nk = new renderer.spine.Skin('_');
-            for (const sn of p.syncState.activeSkins) { const sk = s.data.findSkin(sn); if (sk) nk.addSkin(sk); }
-            s.setSkin(nk); s.setToSetupPose(); st.apply(s);
+            renderer.applySkins(p.syncState.activeSkins);
           }
-          renderer.attachmentsCache = p.syncState.attachmentsCache || {};
+          renderer._attachmentsCache = p.syncState.attachmentsCache || {};
         }
         if (p.animName) await renderer.setAnimation(p.animName);
       }
       let output = null, videoSource = null;
       if (type === 'START_VIDEO') {
         output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
-        videoSource = new CanvasSource(canvas, { codec: 'vp9', bitrate: p.bitrate });
+        videoSource = new CanvasSource(canvas, { codec: 'vp9', bitrate: p.bitrate, alpha: 'keep' });
         output.addVideoTrack(videoSource);
         await output.start();
       }

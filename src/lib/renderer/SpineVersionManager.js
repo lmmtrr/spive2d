@@ -16,7 +16,7 @@ export class SpineVersionManager {
             Object.assign(window.spine, window.spine.webgl);
           }
           spineLibs[version] = window.spine;
-          window.spine = undefined; // Clear for next version
+          window.spine = undefined;
           script.remove();
           resolve();
         };

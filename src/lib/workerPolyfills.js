@@ -52,7 +52,16 @@ export function setupWorkerEnv(self) {
       return oldTexSubImage2D.apply(this, args);
     };
   };
+  patchWebGL(self.WebGLRenderingContext?.prototype);
   patchWebGL(self.WebGL2RenderingContext?.prototype);
+  if (typeof OffscreenCanvasRenderingContext2D !== 'undefined') {
+    const proto = OffscreenCanvasRenderingContext2D.prototype;
+    const oldDrawImage = proto.drawImage;
+    proto.drawImage = function (...args) {
+      if (args[0] && args[0]._bitmap) args[0] = args[0]._bitmap;
+      return oldDrawImage.apply(this, args);
+    };
+  }
   let fallbackCanvas = null;
   const getFallbackCanvas = () => {
     if (!fallbackCanvas) fallbackCanvas = new OffscreenCanvas(32, 32);

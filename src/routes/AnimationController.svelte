@@ -64,7 +64,7 @@
     renderer?.seekAnimation(progress);
     const duration = renderer?.getAnimationDuration() || 0;
     if (duration > 0) {
-      const fps = renderer?.getFPS() || 30;
+      const fps = renderer?.getFPS() || 60;
       timeDisplay = formatFrames(progress * duration, duration, fps);
     }
   }

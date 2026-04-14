@@ -181,7 +181,8 @@ async function prepareExportContext(taskId, baseFilename, WorkerClass) {
     rotation: activeRenderer?._rotate || 0,
     originalWidth: originalSize.width,
     originalHeight: originalSize.height,
-    screenBaseScale
+    screenBaseScale,
+    ignoreTransform: appState.exportBase === 'original'
   };
 
   return {
@@ -237,7 +238,7 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
   let baseDuration = 0.1;
   let fps = RECORDING_FRAME_RATE;
   let totalFrames = 0;
-  const { finalWidth: rawFinalWidth, finalHeight: rawFinalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
+  const { finalWidth: rawFinalWidth, finalHeight: rawFinalHeight, marginX, marginY, contentWidth, contentHeight } = getFinalExportSize(activeRenderer);
   const finalWidth = rawFinalWidth % 2 === 0 ? rawFinalWidth : rawFinalWidth + 1;
   const finalHeight = rawFinalHeight % 2 === 0 ? rawFinalHeight : rawFinalHeight + 1;
   let framesInFlight = 0;
@@ -302,6 +303,8 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
         }
         break;
       case 'ERROR':
+        console.error('Worker error:', e.data.error);
+        showNotification(`${t('exportError') || 'Export error'}: ${e.data.error}`, 'error');
         exportQueue.updateStatus(taskId, 'error');
         worker.terminate();
         break;
@@ -329,6 +332,8 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     alphaMode,
     marginX,
     marginY,
+    contentWidth,
+    contentHeight,
     libraryBaseUrl: window.location.origin
   };
   const cleanVideoPayload = JSON.parse(JSON.stringify(videoPayload));
@@ -356,7 +361,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
   let baseDuration = 0.1;
   let fps = RECORDING_FRAME_RATE;
   let totalFrames = 0;
-  const { finalWidth, finalHeight, marginX, marginY } = getFinalExportSize(activeRenderer);
+  const { finalWidth, finalHeight, marginX, marginY, contentWidth, contentHeight } = getFinalExportSize(activeRenderer);
   const writePromises = [];
   let framesProcessed = 0;
   let framesInFlight = 0;
@@ -453,6 +458,8 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     alphaMode,
     marginX,
     marginY,
+    contentWidth,
+    contentHeight,
     libraryBaseUrl: window.location.origin
   };
   const cleanPngPayload = JSON.parse(JSON.stringify(pngPayload));

@@ -80,7 +80,7 @@ export class BaseRenderer {
   }
 
   getFPS() {
-    return 30;
+    return 60;
   }
 
   setPaused(paused) {
