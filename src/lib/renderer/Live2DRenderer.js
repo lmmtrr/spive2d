@@ -66,7 +66,7 @@ export class Live2DRenderer extends BaseRenderer {
     return this.#canvas;
   }
 
-  async load(dirName, fileNames) {
+  async load(dirName, scene) {
     if (this.#disposed) return;
     if (this.#model) {
       if (!this.#isExport && this.#app && this.#app.stage) {
@@ -79,9 +79,9 @@ export class Live2DRenderer extends BaseRenderer {
       this.#canvas.style.display = 'block';
     }
     let ext = '.model3.json';
-    if (fileNames[1].includes('.moc3')) ext = '.model3.json';
-    else if (fileNames[1].includes('.moc')) ext = '.json';
-    const rawUrl = `${dirName}${fileNames[0]}${ext}`;
+    if (scene.mainExt.includes('.moc3')) ext = '.model3.json';
+    else if (scene.mainExt.includes('.moc')) ext = '.json';
+    const rawUrl = `${dirName}${scene.name}${ext}`;
     let url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
       ? rawUrl
       : convertFileSrc(rawUrl);

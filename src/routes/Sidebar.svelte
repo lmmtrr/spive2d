@@ -173,10 +173,10 @@
     {/each}
   </select>
 
-  <select id="sceneSelector" value={appState.directories.files?.[appState.directories.selectedDir]?.[appState.directories.selectedScene]?.[0] || ''} onchange={onSceneChange}>
+  <select id="sceneSelector" value={appState.directories.files?.[appState.directories.selectedDir]?.[appState.directories.selectedScene]?.name || ''} onchange={onSceneChange}>
     {#if appState.directories.files && appState.directories.selectedDir}
       {#each appState.directories.files[appState.directories.selectedDir] || [] as scene}
-        <option value={scene[0]}>{scene[0].split('/').filter(Boolean).pop()}</option>
+        <option value={scene.name}>{scene.name.split('/').filter(Boolean).pop().replace(/^\u200B/, '')}</option>
       {/each}
     {/if}
   </select>

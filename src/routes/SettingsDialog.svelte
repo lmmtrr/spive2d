@@ -27,8 +27,8 @@
     const selectedScene = appState.directories.selectedScene;
     if (!scenes || selectedScene < 0 || selectedScene >= scenes.length) return false;
     const scene = scenes[selectedScene];
-    if (!scene || scene.length < 2) return false;
-    const ext = scene[1];
+    if (!scene) return false;
+    const ext = scene.mainExt;
     return !(ext.includes('.moc') || ext.includes('.model3.json') || ext.includes('.model.json'));
   });
 
@@ -116,7 +116,7 @@
     if (!dir || dir.startsWith('http://') || dir.startsWith('https://')) return;
     const scenes = appState.directories.files?.[dir] || [];
     const sceneInfo = scenes[appState.directories.selectedScene];
-    const scene = sceneInfo ? sceneInfo[0] : '';
+    const scene = sceneInfo ? sceneInfo.name : '';
     await openCurrentDirectory(dir, scene);
   }
 

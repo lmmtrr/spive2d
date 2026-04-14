@@ -19,6 +19,18 @@ impl AppState {
     }
 }
 
+#[derive(serde::Serialize, Clone)]
+struct SceneData {
+    name: String,
+    #[serde(rename = "mainExt")]
+    main_ext: String,
+    #[serde(rename = "atlasExt")]
+    atlas_ext: String,
+    files: Vec<String>,
+    #[serde(rename = "isMerged")]
+    is_merged: bool,
+}
+
 fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String> {
     let os_success = match ext {
         "zip" => {
@@ -116,7 +128,7 @@ async fn handle_dropped_path(
     path: String,
     merge_sequential: bool,
     app_handle: AppHandle,
-) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
     let path_obj = Path::new(&path);
     if path_obj.is_dir() {
@@ -166,9 +178,9 @@ fn get_subdir_files(
     folder_path: String,
     merge_sequential: bool,
     app_handle: AppHandle,
-) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
     let root_path = Path::new(&folder_path);
-    let mut dir_files_map: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    let mut dir_files_map: HashMap<String, Vec<SceneData>> = HashMap::new();
     if !root_path.exists() || !root_path.is_dir() {
         app_handle.emit("progress", false).unwrap();
         return Ok(dir_files_map);
@@ -263,7 +275,7 @@ fn process_directory_with_subdirs(
     dir_path: &Path,
     base_path: &Path,
     merge_sequential: bool,
-) -> Result<HashMap<String, Vec<Vec<String>>>, String> {
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
     let mut dir_files_map = HashMap::new();
     let current_file_groups = process_files(dir_path, base_path, merge_sequential)?;
     if !current_file_groups.is_empty() {
@@ -294,7 +306,7 @@ fn process_directory_with_subdirs(
     Ok(dir_files_map)
 }
 
-fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<Vec<String>>, String> {
+fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<SceneData>, String> {
     let mut file_groups = Vec::new();
     let mut atlas_bases = HashSet::with_capacity(64);
     let mut atlas_original_extensions: HashMap<String, String> = HashMap::with_capacity(64);
@@ -340,7 +352,13 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 let base_name_part =
                     &adjusted_path[..adjusted_path.len() - (filename.len() - moc3_pos)];
                 let extension_part = &filename[moc3_pos..];
-                file_groups.push(vec![base_name_part.to_string(), extension_part.to_string()]);
+                file_groups.push(SceneData {
+                    name: base_name_part.to_string(),
+                    main_ext: extension_part.to_string(),
+                    atlas_ext: "".to_string(),
+                    files: Vec::new(),
+                    is_merged: false,
+                });
             }
         } else if filename_lower.contains(".moc") && !filename_lower.contains(".moc3") {
             let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
@@ -352,7 +370,13 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 let base_name_part =
                     &adjusted_path[..adjusted_path.len() - (filename.len() - moc_pos)];
                 let extension_part = &filename[moc_pos..];
-                file_groups.push(vec![base_name_part.to_string(), extension_part.to_string()]);
+                file_groups.push(SceneData {
+                    name: base_name_part.to_string(),
+                    main_ext: extension_part.to_string(),
+                    atlas_ext: "".to_string(),
+                    files: Vec::new(),
+                    is_merged: false,
+                });
             }
         }
     }
@@ -459,43 +483,38 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             } else {
                 &base_name_for_group
             };
-            let mut file_group = vec![
-                adjusted_base_name.to_string(),
-                main_extension.clone(),
-                atlas_extension,
-            ];
-            let bg_files = find_extra_files(&base_lower, "_bg", &file_paths, &main_extension);
-            file_group.extend(bg_files);
+            let mut bg_files = find_extra_files(&base_lower, "_bg", &file_paths, &main_extension);
             let fg_files = find_extra_files(&base_lower, "_fg", &file_paths, &main_extension);
-            file_group.extend(fg_files);
-            file_groups.push(file_group);
+            bg_files.extend(fg_files);
+            file_groups.push(SceneData {
+                name: adjusted_base_name.to_string(),
+                main_ext: main_extension,
+                atlas_ext: atlas_extension,
+                files: bg_files,
+                is_merged: false,
+            });
         }
     }
-    file_groups.sort_unstable_by(|a, b| compare_natural(&a[0], &b[0]));
+    file_groups.sort_unstable_by(|a, b| compare_natural(&a.name, &b.name));
     if merge_sequential && file_groups.len() > 1 {
         if file_groups.len() > 20 {
             file_groups.truncate(20);
         }
-        let mut merged_group = Vec::new();
         let mut main_ext = String::new();
         let mut atlas_ext = String::new();
         let mut all_bases = Vec::new();
         let mut is_compatible = true;
         for group in &file_groups {
-            if group.len() < 3 {
-                is_compatible = false;
-                break;
-            }
             if main_ext.is_empty() {
-                main_ext = group[1].clone();
-                atlas_ext = group[2].clone();
-            } else if main_ext != group[1] || atlas_ext != group[2] {
+                main_ext = group.main_ext.clone();
+                atlas_ext = group.atlas_ext.clone();
+            } else if main_ext != group.main_ext || atlas_ext != group.atlas_ext {
                 is_compatible = false;
                 break;
             }
-            all_bases.push(group[0].clone());
-            for i in 3..group.len() {
-                all_bases.push(format!("{}{}", group[0], group[i].split('.').next().unwrap_or(&group[i])));
+            all_bases.push(group.name.clone());
+            for extra in &group.files {
+                all_bases.push(format!("{}{}", group.name, extra.split('.').next().unwrap_or(extra)));
             }
         }
         if is_compatible && !all_bases.is_empty() {
@@ -508,11 +527,13 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                         .trim_end_matches(|c: char| c.is_ascii_digit() || c == '_' || c == '-')
                         .to_string()
                 });
-            merged_group.push(format!("\u{200B}{}", folder_name));
-            merged_group.push(main_ext);
-            merged_group.push(atlas_ext);
-            merged_group.extend(all_bases);
-            return Ok(vec![merged_group]);
+            return Ok(vec![SceneData {
+                name: folder_name,
+                main_ext,
+                atlas_ext,
+                files: all_bases,
+                is_merged: true,
+            }]);
         }
     }
     Ok(file_groups)
@@ -551,7 +572,7 @@ fn find_extra_files(
     extra_files
 }
 
-fn process_directory(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<Vec<String>>, String> {
+fn process_directory(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<SceneData>, String> {
     let mut all_file_groups = Vec::new();
     let current_file_groups = process_files(dir_path, base_path, merge_sequential)?;
     all_file_groups.extend(current_file_groups);
@@ -563,7 +584,7 @@ fn process_directory(dir_path: &Path, base_path: &Path, merge_sequential: bool) 
             all_file_groups.extend(subdir_file_groups);
         }
     }
-    all_file_groups.sort_unstable_by(|a, b| compare_natural(&a[0], &b[0]));
+    all_file_groups.sort_unstable_by(|a, b| compare_natural(&a.name, &b.name));
     Ok(all_file_groups)
 }
 

@@ -33,20 +33,19 @@ export function resolveModelInfo() {
   if (!files || !selectedDir || !files[selectedDir]) {
     return null;
   }
-  const fileNames = files[selectedDir][selectedScene];
-  const ext = fileNames[1];
-  const isLive2D = ext.includes('.moc') || ext.includes('.model3.json') || ext.includes('.model.json');
+  const scene = files[selectedDir][selectedScene];
+  const isLive2D = scene.mainExt.includes('.moc') || scene.mainExt.includes('.model3.json') || scene.mainExt.includes('.model.json');
   let modelUrl = '';
   if (isLive2D) {
     let ext_fixed = '.model3.json';
-    if (fileNames[1].includes('.moc3')) ext_fixed = '.model3.json';
-    else if (fileNames[1].includes('.moc')) ext_fixed = '.json';
-    const rawUrl = `${selectedDir}${fileNames[0]}${ext_fixed}`;
+    if (scene.mainExt.includes('.moc3')) ext_fixed = '.model3.json';
+    else if (scene.mainExt.includes('.moc')) ext_fixed = '.json';
+    const rawUrl = `${selectedDir}${scene.name}${ext_fixed}`;
     modelUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) ? rawUrl : convertFileSrc(rawUrl);
     modelUrl += (modelUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
   }
   return {
-    fileNames: [...fileNames],
+    fileNames: scene,
     selectedDir,
     selectedDirUrl: (selectedDir.startsWith('http://') || selectedDir.startsWith('https://')) ? selectedDir : convertFileSrc(selectedDir),
     isLive2D,

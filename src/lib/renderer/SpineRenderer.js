@@ -48,15 +48,15 @@ export class SpineRenderer extends BaseRenderer {
     return this.#canvas;
   }
 
-  async load(dirName, fileNames) {
+  async load(dirName, scene) {
     this.dispose();
     this.#attachmentsCache = {};
     this.#activeSkins = null;
     this.#canvas.style.display = 'block';
     this.#dirName = dirName;
-    this.#fileNames = fileNames;
+    this.#fileNames = scene;
     this.#firstRender = true;
-    const { version, isJson } = await SpineVersionManager.detectVersion(dirName, fileNames);
+    const { version, isJson } = await SpineVersionManager.detectVersion(dirName, scene);
     this.#isFileJson = isJson;
     this.#spine = SpineVersionManager.getLib(version);
     if (!this.#spine) {
@@ -72,10 +72,10 @@ export class SpineRenderer extends BaseRenderer {
     this.#ctx = new this.#spine.ManagedWebGLRenderingContext(this.#canvas, {
       preserveDrawingBuffer: true,
     });
-    this.#ctx.gl.pixelStorei(
-      this.#ctx.gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
-      this.#alphaMode === 'unpack'
-    );
+    const gl = this.#ctx.gl;
+    if (gl) {
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this.#alphaMode === 'unpack');
+    }
     this.#shader = this.#spine.Shader.newTwoColoredTextured(this.#ctx);
     this.#batcher = new this.#spine.PolygonBatcher(this.#ctx);
     this.#skeletonRenderer = new this.#spine.SkeletonRenderer(this.#ctx);
@@ -90,30 +90,29 @@ export class SpineRenderer extends BaseRenderer {
       success?.(text);
     }, error);
     this.#mvp = new this.#spine.Matrix4();
-    const baseName = fileNames[0];
-    const skelExt = fileNames[1];
-    const atlasExt = fileNames[2];
+    const sceneInfo = this.#fileNames;
+    const mainExt = sceneInfo.mainExt;
+    const atlasExt = sceneInfo.atlasExt;
     const makePath = (name, ext) => {
       if (isWebUrl) return `${name}${ext}`;
       return `${dirName}${name}${ext}`;
     };
-    if (baseName.startsWith('\u200B')) {
-      for (let i = 3; i < fileNames.length; i++) {
-        const name = fileNames[i];
+    if (sceneInfo.isMerged) {
+      for (const name of sceneInfo.files) {
         if (!this.#isFileJson)
-          this.#assetManager.loadBinary(makePath(name, skelExt));
+          this.#assetManager.loadBinary(makePath(name, mainExt));
         else
-          this.#assetManager.loadText(makePath(name, skelExt));
+          this.#assetManager.loadText(makePath(name, mainExt));
         this.#assetManager.loadTextureAtlas(makePath(name, atlasExt));
       }
     } else {
+      const baseName = sceneInfo.name;
       if (!this.#isFileJson)
-        this.#assetManager.loadBinary(makePath(baseName, skelExt));
+        this.#assetManager.loadBinary(makePath(baseName, mainExt));
       else
-        this.#assetManager.loadText(makePath(baseName, skelExt));
+        this.#assetManager.loadText(makePath(baseName, mainExt));
       this.#assetManager.loadTextureAtlas(makePath(baseName, atlasExt));
-      for (let i = 3; i < fileNames.length; i++) {
-        const extraFile = fileNames[i];
+      for (const extraFile of sceneInfo.files) {
         if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
         if (!this.#isFileJson)
           this.#assetManager.loadBinary(makePath(baseName, extraFile));
@@ -324,13 +323,12 @@ export class SpineRenderer extends BaseRenderer {
   }
 
   #getSortedSkeletonKeys() {
-    const baseName = this.#fileNames[0];
+    const sceneInfo = this.#fileNames;
     return Object.keys(this.#skeletons).sort((a, b) => {
       const getLayer = (k) => {
-        const isMerged = baseName.startsWith('\u200B');
-        if (!isMerged && k === '0') return 0;
-        const index = isMerged ? parseInt(k) + 3 : parseInt(k) + 2;
-        const name = (this.#fileNames[index] || '').toLowerCase();
+        if (!sceneInfo.isMerged && k === '0') return 0;
+        const index = sceneInfo.isMerged ? parseInt(k) : parseInt(k) - 1;
+        const name = (sceneInfo.files[index] || '').toLowerCase();
         if (name.includes('_fg')) return 1;
         if (name.includes('_bg')) return -1;
         return 0;
@@ -381,8 +379,7 @@ export class SpineRenderer extends BaseRenderer {
   async setAlphaMode(alphaMode) {
     this.#alphaMode = alphaMode;
     this.#firstRender = true;
-    if (this.#dirName && this.#fileNames.length > 0) {
-      this.dispose();
+    if (this.#dirName && this.#fileNames && (this.#fileNames.name || this.#fileNames.files?.length > 0)) {
       await this.load(this.#dirName, this.#fileNames);
     }
   }
@@ -391,29 +388,29 @@ export class SpineRenderer extends BaseRenderer {
     if (!this.#assetManager) return;
     if (this.#assetManager.isLoadingComplete()) {
       const allSkipped = [];
-      const baseName = this.#fileNames[0];
-      if (baseName.startsWith('\u200B')) {
-        for (let i = 3; i < this.#fileNames.length; i++) {
-          const name = this.#fileNames[i];
+      const sceneInfo = this.#fileNames;
+      if (sceneInfo.isMerged) {
+        for (let i = 0; i < sceneInfo.files.length; i++) {
+          const name = sceneInfo.files[i];
           const skelData = this.#loadSkeleton(name);
           if (skelData) {
-            this.#skeletons[String(i - 3)] = skelData;
+            this.#skeletons[String(i)] = skelData;
             allSkipped.push(...(skelData.skippedAttachments || []));
           }
         }
       } else {
-        const skelData0 = this.#loadSkeleton(baseName);
+        const skelData0 = this.#loadSkeleton(sceneInfo.name);
         if (skelData0) {
           this.#skeletons['0'] = skelData0;
           allSkipped.push(...(skelData0.skippedAttachments || []));
         }
-        for (let i = 3; i < this.#fileNames.length; i++) {
-          const extraFile = this.#fileNames[i];
+        for (let i = 0; i < sceneInfo.files.length; i++) {
+          const extraFile = sceneInfo.files[i];
           if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-          const name2 = `${baseName}${extraFile.split('.')[0]}`;
+          const name2 = `${sceneInfo.name}${extraFile.split('.')[0]}`;
           const skelDataN = this.#loadSkeleton(name2);
           if (skelDataN) {
-            this.#skeletons[String(i - 2)] = skelDataN;
+            this.#skeletons[String(i + 1)] = skelDataN;
             allSkipped.push(...(skelDataN.skippedAttachments || []));
           }
         }
@@ -439,8 +436,9 @@ export class SpineRenderer extends BaseRenderer {
   }
 
   #loadSkeleton(fileName) {
-    const skelExt = this.#fileNames[1];
-    const atlasExt = this.#fileNames[2];
+    const sceneInfo = this.#fileNames;
+    const mainExt = sceneInfo.mainExt;
+    const atlasExt = sceneInfo.atlasExt;
     const isWebUrl = this.#dirName.startsWith('http://') || this.#dirName.startsWith('https://');
     const makePath = (name, ext) => {
       if (isWebUrl) return `${name}${ext}`;
@@ -487,7 +485,7 @@ export class SpineRenderer extends BaseRenderer {
     const skeletonLoader = !this.#isFileJson
       ? new this.#spine.SkeletonBinary(atlasLoader)
       : new this.#spine.SkeletonJson(atlasLoader);
-    let skelDataOrText = this.#assetManager.get(makePath(fileName, skelExt));
+    let skelDataOrText = this.#assetManager.get(makePath(fileName, mainExt));
     if (typeof skelDataOrText === 'string' && this.#isFileJson) {
       skelDataOrText = skelDataOrText.replace(/,(\s*[}\]])/g, '$1');
     }
@@ -613,16 +611,15 @@ export class SpineRenderer extends BaseRenderer {
 
   #getAttachmentItems() {
     const allItems = [];
-    const baseName = this.#fileNames[0];
+    const sceneInfo = this.#fileNames;
     for (const skeletonId in this.#skeletons) {
       const skelEntry = this.#skeletons[skeletonId];
       const skeleton = skelEntry.skeleton;
       const state = skelEntry.state;
       const idNum = parseInt(skeletonId);
-      const isMerged = baseName.startsWith('\u200B');
-      const fileLabel = isMerged
-        ? `[${this.#fileNames[idNum + 3] || skeletonId}] `
-        : (idNum === 0 ? '' : `[${this.#fileNames[idNum + 2] || skeletonId}] `);
+      const fileLabel = sceneInfo.isMerged
+        ? `[${sceneInfo.files[idNum] || skeletonId}] `
+        : (idNum === 0 ? '' : `[${sceneInfo.files[idNum - 1] || skeletonId}] `);
       const animationAttachmentMap = new Map();
       const addSkinAttachments = (skin) => {
         if (!skin) return;
@@ -736,16 +733,15 @@ export class SpineRenderer extends BaseRenderer {
     const slotIndex = uniqueIndex % 10000;
     const skeleton = this.#skeletons[skeletonId]?.skeleton;
     if (!skeleton) return;
-    const baseName = this.#fileNames[0];
+    const sceneInfo = this.#fileNames;
     let originalName = displayName;
-    const isMerged = baseName.startsWith('\u200B');
-    if (isMerged) {
-      const fileLabel = `[${this.#fileNames[idNum + 3] || skeletonId}] `;
+    if (sceneInfo.isMerged) {
+      const fileLabel = `[${sceneInfo.files[idNum] || skeletonId}] `;
       if (displayName.startsWith(fileLabel)) {
         originalName = displayName.substring(fileLabel.length);
       }
     } else if (idNum !== 0) {
-      const fileLabel = `[${this.#fileNames[idNum + 2] || skeletonId}] `;
+      const fileLabel = `[${sceneInfo.files[idNum - 1] || skeletonId}] `;
       if (displayName.startsWith(fileLabel)) {
         originalName = displayName.substring(fileLabel.length);
       }

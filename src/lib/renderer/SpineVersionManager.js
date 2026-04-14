@@ -29,12 +29,12 @@ export class SpineVersionManager {
     return spineLibs[version];
   }
 
-  static async detectVersion(dirName, fileNames) {
-    let baseName = fileNames[0];
-    if (baseName.startsWith('\u200B') && fileNames.length > 3) {
-      baseName = fileNames[3];
+  static async detectVersion(dirName, scene) {
+    let baseName = scene.name;
+    if (scene.isMerged && scene.files.length > 0) {
+      baseName = scene.files[0];
     }
-    const rawUrl = `${dirName}${baseName}${fileNames[1]}`;
+    const rawUrl = `${dirName}${baseName}${scene.mainExt}`;
     const url = /^https?:\/\//.test(rawUrl) ? rawUrl : convertFileSrc(rawUrl);
     try {
       const response = await fetch(url);

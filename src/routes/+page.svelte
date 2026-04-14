@@ -132,7 +132,7 @@
         }
         dirFiles = {
           [dirName]: [
-             [baseName, ext1, ext2]
+             { name: baseName, mainExt: ext1, atlasExt: ext2, files: [], isMerged: false }
           ]
         };
       } else {
@@ -259,13 +259,13 @@
     const newDir = e.target.value;
     const oldDir = appState.directories.selectedDir;
     const oldScenes = appState.directories.files[oldDir] || [];
-    const currentSceneStr = oldScenes.length > 0 && appState.directories.selectedScene >= 0 && appState.directories.selectedScene < oldScenes.length ? oldScenes[appState.directories.selectedScene][0] : '';
+    const currentSceneStr = oldScenes.length > 0 && appState.directories.selectedScene >= 0 && appState.directories.selectedScene < oldScenes.length ? oldScenes[appState.directories.selectedScene].name : '';
     const maxNumber = findMaxNumber(currentSceneStr || '');
     appState.directories.selectedDir = newDir;
     const scenes = appState.directories.files[newDir] || [];    
     let index = -1;
     if (maxNumber !== null) {
-      index = scenes.findIndex(item => String(item[0]).includes(String(maxNumber)));
+      index = scenes.findIndex(item => String(item.name).includes(String(maxNumber)));
     }
     appState.directories.selectedScene = index === -1 ? 0 : index;
     const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
@@ -388,8 +388,8 @@
 
   function getSceneText() {
     const scenes = appState.directories.files?.[appState.directories.selectedDir] || [];
-    const currentSceneStr = scenes.length > 0 && appState.directories.selectedScene >= 0 && appState.directories.selectedScene < scenes.length ? scenes[appState.directories.selectedScene][0] : '';
-    return currentSceneStr ? currentSceneStr.split('/').filter(Boolean).pop() : 'scene';
+    const currentSceneStr = scenes.length > 0 && appState.directories.selectedScene >= 0 && appState.directories.selectedScene < scenes.length ? scenes[appState.directories.selectedScene].name : '';
+    return currentSceneStr ? currentSceneStr.split('/').filter(Boolean).pop().replace(/^\u200B/, '') : 'scene';
   }
 
   function handleResize() {

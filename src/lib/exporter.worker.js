@@ -275,9 +275,9 @@ class WorkerSpineRenderer {
     this.alphaMode = 'unpack';
   }
 
-  async load(dirName, fileNames, isFileJson, alphaMode = 'unpack') {
+  async load(dirName, scene, isFileJson, alphaMode = 'unpack') {
     this.dirName = dirName;
-    this.fileNames = fileNames;
+    this.fileNames = scene;
     this.alphaMode = alphaMode;
     const isWebUrl = dirName.startsWith('http');
     this.assetManager = new this.spine.AssetManager(this.ctx.gl, isWebUrl ? dirName : '');
@@ -293,20 +293,21 @@ class WorkerSpineRenderer {
     if (gl) {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
     }
-    const baseName = fileNames[0];
-    const skelExt = fileNames[1];
-    const atlasExt = fileNames[2];
+    const mainExt = scene.mainExt;
+    const atlasExt = scene.atlasExt;
     const loadModel = (name) => {
-      if (!isFileJson) this.assetManager.loadBinary(name + skelExt);
-      else this.assetManager.loadText(name + skelExt);
+      if (!isFileJson) this.assetManager.loadBinary(name + mainExt);
+      else this.assetManager.loadText(name + mainExt);
       this.assetManager.loadTextureAtlas(name + atlasExt);
     };
-    const isMerged = baseName.startsWith('\u200B');
-    if (isMerged) {
-      for (let i = 3; i < fileNames.length; i++) loadModel(fileNames[i]);
+    if (scene.isMerged) {
+      for (const name of scene.files) loadModel(name);
     } else {
-      loadModel(baseName);
-      for (let i = 3; i < fileNames.length; i++) loadModel(baseName + fileNames[i].split('.')[0]);
+      loadModel(scene.name);
+      for (const extraFile of scene.files) {
+        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
+        loadModel(scene.name + extraFile.split('.')[0]);
+      }
     }
     await new Promise((resolve, reject) => {
       const start = Date.now();
@@ -320,24 +321,27 @@ class WorkerSpineRenderer {
       };
       check();
     });
-    const isMerged2 = baseName.startsWith('\u200B');
-    if (isMerged2) {
-      for (let i = 3; i < fileNames.length; i++) {
-        this.skeletons[String(i - 3)] = await this._loadSkeleton(fileNames[i], fileNames, isFileJson);
+    if (scene.isMerged) {
+      for (let i = 0; i < scene.files.length; i++) {
+        this.skeletons[String(i)] = await this._loadSkeleton(scene.files[i], scene, isFileJson);
       }
     } else {
-      this.skeletons['0'] = await this._loadSkeleton(baseName, fileNames, isFileJson);
-      for (let i = 3; i < fileNames.length; i++) {
-        const name2 = baseName + fileNames[i].split('.')[0];
-        this.skeletons[String(i - 2)] = await this._loadSkeleton(name2, fileNames, isFileJson);
+      this.skeletons['0'] = await this._loadSkeleton(scene.name, scene, isFileJson);
+      for (let i = 0; i < scene.files.length; i++) {
+        const extraFile = scene.files[i];
+        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
+        const name2 = scene.name + extraFile.split('.')[0];
+        this.skeletons[String(i + 1)] = await this._loadSkeleton(name2, scene, isFileJson);
       }
     }
     this._currentDuration = this.getAnimationDuration();
   }
 
-  async _loadSkeleton(fileName, fileNames, isFileJson) {
-    const skelFile = fileName + fileNames[1];
-    const atlasFile = fileName + fileNames[2];
+  async _loadSkeleton(fileName, scene, isFileJson) {
+    const mainExt = scene.mainExt;
+    const atlasExt = scene.atlasExt;
+    const atlasFile = fileName + atlasExt;
+    const skelFile = fileName + mainExt;
     const atlas = this.assetManager.get(atlasFile);
     if (!atlas) throw new Error("Atlas not found: " + atlasFile);
     if (atlas.regions) {
@@ -431,12 +435,11 @@ class WorkerSpineRenderer {
     const gl = this.ctx.gl, { width, height } = this.canvas;
     this._updateMVP(width, height);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-    const baseName = this.fileNames[0];
+    const sceneInfo = this.fileNames;
     const keys = Object.keys(this.skeletons).sort((a, b) => {
       const getL = (k) => {
-        const isMerged = baseName.startsWith('\u200B');
-        if (!isMerged && k === '0') return 0;
-        const name = (this.fileNames[isMerged ? parseInt(k) + 3 : parseInt(k) + 2] || '').toLowerCase();
+        if (!sceneInfo.isMerged && k === '0') return 0;
+        const name = (sceneInfo.isMerged ? sceneInfo.files[parseInt(k)] : sceneInfo.files[parseInt(k) - 1] || '').toLowerCase();
         return name.includes('_fg') ? 1 : (name.includes('_bg') ? -1 : 0);
       };
       const la = getL(a), lb = getL(b);
