@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.23] - 2026-04-14
+
+### Fixed
+
+- Unify Spine export transform and movement scaling with Live2D
+- Synchronize Spine canvas size with window resize
+
 ## [0.1.22] - 2026-04-14
 
 ### Fixed
