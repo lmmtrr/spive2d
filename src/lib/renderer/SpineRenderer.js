@@ -107,6 +107,18 @@ export class SpineRenderer extends SpineRendererBase {
     this.setPaused(false);
   }
 
+  resize(width, height) {
+    if (this.isExport || !this._canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    this._canvas.width = Math.round(width * dpr);
+    this._canvas.height = Math.round(height * dpr);
+    this._canvas.style.width = `${width}px`;
+    this._canvas.style.height = `${height}px`;
+    if (this._paused) {
+      this.render(0, { dpr });
+    }
+  }
+
   dispose() {
     if (this.#requestId) {
       cancelAnimationFrame(this.#requestId);
