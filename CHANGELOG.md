@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.22] - 2026-04-14
+
+### Fixed
+
+- Ignore missing atlas regions to prevent loading failures
+- Handle missing Spine textures with fallback and prevent renderer crashes
+
+### Changed
+
+- Restructured Spine renderer architecture and consolidated logic for better maintainability
+
 ## [0.1.21] - 2026-04-13
 
 ### Added
