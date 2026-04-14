@@ -89,6 +89,21 @@ export class SpineRenderer extends BaseRenderer {
       }
       success?.(text);
     }, error);
+    const originalLoadTexture = this.#assetManager.loadTexture.bind(this.#assetManager);
+    this.#assetManager.loadTexture = (url, success, error) => {
+      originalLoadTexture(url, success, (path, msg) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#cccccc';
+        ctx.fillRect(0, 0, 1, 1);
+        const texture = new this.#spine.GLTexture(this.#ctx.gl, canvas);
+        this.#assetManager.assets[path] = texture;
+        if (this.#assetManager.errors) delete this.#assetManager.errors[path];
+        success?.(path, texture);
+      });
+    };
     this.#mvp = new this.#spine.Matrix4();
     const sceneInfo = this.#fileNames;
     const mainExt = sceneInfo.mainExt;

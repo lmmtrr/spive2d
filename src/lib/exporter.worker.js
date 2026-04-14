@@ -289,6 +289,19 @@ class WorkerSpineRenderer {
       }
       success?.(text);
     }, error);
+    const originalLoadTexture = this.assetManager.loadTexture.bind(this.assetManager);
+    this.assetManager.loadTexture = (url, success, error) => {
+      originalLoadTexture(url, success, (path, msg) => {
+        const canvas = new OffscreenCanvas(1, 1);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#cccccc';
+        ctx.fillRect(0, 0, 1, 1);
+        const texture = new this.spine.GLTexture(this.ctx.gl, canvas);
+        this.assetManager.assets[path] = texture;
+        if (this.assetManager.errors) delete this.assetManager.errors[path];
+        success?.(path, texture);
+      });
+    };
     const gl = this.ctx.gl;
     if (gl) {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
