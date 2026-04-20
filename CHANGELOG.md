@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.24] - 2026-04-20
+
+### Added
+
+- Enhance Spine parameter overrides and state synchronization
+
+### Fixed
+
+- Stabilize Spine attachment visibility and simplify restoration logic
+
 ## [0.1.23] - 2026-04-14
 
 ### Fixed
