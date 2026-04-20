@@ -394,12 +394,7 @@ self.onmessage = async (e) => {
           p.transform?.screenBaseScale
         );
         if (!renderer._skeletons['0']) throw new Error('Main skeleton failed to load');
-        if (p.syncState) {
-          if (p.syncState.activeSkins) {
-            renderer.applySkins(p.syncState.activeSkins);
-          }
-          renderer._attachmentsCache = p.syncState.attachmentsCache || {};
-        }
+        if (p.syncState) renderer.applySyncState(p.syncState);
         if (p.animName) await renderer.setAnimation(p.animName);
       }
       let output = null, videoSource = null;

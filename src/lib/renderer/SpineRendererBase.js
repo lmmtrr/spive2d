@@ -113,6 +113,8 @@ export class SpineRendererBase extends BaseRenderer {
     this._animationStates = [];
     this._attachmentsCache = {};
     this._activeSkins = null;
+    this._parameterItems = null;
+    this._parameterItemsMap = null;
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
     setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl);
     const mainExt = scene.mainExt;
@@ -290,6 +292,7 @@ export class SpineRendererBase extends BaseRenderer {
       const { skeleton, state } = this._skeletons[key];
       if (delta > 0 && !this._paused) state.update(delta * this._speed);
       state.apply(skeleton);
+      this._applyParameterOverrides(key);
       skeleton.updateWorldTransform(2);
       this._syncHiddenAttachments(skeleton, key);
       this._shader.bind();
@@ -516,7 +519,7 @@ export class SpineRendererBase extends BaseRenderer {
       attachmentMap.forEach((slotIndex, keyAndIdx) => {
         const [name] = keyAndIdx.split('##');
         const compositeKey = `${skelId}##${name}##${slotIndex}`;
-        const mergedIndex = (parseInt(skelId) << 16) | slotIndex;
+        const mergedIndex = (parseInt(skelId) * 1000000) + slotIndex;
         const displayName = (Object.keys(this._skeletons).length > 1 ? `[${skelName}] ${name}` : name).replace(/\[.*?\]\s*/g, '');
         items.push({
           name: name,
@@ -567,18 +570,86 @@ export class SpineRendererBase extends BaseRenderer {
 
   _getParameterItems() {
     const items = [];
-    let idx_counter = 0;
-    for (const key in this._skeletons) {
+    const sortedKeys = this._getSortedSkeletonKeys();
+    for (const key of sortedKeys) {
       const skelEntry = this._skeletons[key];
       const skel = skelEntry.skeleton;
       const skelName = skelEntry.name || key;
       const skelId = parseInt(key);
-      const addRange = (name, target, prop, min = 0, max = 1, step = 0.01) => {
-        const displayName = (Object.keys(this._skeletons).length > 1 ? `[${skelName}] ${name}` : name).replace(/\[.*?\]\s*/g, '');
+      const animatedBonesRot = new Set();
+      const animatedBonesTrans = new Set();
+      const animatedBonesScale = new Set();
+      const animatedBonesAny = new Set();
+      const animatedIK = new Set();
+      const animatedTF = new Set();
+      const animatedPath = new Set();
+      const animations = skel.data.animations;
+      const hasAnimations = animations && animations.length > 0;
+      if (hasAnimations) {
+        for (const anim of animations) {
+          if (!anim.timelines) continue;
+          for (const tl of anim.timelines) {
+            const isMoving = tl.frames && (tl.frames.length > (tl.constructor.name.includes('Rotate') ? 2 : 3) || tl.frames[0] > 0);
+            if (tl.boneIndex !== undefined) {
+              const bi = tl.boneIndex;
+              const type = tl.constructor.name;
+              if (isMoving) {
+                animatedBonesAny.add(bi);
+                if (type.includes('Rotate')) animatedBonesRot.add(bi);
+                if (type.includes('Translate')) animatedBonesTrans.add(bi);
+                if (type.includes('Scale')) animatedBonesScale.add(bi);
+              }
+            }
+            if (isMoving) {
+              if (tl.ikConstraintIndex !== undefined) animatedIK.add(tl.ikConstraintIndex);
+              if (tl.transformConstraintIndex !== undefined) animatedTF.add(tl.transformConstraintIndex);
+              if (tl.pathConstraintIndex !== undefined) animatedPath.add(tl.pathConstraintIndex);
+            }
+          }
+        }
+      }
+      const deformBones = new Set();
+      if (skel.data.skins) {
+        skel.data.skins.forEach(skin => {
+          if (!skin.attachments) return;
+          skin.attachments.forEach(slotAttachments => {
+            if (!slotAttachments) return;
+            Object.values(slotAttachments).forEach(attachment => {
+              if (attachment && attachment.bones) {
+                attachment.bones.forEach(bId => deformBones.add(bId));
+              }
+            });
+          });
+        });
+      }
+      const ikTargets = new Set();
+      const drivenBones = new Set();
+      if (skel.ikConstraints) {
+        skel.ikConstraints.forEach(ik => {
+          if (ik.target) ikTargets.add(skel.bones.indexOf(ik.target));
+          if (ik.bones) ik.bones.forEach(b => drivenBones.add(skel.bones.indexOf(b)));
+        });
+      }
+      if (skel.transformConstraints) {
+        skel.transformConstraints.forEach(tc => {
+          if (tc.bones) tc.bones.forEach(b => drivenBones.add(skel.bones.indexOf(b)));
+        });
+      }
+      const hasChildren = new Set();
+      skel.bones.forEach((bone, i) => {
+        if (bone.parent) hasChildren.add(skel.bones.indexOf(bone.parent));
+      });
+      const usedNames = new Set();
+      const isMerged = !!this._fileNames?.isMerged;
+      const addRange = (name, target, prop, min = 0, max = 1, step = 0.01, localId) => {
+        const fullPropName = `${name}_${prop}`;
+        if (isMerged && usedNames.has(fullPropName)) return;
+        usedNames.add(fullPropName);
+        const displayName = (Object.keys(this._skeletons).length > 1 && !isMerged ? `[${skelName}] ${name}` : name).replace(/\[.*?\]\s*/g, '');
         items.push({
           name: name,
           displayName: displayName,
-          index: (skelId << 16) | idx_counter++,
+          index: (skelId * 1000000) + localId,
           type: 'range',
           min, max, step,
           value: target[prop],
@@ -588,46 +659,139 @@ export class SpineRendererBase extends BaseRenderer {
         });
       };
       if (skel.ikConstraints) {
-        for (const ik of skel.ikConstraints) addRange(`IK: ${ik.data.name}`, ik, 'mix');
+        skel.ikConstraints.forEach((ik, i) => {
+          if (!hasAnimations || animatedIK.has(i)) {
+            addRange(`IK: ${ik.data.name}`, ik, 'mix', 0, 1, 0.01, 0 + i);
+          }
+        });
       }
       if (skel.transformConstraints) {
-        for (const tc of skel.transformConstraints) {
-          for (const p of ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix']) {
-            if (tc[p] !== undefined) addRange(`TF ${tc.data.name}: ${p}`, tc, p);
+        skel.transformConstraints.forEach((tc, i) => {
+          if (!hasAnimations || animatedTF.has(i)) {
+            const props = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
+            props.forEach((p, pi) => {
+              if (tc[p] !== undefined) addRange(`TF ${tc.data.name}: ${p}`, tc, p, 0, 1, 0.01, 10000 + i * 10 + pi);
+            });
           }
-        }
+        });
       }
       if (skel.pathConstraints) {
-        for (const pc of skel.pathConstraints) {
-          for (const p of ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY']) {
-            if (pc[p] !== undefined) addRange(`Path ${pc.data.name}: ${p}`, pc, p);
+        skel.pathConstraints.forEach((pc, i) => {
+          if (!hasAnimations || animatedPath.has(i)) {
+            const props = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY'];
+            props.forEach((p, pi) => {
+              if (pc[p] !== undefined) addRange(`Path ${pc.data.name}: ${p}`, pc, p, 0, 1, 0.01, 20000 + i * 10 + pi);
+            });
           }
-        }
+        });
       }
       if (skel.bones) {
-        for (const bone of skel.bones) {
+        skel.bones.forEach((bone, i) => {
+          const name = bone.data.name;
+          if (name.startsWith('_')) return;
+          const isRoot = (i === 0);
+          const isIKTarget = ikTargets.has(i);
+          if (drivenBones.has(i) && !isIKTarget && !isRoot) return;
+          const isDeformOnly = deformBones.has(i) && !hasChildren.has(i) && !isIKTarget;
+          if (isDeformOnly && !isRoot) return;
+          const hasRot = animatedBonesRot.has(i);
+          const hasTrans = animatedBonesTrans.has(i);
+          const hasScale = animatedBonesScale.has(i);
+          if (hasAnimations && !animatedBonesAny.has(i) && !isRoot && !isIKTarget) return;
           const range = 1000;
-          addRange(`Bone ${bone.data.name}: x`, bone, 'x', -range, range, 0.5);
-          addRange(`Bone ${bone.data.name}: y`, bone, 'y', -range, range, 0.5);
-        }
+          const baseId = 100000 + i * 10;
+          if (!hasAnimations || hasTrans || isRoot || isIKTarget) {
+            addRange(`Bone ${name}: x`, bone, 'x', -range, range, 0.5, baseId + 0);
+            addRange(`Bone ${name}: y`, bone, 'y', -range, range, 0.5, baseId + 1);
+          }
+          if (!hasAnimations || hasRot || isRoot) {
+            addRange(`Bone ${name}: rotation`, bone, 'rotation', -360, 360, 1, baseId + 2);
+          }
+          if (!hasAnimations || hasScale) {
+            addRange(`Bone ${name}: scaleX`, bone, 'scaleX', -10, 10, 0.1, baseId + 3);
+            addRange(`Bone ${name}: scaleY`, bone, 'scaleY', -10, 10, 0.1, baseId + 4);
+          }
+        });
       }
     }
     this._parameterItems = items;
+    this._parameterItemsMap = new Map(items.map(i => [i.index, i]));
     return items;
+  }
+
+  _applyParameterOverrides(skeletonId) {
+    if (this.parameterOverrides.size === 0) return;
+    if ((!this._parameterItemsMap || this._parameterItemsMap.size === 0) && Object.keys(this._skeletons).length > 0) {
+      this._getParameterItems();
+    }
+    if (!this._parameterItemsMap) return;
+
+    const skelIdInt = parseInt(skeletonId);
+    for (let [index, value] of this.parameterOverrides) {
+      const idx = Number(index);
+      if (Math.floor(idx / 1000000) === skelIdInt) {
+        const item = this._parameterItemsMap.get(idx);
+        if (item) {
+          item._target[item._prop] = value;
+        }
+      }
+    }
   }
 
   updatePropertyItem(category, name, mergedIndex, value) {
     if (category === 'parameters') {
-      const item = this._parameterItems.find(i => i.index === mergedIndex);
+      const idx = Number(mergedIndex);
+      const item = this._parameterItemsMap?.get(idx) || this._parameterItems?.find(i => i.index === idx);
       if (item) {
-        item._target[item._prop] = value;
-        this.parameterOverrides.set(mergedIndex, value);
+        const val = Number(value);
+        const prop = item._prop;
+        const itemName = item.name;
+        const isMerged = !!this._fileNames?.isMerged;
+        for (const k in this._skeletons) {
+          if (!isMerged && k !== item._skeletonId) continue;
+          const s = this._skeletons[k].skeleton;
+          let targetObj = null;
+          let localIdBase = 0;
+          if (itemName.startsWith('Bone ')) {
+            const bName = itemName.split(': ')[0].replace('Bone ', '');
+            targetObj = s.findBone(bName);
+            if (targetObj) localIdBase = 100000 + s.bones.indexOf(targetObj) * 10;
+          } else if (itemName.startsWith('IK: ')) {
+            const ikName = itemName.replace('IK: ', '');
+            targetObj = s.findIkConstraint(ikName);
+            if (targetObj) localIdBase = 0 + s.ikConstraints.indexOf(targetObj);
+          } else if (itemName.startsWith('TF ')) {
+            const tfName = itemName.split(': ')[0].replace('TF ', '');
+            targetObj = s.findTransformConstraint(tfName);
+            if (targetObj) localIdBase = 10000 + s.transformConstraints.indexOf(targetObj) * 10;
+          } else if (itemName.startsWith('Path ')) {
+            const pathName = itemName.split(': ')[0].replace('Path ', '');
+            targetObj = s.findPathConstraint(pathName);
+            if (targetObj) localIdBase = 20000 + s.pathConstraints.indexOf(targetObj) * 10;
+          }
+          if (targetObj) {
+            targetObj[prop] = val;
+            const skelId = parseInt(k);
+            let finalIdx = (skelId * 1000000) + localIdBase;
+            if (itemName.includes(': ')) {
+              const suffix = itemName.split(': ')[1];
+              if (suffix === 'y') finalIdx += 1;
+              if (suffix === 'rotation') finalIdx += 2;
+              if (suffix === 'scaleX') finalIdx += 3;
+              if (suffix === 'scaleY') finalIdx += 4;
+              const props = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
+              const pi = props.indexOf(prop);
+              if (pi !== -1) finalIdx += pi;
+            }
+            this.parameterOverrides.set(finalIdx, val);
+          }
+        }
       }
     } else if (category === 'skins') {
       this._toggleSkin(name, value);
     } else if (category === 'attachments') {
-      const skeletonId = String(mergedIndex >> 16);
-      const slotIndex = mergedIndex & 0xFFFF;
+      const skeletonId = String(Math.floor(mergedIndex / 1000000));
+      const slotIndex = mergedIndex % 1000000;
       this._toggleAttachment(name, slotIndex, value, skeletonId);
     }
   }
@@ -702,8 +866,28 @@ export class SpineRendererBase extends BaseRenderer {
       if (entry) {
         entry.trackTime = entry.animation.duration * progress;
         state.apply(skeleton);
+        this._applyParameterOverrides(key);
         skeleton.updateWorldTransform(2);
       }
+    }
+  }
+
+  getSyncState() {
+    const state = super.getSyncState();
+    state.activeSkins = this._activeSkins ? Array.from(this._activeSkins) : null;
+    state.attachmentsCache = this._attachmentsCache;
+    return state;
+  }
+
+  applySyncState(state) {
+    super.applySyncState(state);
+    if (!state) return;
+    if (state.activeSkins) {
+      this.applySkins(state.activeSkins);
+    }
+    if (state.attachmentsCache) {
+      this._attachmentsCache = state.attachmentsCache;
+      this._syncAllHiddenAttachments();
     }
   }
 }

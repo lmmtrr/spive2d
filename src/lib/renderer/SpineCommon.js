@@ -34,7 +34,8 @@ export function parseAtlasDeclaredSizes(atlasText) {
 }
 
 export function setupAtlas(atlas) {
-  if (!atlas || !atlas.regions) return;
+  if (!atlas || !atlas.regions || atlas.__spive2d_setup) return;
+  atlas.__spive2d_setup = true;
   atlas.regions.forEach((region) => {
     if (region.name) region.name = region.name.trim();
   });
