@@ -25,10 +25,10 @@ https://github.com/user-attachments/assets/c8ad28e7-8414-4153-9585-e8c9a8039354
 | ⏭️ 下一个场景    | `S`                        |
 | ◀️ 上一个动画    | `Z`                        |
 | ▶️ 下一个动画    | `X`                        |
-| 📷 导出图像      | `R`                        |
+| 📷 导出图像      | `E`                        |
 | 🖼️ 导出图像序列  | `D`                        |
 | 💾 导出动画      | `C`                        |
-| ⚙️ 打开/关闭设置 | `E`                        |
+| ⚙️ 打开/关闭设置 | `R`                        |
 | 📝 添加到列表    | `V`                        |
 | ❌ 退出          | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
@@ -91,6 +91,28 @@ chmod +x /path/to/spive2d_linux_x64
     ```bash
     bun run tauri build
     ```
+
+### 🧪 测试
+
+运行单元测试和 E2E 测试：
+
+```bash
+# 运行单元测试
+bun run test:unit
+
+# 运行 E2E 测试
+bun run test:e2e:attachment
+bun run test:e2e:background
+bun run test:e2e:export
+bun run test:e2e:live2d
+bun run test:e2e:playback
+bun run test:e2e:resize
+bun run test:e2e:switch
+bun run test:e2e:vreg
+
+# 运行所有测试 (单元测试 + 所有 E2E)
+bun run test
+```
 
 ## 🌐 支持版本
 

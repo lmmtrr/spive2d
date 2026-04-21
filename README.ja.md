@@ -25,10 +25,10 @@ Spine スケルタルアニメーションと Live2D モデルを表示・操作
 | ⏭️ 次のシーン           | `S`                        |
 | ◀️ 前のアニメーション   | `Z`                        |
 | ▶️ 次のアニメーション   | `X`                        |
-| 📷 画像を書出           | `R`                        |
+| 📷 画像を書出           | `E`                        |
 | 🖼️ 連番画像を書出       | `D`                        |
 | 💾 アニメーションを書出 | `C`                        |
-| ⚙️ 設定を開く/閉じる    | `E`                        |
+| ⚙️ 設定を開く/閉じる    | `R`                        |
 | 📝 リストに追加         | `V`                        |
 | ❌ 終了                 | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
@@ -91,6 +91,28 @@ chmod +x /path/to/spive2d_linux_x64
     ```bash
     bun run tauri build
     ```
+
+### 🧪 テスト
+
+ユニットテストおよびE2Eテストを実行します。
+
+```bash
+# ユニットテストの実行
+bun run test:unit
+
+# E2Eテストの実行
+bun run test:e2e:attachment
+bun run test:e2e:background
+bun run test:e2e:export
+bun run test:e2e:live2d
+bun run test:e2e:playback
+bun run test:e2e:resize
+bun run test:e2e:switch
+bun run test:e2e:vreg
+
+# 全てのテストを実行 (ユニットテスト + 全てのE2E)
+bun run test
+```
 
 ## 🌐 対応バージョン
 

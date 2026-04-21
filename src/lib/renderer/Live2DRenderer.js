@@ -498,15 +498,15 @@ export class Live2DRenderer extends BaseRenderer {
   setPaused(paused) {
     if (!this.#model) return;
     if (paused) {
-      this.#model.autoUpdate = false;
+      if (this.#model.autoUpdate) this.#model.autoUpdate = false;
     } else {
       const { group, index } = this.#currentMotion;
       if (group !== null && index !== null) {
         this.#model.motion(group, index, 3).then(() => {
-          if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
+          this.#model.autoUpdate = true;
         });
       } else {
-        if (!this.#model.autoUpdate) this.#model.autoUpdate = true;
+        this.#model.autoUpdate = true;
       }
     }
   }

@@ -23,6 +23,7 @@ export class SpineRenderer extends SpineRendererBase {
   async load(dirName, scene) {
     this.dispose();
     this._canvas.style.display = 'block';
+    await SpineVersionManager.init();
     const { version, isJson } = await SpineVersionManager.detectVersion(dirName, scene);
     this._spine = SpineVersionManager.getLib(version);
     if (!this._spine) {

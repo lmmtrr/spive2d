@@ -44,6 +44,14 @@
 
   onMount(() => {
     initBackground();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const modelUrl = params.get('model');
+      if (modelUrl) {
+        processPath([modelUrl]);
+      }
+      window.__APP_STATE__ = appState;
+    }
     const unlistenProgress = listen('progress', (event) => {
       appState.processing = event.payload;
       showSpinner = event.payload;
@@ -93,10 +101,10 @@
     try {
       const inputPath = paths[0];
       let dirFiles = {};
-      if (inputPath.startsWith('http://') || inputPath.startsWith('https://')) {
+      if (inputPath.startsWith('http://') || inputPath.startsWith('https://') || inputPath.startsWith('/')) {
         let url;
         try {
-          url = new URL(inputPath);
+          url = new URL(inputPath, window.location.origin);
         } catch {
           appState.initialized = wasInitialized;
           showNotification(t('invalidUrl'));

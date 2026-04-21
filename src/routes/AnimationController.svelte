@@ -15,6 +15,24 @@
     };
   });
 
+  $effect(() => {
+    const renderer = getRenderer();
+    if (renderer) {
+      if (renderer.setPaused) {
+        renderer.setPaused(appState.animation.paused);
+      }
+    }
+  });
+
+  $effect(() => {
+    if (appState.animation.paused && !appState.animation.seeking) {
+      const renderer = getRenderer();
+      if (renderer && renderer.seekAnimation) {
+        renderer.seekAnimation(appState.animation.seekProgress);
+      }
+    }
+  });
+
   export function showOnHover(clientY) {
     visible = window.innerHeight - clientY < 80 || appState.animation.seeking;
   }

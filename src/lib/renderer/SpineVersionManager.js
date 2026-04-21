@@ -3,26 +3,32 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 
 const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
 const spineLibs = {};
+let initPromise = null;
 
 export class SpineVersionManager {
   static async init() {
-    if (Object.keys(spineLibs).length > 0) return;
-    for (const version of SPINE_VERSIONS) {
-      await new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = `lib/spine-webgl-${version}.js`;
-        script.onload = () => {
-          if (version[0] === '3') {
-            Object.assign(window.spine, window.spine.webgl);
-          }
-          spineLibs[version] = window.spine;
-          window.spine = undefined;
-          script.remove();
-          resolve();
-        };
-        document.head.appendChild(script);
-      });
-    }
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+      if (Object.keys(spineLibs).length === SPINE_VERSIONS.length) return;
+      for (const version of SPINE_VERSIONS) {
+        if (spineLibs[version]) continue;
+        await new Promise((resolve) => {
+          const script = document.createElement('script');
+          script.src = `lib/spine-webgl-${version}.js`;
+          script.onload = () => {
+            if (version[0] === '3' && window.spine.webgl) {
+              Object.assign(window.spine, window.spine.webgl);
+            }
+            spineLibs[version] = window.spine;
+            window.spine = undefined;
+            script.remove();
+            resolve();
+          };
+          document.head.appendChild(script);
+        });
+      }
+    })();
+    return initPromise;
   }
 
   static getLib(version) {

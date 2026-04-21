@@ -9,7 +9,19 @@
       "preview": "vite preview",
       "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
       "check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch",
-      "tauri": "tauri"
+      "tauri": "tauri",
+      "test:unit": "vitest run test/unit",
+      "test:e2e:attachment": "bun test/e2e/attachment.test.js",
+      "test:e2e:background": "bun test/e2e/background.test.js",
+      "test:e2e:export": "bun test/e2e/export.test.js",
+      "test:e2e:live2d": "bun test/e2e/live2d.test.js",
+      "test:e2e:playback": "bun test/e2e/playback.test.js",
+      "test:e2e:resize": "bun test/e2e/resize.test.js",
+      "test:e2e:switch": "bun test/e2e/switch.test.js",
+      "test:e2e:vreg": "bun test/e2e/vreg.test.js",
+      "test:e2e:vreg:update": "bun test/e2e/vreg.test.js --update",
+      "test:run-all": "bun test/run-all.js",
+      "test": "bun test/run-all.js"
    },
    "license": "MIT",
    "dependencies": {
@@ -24,10 +36,14 @@
       "@sveltejs/kit": "^2.57.1",
       "@sveltejs/vite-plugin-svelte": "^5.1.1",
       "@tauri-apps/cli": "^2.10.1",
+      "pixelmatch": "^7.1.0",
+      "pngjs": "^7.0.0",
+      "puppeteer": "^24.41.0",
       "svelte": "^5.55.1",
       "svelte-check": "^4.4.6",
       "typescript": "~5.6.3",
-      "vite": "^6.4.2"
+      "vite": "^6.4.2",
+      "vitest": "^4.1.4"
    },
    "overrides": {
       "cookie": "^0.7.2"

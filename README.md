@@ -25,10 +25,10 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | ⏭️ Next Scene            | `S`                        |
 | ◀️ Previous Animation    | `Z`                        |
 | ▶️ Next Animation        | `X`                        |
-| 📷 Export Image          | `R`                        |
+| 📷 Export Image          | `E`                        |
 | 🖼️ Export Image Sequence | `D`                        |
 | 💾 Export Animation      | `C`                        |
-| ⚙️ Open/Close Settings   | `E`                        |
+| ⚙️ Open/Close Settings   | `R`                        |
 | 📝 Append to List        | `V`                        |
 | ❌ Exit                  | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
@@ -91,6 +91,28 @@ To set up a local development environment, you'll need to install the following 
     ```bash
     bun run tauri build
     ```
+
+### 🧪 Testing
+
+Run unit tests and E2E tests:
+
+```bash
+# Run Unit tests
+bun run test:unit
+
+# Run E2E tests
+bun run test:e2e:attachment
+bun run test:e2e:background
+bun run test:e2e:export
+bun run test:e2e:live2d
+bun run test:e2e:playback
+bun run test:e2e:resize
+bun run test:e2e:switch
+bun run test:e2e:vreg
+
+# Run all tests (Unit + All E2E)
+bun run test
+```
 
 ## 🌐 Supported Versions
 
