@@ -140,10 +140,14 @@ export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson)
   const skeletonData = skeletonLoader.readSkeletonData(data);
   const skeleton = new spine.Skeleton(skeletonData);
   let initialSkinName;
-  if (skeleton.data.skins[0].name === 'default' && skeleton.data.skins.length > 1)
-    initialSkinName = skeleton.data.skins[1].name;
-  else
-    initialSkinName = skeleton.data.skins[0].name;
+  if (skeleton.data.skins.length > 0) {
+    const appearanceSkins = skeleton.data.skins.filter(s => s.name !== 'default' && !s.name.startsWith('mask_'));
+    if (appearanceSkins.length > 0) {
+      initialSkinName = appearanceSkins[0].name;
+    } else {
+      initialSkinName = 'default';
+    }
+  }
   const newSkin = new spine.Skin('_');
   const initialSkin = skeleton.data.findSkin(initialSkinName);
   if (initialSkin) newSkin.addSkin(initialSkin);
