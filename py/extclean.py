@@ -1,15 +1,14 @@
 """
 File Extension Cleanup Tool
 Description:
-- Removes extra extensions from files like .skel.bytes, .atlas.asset, .json.txt, .moc3.asset, .moc.asset
-- Preserves directory structure
-- Processes all subdirectories recursively
-- Renames files to their proper extensions (.skel, .atlas, .json, .moc3, .moc)
+- Removes redundant extensions (e.g., .skel.bytes -> .skel, .atlas.asset -> .atlas).
+- All other files are copied to the output directory unchanged.
+- Preserves directory structure and processes all subdirectories recursively.
 
 Usage:
-1. Place files with extra extensions in ./input directory
-2. Run script to process all files
-3. Cleaned files will be in './output' directory
+1. Put your files with extra extensions (and other assets) into the './input' folder.
+2. Run this script: python extclean.py
+3. Find your renamed files and copied assets in the './output' folder.
 """
 
 import os
