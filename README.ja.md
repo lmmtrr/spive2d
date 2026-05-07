@@ -97,7 +97,6 @@ chmod +x /path/to/spive2d_linux_x64
 ユニットテストおよびE2Eテストを実行します。
 
 ```bash
-# 全てのテストを実行 (ユニットテスト + 全てのE2E)
 bun run test
 ```
 
