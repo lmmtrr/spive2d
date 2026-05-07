@@ -5,6 +5,13 @@ const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
 const spineLibs = {};
 let initPromise = null;
 
+export function isJsonSpineData(head) {
+  const firstIdx = head.findIndex(c => ![32, 9, 10, 13].includes(c));
+  if (firstIdx === -1) return false;
+  return head[firstIdx] === 123 &&
+    !head.subarray(firstIdx + 1).some(c => c === 0 || (c < 9) || (c > 13 && c < 32));
+}
+
 export class SpineVersionManager {
   static async init() {
     if (initPromise) return initPromise;
@@ -51,9 +58,7 @@ export class SpineVersionManager {
       const buffer = await response.arrayBuffer();
       const data = new Uint8Array(buffer);
       const head = data.subarray(0, 100);
-      const firstIdx = head.findIndex(c => ![32, 9, 10, 13].includes(c));
-      const isJson = head[firstIdx] === 123 &&
-        !head.subarray(firstIdx + 1).some(c => c === 0 || (c < 9) || (c > 13 && c < 32));
+      const isJson = isJsonSpineData(head);
       if (isJson) {
         const content = new TextDecoder().decode(data).replace(/,(\s*[}\]])/g, '$1');
         const jsonData = JSON.parse(content);

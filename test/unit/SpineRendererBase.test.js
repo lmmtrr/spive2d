@@ -18,8 +18,8 @@ describe('SpineRendererBase Logic', () => {
     const canvas = { width: 800, height: 600 };
     const renderer = new SpineRendererBase(canvas, mockSpine);
     renderer._skeletons = {
-        '0': { 
-            skeleton: { 
+        '0': {
+            skeleton: {
                 slots: [
                     { attachment: { name: 'att1' }, data: { name: 'slot0' } },
                     { attachment: { name: 'att2' }, data: { name: 'slot1' } }

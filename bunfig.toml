@@ -8,3 +8,6 @@ NODE_ENV = "development"
 [dev]
 reload = true
 watch = true
+ 
+[test]
+exclude = ["test/unit/**", "test/e2e/**"]

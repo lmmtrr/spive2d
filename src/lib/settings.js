@@ -16,3 +16,9 @@ export function removeSetting(key) {
     localStorage.removeItem(key);
   }
 }
+
+export function clearAllSettings() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.clear();
+  }
+}

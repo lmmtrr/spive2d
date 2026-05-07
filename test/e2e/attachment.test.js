@@ -18,13 +18,18 @@ async function waitForServer(url, timeout = 45000) {
   throw new Error('Server timeout: ' + url);
 }
 (async () => {
-  const serverProcess = spawn('bun', ['run', 'dev'], { shell: true, stdio: 'ignore' });
+  let serverProcess;
+  if (!process.env.SHARED_SERVER) {
+    serverProcess = spawn('bun', ['run', 'dev'], { shell: true, stdio: 'ignore' });
+    await waitForServer('http://localhost:1420').catch(err => {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    });
+  }
   let browser;
   try {
-    await waitForServer('http://localhost:1420');
     browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
     const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 800 });
     await page.evaluateOnNewDocument(() => {
       window.__TAURI_INTERNALS__ = {
         invoke: async (cmd, args) => {
@@ -32,16 +37,25 @@ async function waitForServer(url, timeout = 45000) {
           if (cmd === 'plugin:path|join') return args.paths.join('/');
           return;
         },
-        metadata: { permissions: {} }
+        metadata: { permissions: {} },
+        transformCallback: (id) => id,
+        unregisterCallback: (id) => {},
+        convertFileSrc: (src) => src,
       };
+      window.__TAURI__ = { invoke: window.__TAURI_INTERNALS__.invoke };
     });
+    await page.setViewport({ width: 1200, height: 800 });
     const modelUrl = '/test-assets/spine/spineboy42/spineboy.skel';
     const targetUrl = `http://localhost:1420/?model=${encodeURIComponent(modelUrl)}`;
+    console.log('Navigating to model...');
     await page.goto(targetUrl, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('#sidebar', { visible: true, timeout: 5000 }).catch(() => page.keyboard.press('r'));
+    console.log('Triggering sidebar visibility...');
+    await page.mouse.move(10, 400);
+    await page.waitForSelector('#sidebar:not(.hidden)', { visible: true, timeout: 5000 });
     await page.waitForSelector('#property .item input[type="checkbox"]', { timeout: 10000 });
     const checkboxSelector = '#property .item input[type="checkbox"]';
     const initialChecked = await page.$eval(checkboxSelector, el => el.checked);
+    console.log('Toggling attachment checkbox...');
     await page.evaluate((selector) => {
       const el = document.querySelector(selector);
       el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -49,6 +63,7 @@ async function waitForServer(url, timeout = 45000) {
     }, checkboxSelector);
     const newChecked = await page.$eval(checkboxSelector, el => el.checked);
     if (initialChecked === newChecked) throw new Error('Checkbox failed to toggle');
+    console.log('Verifying attachment cache in export data...');
     const exportData = await page.evaluate(async () => {
       return new Promise((resolve) => {
         const originalPostMessage = Worker.prototype.postMessage;
@@ -65,12 +80,13 @@ async function waitForServer(url, timeout = 45000) {
     const attachmentsCache = exportData.syncState.attachmentsCache;
     const cacheKeys = Object.keys(attachmentsCache || {});
     if (cacheKeys.length === 0) throw new Error('attachmentsCache is empty');
+    console.log('SUCCESS: Attachment visibility and export state verified.');
   } catch (e) {
     console.error('E2E ERROR:', e);
     process.exit(1);
   } finally {
     if (browser) await browser.close();
-    if (serverProcess.pid) {
+    if (serverProcess && serverProcess.pid) {
       spawn('taskkill', ['/pid', serverProcess.pid, '/f', '/t'], { shell: true, stdio: 'ignore' });
       serverProcess.kill();
     }

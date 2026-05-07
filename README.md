@@ -97,19 +97,6 @@ To set up a local development environment, you'll need to install the following 
 Run unit tests and E2E tests:
 
 ```bash
-# Run Unit tests
-bun run test:unit
-
-# Run E2E tests
-bun run test:e2e:attachment
-bun run test:e2e:background
-bun run test:e2e:export
-bun run test:e2e:live2d
-bun run test:e2e:playback
-bun run test:e2e:resize
-bun run test:e2e:switch
-bun run test:e2e:vreg
-
 # Run all tests (Unit + All E2E)
 bun run test
 ```

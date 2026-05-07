@@ -112,6 +112,16 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
   };
 }
 
+export function getInitialSkinName(skins) {
+  if (!skins || skins.length === 0) return 'default';
+  const appearanceSkins = skins.filter(s => s.name !== 'default' && !s.name.startsWith('mask_'));
+  if (appearanceSkins.length > 0) {
+    return appearanceSkins[0].name;
+  } else {
+    return 'default';
+  }
+}
+
 export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson) {
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
   const originalNewRegionAttachment = atlasLoader.newRegionAttachment;
@@ -139,15 +149,7 @@ export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson)
   }
   const skeletonData = skeletonLoader.readSkeletonData(data);
   const skeleton = new spine.Skeleton(skeletonData);
-  let initialSkinName;
-  if (skeleton.data.skins.length > 0) {
-    const appearanceSkins = skeleton.data.skins.filter(s => s.name !== 'default' && !s.name.startsWith('mask_'));
-    if (appearanceSkins.length > 0) {
-      initialSkinName = appearanceSkins[0].name;
-    } else {
-      initialSkinName = 'default';
-    }
-  }
+  const initialSkinName = getInitialSkinName(skeleton.data.skins);
   const newSkin = new spine.Skin('_');
   const initialSkin = skeleton.data.findSkin(initialSkinName);
   if (initialSkin) newSkin.addSkin(initialSkin);

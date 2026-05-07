@@ -97,19 +97,6 @@ chmod +x /path/to/spive2d_linux_x64
 运行单元测试和 E2E 测试：
 
 ```bash
-# 运行单元测试
-bun run test:unit
-
-# 运行 E2E 测试
-bun run test:e2e:attachment
-bun run test:e2e:background
-bun run test:e2e:export
-bun run test:e2e:live2d
-bun run test:e2e:playback
-bun run test:e2e:resize
-bun run test:e2e:switch
-bun run test:e2e:vreg
-
 # 运行所有测试 (单元测试 + 所有 E2E)
 bun run test
 ```

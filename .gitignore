@@ -2,7 +2,6 @@
 /build
 /node_modules
 /package
-/test/e2e/baselines/
 /test/e2e/diffs/
 .DS_Store
 .env

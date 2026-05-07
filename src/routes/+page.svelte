@@ -51,6 +51,7 @@
         processPath([modelUrl]);
       }
       window.__APP_STATE__ = appState;
+      window.__GET_RENDERER__ = getRenderer;
     }
     const unlistenProgress = listen('progress', (event) => {
       appState.processing = event.payload;

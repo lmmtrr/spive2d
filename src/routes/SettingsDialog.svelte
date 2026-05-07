@@ -562,13 +562,13 @@
 
 <dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja'} onclick={handleDialogClick} class:wide={activeTab === 'export'}>
   <div class="tab-bar">
-    <button class="tab-btn" class:active={activeTab === 'general'} onclick={() => activeTab = 'general'}>
+    <button id="tabBtnGeneral" class="tab-btn" class:active={activeTab === 'general'} onclick={() => activeTab = 'general'}>
       {t('tabGeneral')}
     </button>
-    <button class="tab-btn" class:active={activeTab === 'export'} onclick={() => activeTab = 'export'}>
+    <button id="tabBtnExport" class="tab-btn" class:active={activeTab === 'export'} onclick={() => activeTab = 'export'}>
       {t('tabExport')}
     </button>
-    <button class="tab-btn" class:active={activeTab === 'shortcuts'} onclick={() => { activeTab = 'shortcuts'; }}>
+    <button id="tabBtnShortcuts" class="tab-btn" class:active={activeTab === 'shortcuts'} onclick={() => { activeTab = 'shortcuts'; }}>
       {t('tabShortcuts')}
     </button>
   </div>
@@ -591,8 +591,8 @@
       </div>
       <hr>
       <div class="input-row">
-        <input type="text" placeholder={t('enterUrlPrompt')} bind:value={urlInput} onkeydown={(e) => e.key === 'Enter' && handleLoadUrl()} style="margin-right: 10px;">
-        <button style="width: auto; margin: 0; padding: 0 15px;" onclick={handleLoadUrl}>{t('loadFromUrl')}</button>
+        <input id="urlInput" type="text" placeholder={t('enterUrlPrompt')} bind:value={urlInput} onkeydown={(e) => e.key === 'Enter' && handleLoadUrl()} style="margin-right: 10px;">
+        <button id="loadUrlBtn" style="width: auto; margin: 0; padding: 0 15px;" onclick={handleLoadUrl}>{t('loadFromUrl')}</button>
       </div>
       <hr>
       <div class="input-row">
@@ -693,7 +693,7 @@
         </div>
         <div class="input-row result-row" style="margin: 12px 0 8px 0;">
           <span class="label">{t('resultingSize')}</span>
-          <span class="value">{exportResolution.width} x {exportResolution.height}</span>
+          <span id="exportResolutionValue" class="value">{exportResolution.width} x {exportResolution.height}</span>
         </div>
 
         <div style="margin-top: 10px;">
