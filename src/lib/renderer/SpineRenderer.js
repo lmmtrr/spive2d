@@ -63,8 +63,10 @@ export class SpineRenderer extends SpineRendererBase {
   }
 
   #renderLoop() {
-    this.#requestId = undefined;
-    if (this._paused || this.isExport) return;
+    if (this._paused || this.isExport) {
+      this.#requestId = undefined;
+      return;
+    }
     const now = Date.now() / 1000;
     const delta = now - this.#lastFrameTime;
     this.#lastFrameTime = now;

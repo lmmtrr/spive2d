@@ -174,7 +174,7 @@
 
   async function handleClearCache() {
     try {
-      await invoke('clear_cache');
+      await invoke('clear_cache', { currentPath: appState.directories.selectedDir });
       showNotification(t('clearCacheSuccess'), 'success');
     } catch (e) {
       console.error('Failed to clear cache:', e);
@@ -252,8 +252,8 @@
       appState.transform.rotate = 0;
     } else {
       let val = appState.transform.rotate;
-      while (val > Math.PI) val -= 2 * Math.PI;
-      while (val < -Math.PI) val += 2 * Math.PI;
+      while (val > 360) val -= 360;
+      while (val < -360) val += 360;
       appState.transform.rotate = val;
     }
   }
@@ -449,7 +449,7 @@
     const mcy = ph / 2 + (originalHeight / 2 - crop.cy) * scaleF;
     ctx.save();
     ctx.translate(mcx, mcy);
-    const rotate = appState.exportBase === 'original' ? 0 : (appState.transform.rotate * (isSpine ? Math.PI : 1));
+    const rotate = appState.exportBase === 'original' ? 0 : (appState.transform.rotate * Math.PI / 180);
     ctx.rotate(rotate);
     const imgW = (originalWidth * 1.6) * scaleF;
     const imgH = (originalHeight * 1.6) * scaleF;
@@ -660,7 +660,7 @@
         </div>
         <div class="input-row">
           <label for="transformRotate">{t('transformRotate')}</label>
-          <input type="number" id="transformRotate" step="0.01" bind:value={appState.transform.rotate} onchange={handleTransformRotateValidate}>
+          <input type="number" id="transformRotate" step="1" bind:value={appState.transform.rotate} onchange={handleTransformRotateValidate}>
         </div>
         <div class="input-row">
           <label for="transformMoveX">{t('transformMoveX')}</label>

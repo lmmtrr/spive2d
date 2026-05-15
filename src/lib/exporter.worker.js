@@ -229,7 +229,7 @@ class WorkerLive2DRenderer {
       const scaleFactor = screenBaseScale ? (baseScale / screenBaseScale) : 1;
       this.model.scale.set(baseScale * (scale || 1));
       this.model.position.set(canvasWidth * 0.5 + (x || 0) * scaleFactor, canvasHeight * 0.5 + (y || 0) * scaleFactor);
-      this.model.rotation = rotation || 0;
+      this.model.rotation = (rotation || 0) * Math.PI / 180;
     }
   }
 

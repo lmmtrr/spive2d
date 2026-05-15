@@ -158,7 +158,7 @@ export class SpineRendererBase extends BaseRenderer {
       loadModel(scene.name);
       for (const extraFile of scene.files) {
         if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-        loadModel(scene.name + extraFile.split('.')[0]);
+        loadModel(scene.name + extraFile.substring(0, extraFile.lastIndexOf('.')));
       }
     }
   }
@@ -176,7 +176,7 @@ export class SpineRendererBase extends BaseRenderer {
       for (let i = 0; i < sceneInfo.files.length; i++) {
         const extraFile = sceneInfo.files[i];
         if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-        const name2 = sceneInfo.name + extraFile.split('.')[0];
+        const name2 = sceneInfo.name + extraFile.substring(0, extraFile.lastIndexOf('.'));
         const skelN = await this._loadSkeleton(name2);
         if (skelN) this._skeletons[String(i + 1)] = skelN;
       }
@@ -251,30 +251,6 @@ export class SpineRendererBase extends BaseRenderer {
     if (resizedPages.size > 0 && atlas.regions) {
       updateAtlasRegions(atlas, resizedPages);
     }
-  }
-
-  getSyncState() {
-    const serializableAttachmentsCache = {};
-    if (this._attachmentsCache) {
-      for (const key in this._attachmentsCache) {
-        const entry = this._attachmentsCache[key];
-        const [slotIndex, name, skeletonId] = entry;
-        serializableAttachmentsCache[key] = [
-          slotIndex,
-          name,
-          skeletonId || '0'
-        ];
-      }
-    }
-    return {
-      scale: this._scale,
-      moveX: this._moveX,
-      moveY: this._moveY,
-      rotate: this._rotate,
-      activeSkins: this._activeSkins ? Array.from(this._activeSkins) : [],
-      attachmentsCache: serializableAttachmentsCache,
-      parameterOverrides: Array.from(this.parameterOverrides.entries())
-    };
   }
 
   _calculateBounds(skeleton) {

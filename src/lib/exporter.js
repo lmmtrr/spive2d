@@ -96,7 +96,7 @@ async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
     }
     await writeFile(filePath, new Uint8Array(buffer));
   } catch (err) {
-    console.error('Failed to write image:', err);
+    showNotification(`${t('exportError') || 'Export error'}: ${err.message || err}`, 'error');
   }
 }
 

@@ -37,7 +37,7 @@ export function createTransformAction() {
           moveY: transform.moveY + (e.clientY - startY),
         };
       } else if (e.clientX >= window.innerWidth - SIDEBAR_WIDTH && (window.innerHeight - e.clientY > CONTROLLER_HEIGHT)) {
-        const delta = ((e.clientY - startY) / window.innerHeight) * 2.0;
+        const delta = ((e.clientY - startY) / window.innerHeight) * 180.0;
         appState.transform = { ...transform, rotate: transform.rotate + delta };
       }
       startX = e.clientX;

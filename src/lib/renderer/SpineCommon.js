@@ -189,8 +189,8 @@ export function calculateSpineMVP(spine, mvp, canvasWidth, canvasHeight, bounds,
     height
   );
   if (userRotate !== 0) {
-    const cos = Math.cos(Math.PI * userRotate);
-    const sin = Math.sin(Math.PI * userRotate);
+    const cos = Math.cos(Math.PI * userRotate / 180);
+    const sin = Math.sin(Math.PI * userRotate / 180);
     const t1 = new spine.Matrix4();
     t1.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, centerX, centerY, 0, 1]);
     const rot = new spine.Matrix4();

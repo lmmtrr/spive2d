@@ -196,7 +196,7 @@ export class Live2DRenderer extends BaseRenderer {
     );
     this.#model.scale.set(baseScale * scale);
     this.#model.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
-    this.#model.rotation = rotate;
+    this.#model.rotation = (rotate * Math.PI) / 180;
   }
 
   resetTransform(width = window.innerWidth, height = window.innerHeight) {
@@ -241,7 +241,7 @@ export class Live2DRenderer extends BaseRenderer {
       const scaleFactor = baseScale / screenBaseScale;
       this.#model.scale.set(baseScale * userScale);
       this.#model.position.set(width * 0.5 + userMoveX * scaleFactor, height * 0.5 + userMoveY * scaleFactor);
-      this.#model.rotation = userRotate;
+      this.#model.rotation = (userRotate * Math.PI) / 180;
     }
     if (!this.#renderTexture ||
       this.#renderTexture.width !== width ||

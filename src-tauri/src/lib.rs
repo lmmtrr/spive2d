@@ -140,8 +140,12 @@ async fn handle_dropped_path(
             .map(|e| e.to_lowercase())
         {
             Some(ext) if ext == "zip" || ext == "7z" => {
-                let temp_dir =
-                    tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                let spive_temp_root = std::env::temp_dir().join("spive2d");
+                let _ = std::fs::create_dir_all(&spive_temp_root);
+                let temp_dir = tempfile::Builder::new()
+                    .prefix("model_")
+                    .tempdir_in(spive_temp_root)
+                    .map_err(|e| format!("Failed to create temp dir: {}", e))?;
                 let temp_path = temp_dir.path().to_string_lossy().into_owned();
                 extract_archive(&path, temp_dir.path(), &ext)?;
                 let mut final_path = temp_path.clone();
@@ -160,6 +164,9 @@ async fn handle_dropped_path(
                 let state = app_handle.state::<AppState>();
                 let mut temp_dirs = state.temp_dirs.lock().unwrap();
                 temp_dirs.push(temp_dir);
+                if temp_dirs.len() > 2 {
+                    temp_dirs.remove(0);
+                }
                 result
             }
             _ => {
@@ -214,9 +221,49 @@ fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn clear_cache(app_handle: AppHandle) -> Result<(), String> {
+async fn clear_cache(current_path: Option<String>, app_handle: AppHandle) -> Result<(), String> {
     for window in app_handle.webview_windows().values() {
         window.clear_all_browsing_data().map_err(|e: tauri::Error| e.to_string())?;
+    }
+    let state = app_handle.state::<AppState>();
+    let mut current_temp_base = None;
+    let cp_norm = current_path.as_ref().map(|p| {
+        Path::new(p.trim_end_matches(|c| c == '/' || c == '\\')).to_path_buf()
+    });
+    {
+        let mut temp_dirs = state.temp_dirs.lock().unwrap();
+        if let Some(ref cp) = cp_norm {
+            let mut i = 0;
+            while i < temp_dirs.len() {
+                let dir_path = temp_dirs[i].path();
+                if cp.starts_with(dir_path) {
+                    current_temp_base = Some(dir_path.to_path_buf());
+                    i += 1;
+                } else {
+                    temp_dirs.remove(i);
+                }
+            }
+        } else {
+            temp_dirs.clear();
+        }
+    }
+    let spive_temp_root = std::env::temp_dir().join("spive2d");
+    if spive_temp_root.exists() {
+        if let Ok(entries) = fs::read_dir(&spive_temp_root) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if let Some(ref base) = current_temp_base {
+                    if path == *base {
+                        continue;
+                    }
+                }
+                if path.is_dir() {
+                    let _ = fs::remove_dir_all(&path);
+                } else {
+                    let _ = fs::remove_file(&path);
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -514,7 +561,11 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             }
             all_bases.push(group.name.clone());
             for extra in &group.files {
-                all_bases.push(format!("{}{}", group.name, extra.split('.').next().unwrap_or(extra)));
+                let stem = Path::new(extra)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(extra);
+                all_bases.push(format!("{}{}", group.name, stem));
             }
         }
         if is_compatible && !all_bases.is_empty() {
