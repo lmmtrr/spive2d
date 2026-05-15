@@ -55,6 +55,8 @@ jobs:
 
       - name: audit Rust dependencies
         uses: actions-rust-lang/audit@72c09e02f132669d52284a3323acdb503cfc1a24 # v1.2.7
+        with:
+          working-directory: src-tauri
 
       - name: Build & Release (macOS / Linux)
         if: matrix.platform != 'windows-latest'
