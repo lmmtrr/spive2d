@@ -1,9 +1,5 @@
 export function setupWorkerEnv(self) {
   self.window = self;
-  self.requestAnimationFrame = (cb) => setTimeout(cb, 16);
-  self.cancelAnimationFrame = (id) => clearTimeout(id);
-  self.innerWidth = 800;
-  self.innerHeight = 600;
   self.HTMLCanvasElement = OffscreenCanvas;
   self.HTMLImageElement = class HTMLImageElement {
     constructor() {
@@ -40,7 +36,6 @@ export function setupWorkerEnv(self) {
     get src() { return this._src; }
   };
   self.Image = self.HTMLImageElement;
-  self.HTMLVideoElement = class HTMLVideoElement { };
   const patchWebGL = (proto) => {
     if (!proto) return;
     const oldTexImage2D = proto.texImage2D;
@@ -83,10 +78,6 @@ export function setupWorkerEnv(self) {
     documentElement: { style: {} },
     head: { appendChild: () => { } },
     body: { appendChild: () => { } },
-    currentScript: null,
-    location: self.location,
-    styleSheets: [],
-    fonts: { add: () => { }, ready: Promise.resolve() },
   };
   self.__TAURI__ = {
     core: {
@@ -98,7 +89,6 @@ export function setupWorkerEnv(self) {
     if (!PIXI) return;
     self.window.PIXI = PIXI;
     if (PIXI.utils) {
-      PIXI.utils.isWebGLSupported = () => true;
       PIXI.utils.skipHello();
     }
     if (PIXI.Ticker) {
