@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.25] - 2026-05-15
+
+### Added
+
+- Implement logarithmic animation speed control for finer adjustments
+- Enhance cache clearing logic and standardize character transform controls
+
+### Fixed
+
+- Resolve Spine transparency rendering artifacts and incorrect alpha blending
+- Fix exporter worker stability and file saving errors in production
+- Stabilize Live2D state synchronization and update timing
+- Exclude internal mask skins from initial selection in Spine models
+
 ## [0.1.24] - 2026-04-20
 
 ### Added
