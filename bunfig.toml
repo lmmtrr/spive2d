@@ -1,6 +1,6 @@
 [install]
 prerelease = false
-minimumReleaseAge = 172800
+minimumReleaseAge = 50000
 
 [define]
 NODE_ENV = "development"
