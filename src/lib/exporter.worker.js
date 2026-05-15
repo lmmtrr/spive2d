@@ -10,45 +10,40 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
   if (libsLoaded === rendererType && (rendererType !== 'spine' || libsLoadedVersion === version)) return;
   const isLive2D = rendererType === 'live2d';
   const isSpine = rendererType === 'spine';
-  try {
-    const origin = libraryBaseUrl || self.location.origin;
-    setupWorkerEnv(self);
-    if (isLive2D) {
-      const scripts = [
-        origin + '/lib/pixi.min.js',
-        origin + '/lib/live2dcubismcore.min.js',
-        origin + '/lib/live2d.min.js',
-        origin + '/lib/index.min.js'
-      ];
-      for (const url of scripts) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-        let code = await response.text();
-        code += "\n;if(typeof PIXI !== 'undefined') self.PIXI = PIXI; if(typeof Live2DCubismCore !== 'undefined') self.Live2DCubismCore = Live2DCubismCore; if(typeof Live2D !== 'undefined') self.Live2D = Live2D;";
-        (0, eval)(code);
-      }
-      if (!self.PIXI) throw new Error('PIXI failed to initialize');
-      self.setupPIXISettings(self.PIXI);
-    } else if (isSpine && version) {
-      const url = `${origin}/lib/spine-webgl-${version}.js`;
+  const origin = libraryBaseUrl || self.location.origin;
+  setupWorkerEnv(self);
+  if (isLive2D) {
+    const scripts = [
+      origin + '/lib/pixi.min.js',
+      origin + '/lib/live2dcubismcore.min.js',
+      origin + '/lib/live2d.min.js',
+      origin + '/lib/index.min.js'
+    ];
+    for (const url of scripts) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Failed to fetch ${url}`);
       let code = await response.text();
-      code += "\n;if(typeof spine !== 'undefined') self.spine = spine;";
-      (0, eval)(code);
-      if (!self.spine) throw new Error(`Spine failed to initialize`);
-      if (version[0] === '3') {
-        if (self.spine.webgl) Object.assign(self.spine, self.spine.webgl);
-        if (!self.spine.core) self.spine.core = self.spine;
-      }
-      self.spineLib = self.spine;
-      libsLoadedVersion = version;
+      code += "\n;if(typeof PIXI !== 'undefined') self.PIXI = PIXI; if(typeof Live2DCubismCore !== 'undefined') self.Live2DCubismCore = Live2DCubismCore; if(typeof Live2D !== 'undefined') self.Live2D = Live2D;";
+      (new Function(code)).call(self);
     }
-    libsLoaded = rendererType;
-  } catch (err) {
-    console.error('Failed to load libraries in worker:', err);
-    throw err;
+    if (!self.PIXI) throw new Error('PIXI failed to initialize');
+    self.setupPIXISettings(self.PIXI);
+  } else if (isSpine && version) {
+    const url = `${origin}/lib/spine-webgl-${version}.js`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+    let code = await response.text();
+    code += "\n;if(typeof spine !== 'undefined') self.spine = spine;";
+    (new Function(code)).call(self);
+    if (!self.spine) throw new Error(`Spine failed to initialize`);
+    if (version[0] === '3') {
+      if (self.spine.webgl) Object.assign(self.spine, self.spine.webgl);
+      if (!self.spine.core) self.spine.core = self.spine;
+    }
+    self.spineLib = self.spine;
+    libsLoadedVersion = version;
   }
+  libsLoaded = rendererType;
 }
 
 class WorkerLive2DRenderer {
@@ -138,23 +133,18 @@ class WorkerLive2DRenderer {
 
   async load(modelUrl) {
     const { live2d: { Live2DModel } } = PIXI;
-    try {
-      this.model = await Live2DModel.from(modelUrl, { autoInteract: false, idleMotionGroup: 'None' });
-      this.model.autoUpdate = false;
-      this.app.stage.addChild(this.model);
-      const { width, height } = this.app.view;
-      const modelWidth = this.model.internalModel.originalWidth;
-      const modelHeight = this.model.internalModel.originalHeight;
-      const s = Math.min(width / modelWidth, height / modelHeight);
-      this.model.scale.set(s);
-      this.model.anchor.set(0.5, 0.5);
-      this.model.position.set(width * 0.5, height * 0.5);
-      if (this.model.internalModel && this.model.internalModel.breath) {
-        this.model.internalModel.breath = null;
-      }
-    } catch (err) {
-      console.error('Worker: Error loading model:', err);
-      throw err;
+    this.model = await Live2DModel.from(modelUrl, { autoInteract: false, idleMotionGroup: 'None' });
+    this.model.autoUpdate = false;
+    this.app.stage.addChild(this.model);
+    const { width, height } = this.app.view;
+    const modelWidth = this.model.internalModel.originalWidth;
+    const modelHeight = this.model.internalModel.originalHeight;
+    const s = Math.min(width / modelWidth, height / modelHeight);
+    this.model.scale.set(s);
+    this.model.anchor.set(0.5, 0.5);
+    this.model.position.set(width * 0.5, height * 0.5);
+    if (this.model.internalModel && this.model.internalModel.breath) {
+      this.model.internalModel.breath = null;
     }
   }
 
@@ -168,31 +158,26 @@ class WorkerLive2DRenderer {
           group = groups[0];
         }
       }
-      try {
-        await this.model.motion(group, index, PIXI.live2d.MotionPriority.FORCE);
-        const mm = this.model.internalModel.motionManager;
-        const mqm = mm?.queueManager;
-        if (mqm?._motions?.length > 0) {
-          const entry = mqm._motions[0];
-          const m = entry._motion;
-          if (m) {
-            this._currentDuration = m._loopDurationSeconds ||
-              (m._motionData && m._motionData.duration) ||
-              (m.getDuration ? m.getDuration() : 0.1);
-            m._fadeInSeconds = 0;
-            m._fadeOutSeconds = 0;
-            if (m._motionData?.curves) {
-              for (const curve of m._motionData.curves) {
-                curve.fadeInTime = -1;
-                curve.fadeOutTime = -1;
-              }
+      await this.model.motion(group, index, PIXI.live2d.MotionPriority.FORCE);
+      const mm = this.model.internalModel.motionManager;
+      const mqm = mm?.queueManager;
+      if (mqm?._motions?.length > 0) {
+        const entry = mqm._motions[0];
+        const m = entry._motion;
+        if (m) {
+          this._currentDuration = m._loopDurationSeconds ||
+            (m._motionData && m._motionData.duration) ||
+            (m.getDuration ? m.getDuration() : 0.1);
+          m._fadeInSeconds = 0;
+          m._fadeOutSeconds = 0;
+          if (m._motionData?.curves) {
+            for (const curve of m._motionData.curves) {
+              curve.fadeInTime = -1;
+              curve.fadeOutTime = -1;
             }
           }
-        } else {
-          this._currentDuration = 0.1;
         }
-      } catch (e) {
-        console.error('Worker: Failed to play motion', e);
+      } else {
         this._currentDuration = 0.1;
       }
     }
