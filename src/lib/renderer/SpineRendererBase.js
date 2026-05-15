@@ -24,7 +24,7 @@ export class SpineRendererBase extends BaseRenderer {
   _fileNames = [];
   _skeletons = {};
   _animationStates = [];
-  _alphaMode = 'unpack';
+  _alphaMode = 'pma';
   _paused = false;
   _speed = 1.0;
   _attachmentsCache = {};
@@ -37,13 +37,39 @@ export class SpineRendererBase extends BaseRenderer {
     this._spine = spineLib;
   }
 
-  async initCtx(alphaMode = 'unpack') {
+  async initCtx(alphaMode = 'pma') {
     this._alphaMode = alphaMode;
     this._ctx = new this._spine.ManagedWebGLRenderingContext(this._canvas, {
       preserveDrawingBuffer: true,
+      alpha: true,
+      premultipliedAlpha: true,
+      antialias: true
     });
     const gl = this._ctx.gl;
     if (gl) {
+      gl.clearColor(0, 0, 0, 0);
+      const originalBlendFunc = gl.blendFunc.bind(gl);
+      const originalBlendFuncSeparate = gl.blendFuncSeparate.bind(gl);
+      const patchBlend = (target) => {
+        target.blendFunc = (src, dst) => {
+          if (dst === gl.ONE_MINUS_SRC_ALPHA) {
+            originalBlendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+          } else if (src === gl.ONE && dst === gl.ONE) {
+            originalBlendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
+          } else {
+            originalBlendFunc(src, dst);
+          }
+        };
+        target.blendFuncSeparate = (srcRGB, dstRGB, srcAlpha, dstAlpha) => {
+          if (dstRGB === gl.ONE_MINUS_SRC_ALPHA) {
+            originalBlendFuncSeparate(srcRGB, dstRGB, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+          } else {
+            originalBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+          }
+        };
+      };
+      patchBlend(gl);
+      patchBlend(this._ctx);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
     }
     this._shader = this._spine.Shader.newTwoColoredTextured(this._ctx);
@@ -286,6 +312,7 @@ export class SpineRendererBase extends BaseRenderer {
     const gl = this._ctx.gl;
     if (!gl) return;
     this.updateMVP(options);
+    gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     const sortedKeys = this._getSortedSkeletonKeys();
     for (const key of sortedKeys) {

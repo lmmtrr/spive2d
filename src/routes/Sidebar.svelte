@@ -206,8 +206,8 @@
 
   {#if propertyCategories.includes('attachments')}
     <select id="pmaSelect" onchange={handleAlphaModeChange} value={appState.alphaMode}>
-      <option value="unpack">{t('alphaModeUnpack')}</option>
       <option value="pma">{t('alphaModePMA')}</option>
+      <option value="unpack">{t('alphaModeUnpack')}</option>
       <option value="npm">{t('alphaModeNPM')}</option>
     </select>
   {/if}

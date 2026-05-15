@@ -35,7 +35,7 @@ let exportBase = $state('window');
 let exportScale = $state(100);
 let exportMarginX = $state(0);
 let exportMarginY = $state(0);
-let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'unpack'));
+let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
 const SCALE_MAX = 8;
 const SCALE_MIN = 0.5;
