@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.26] - 2026-05-15
+
+### Changed
+
+- Clean up unnecessary polyfills and mocks in worker environment for better performance
+
 ## [0.1.25] - 2026-05-15
 
 ### Added
