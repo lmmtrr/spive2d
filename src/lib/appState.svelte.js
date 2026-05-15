@@ -72,6 +72,10 @@ export const appState = {
   SCALE_MIN,
   resetTransform() {
     transform = { scale: 1, moveX: 0, moveY: 0, rotate: 0 };
+    exportScale = 100;
+    exportMarginX = 0;
+    exportMarginY = 0;
+    exportBase = 'window';
   },
   resetAnimation() {
     animation = { paused: false, seeking: false, seekProgress: 0, currentTime: 0, duration: 0, speed: 1.0 };

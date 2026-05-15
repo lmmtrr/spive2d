@@ -5,7 +5,7 @@
   "openCurrentDirectory": "Open Current Directory",
   "openImage": "Open Image for Background",
   "openExportDirectory": "Open Export Directory",
-  "removeImage": "Remove Background Image",
+  "removeBackground": "Remove Background",
   "backgroundColor": "Background Color:",
   "windowWidth": "Window Width:",
   "windowHeight": "Window Height:",

@@ -135,7 +135,7 @@
     appState.background = { ...appState.background, imagePath: path };
   }
 
-  function handleRemoveImage() {
+  function handleRemoveBackground() {
     document.body.style.backgroundColor = '';
     document.body.style.backgroundImage = `
       linear-gradient(45deg, #fff 25%, transparent 0),
@@ -601,7 +601,7 @@
       </div>
       <div class="button-group">
         <button onclick={handleOpenImage}>{t('openImage')}</button>
-        <button onclick={handleRemoveImage}>{t('removeImage')}</button>
+        <button onclick={handleRemoveBackground}>{t('removeBackground')}</button>
       </div>
       <hr>
       <div class="input-row" style="margin-top: 5px;">
@@ -610,7 +610,7 @@
             appState.mergeSequential = e.target.checked;
             saveSetting('spive2d_merge_sequential', e.target.checked);
           }} style="width: auto; margin: 0;">
-          <span style="font-size: 14px; letter-spacing: 0.08em; font-weight: 500;">{t('mergeSequential')}</span>
+          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('mergeSequential')}</span>
         </label>
       </div>
       <hr>
@@ -627,16 +627,18 @@
           <button onclick={handleResetState} style="width: auto; padding: 0 15px;">{t('resetState')}</button>
           <button onclick={handleOpenExportDir} style="width: auto; padding: 0 15px;">{t('openExportDirectory')}</button>
         </div>
-        <div class="input-row radio-group" style="gap: 15px; margin-top: 10px;">
+        <div class="input-row radio-group" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px;">
           <span>{t('exportSizeBase')}</span>
-          <label class="radio-label">
-            <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
-            <span>{t('baseWindow')}</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
-            <span>{t('baseOriginal')}</span>
-          </label>
+          <div style="display: flex; gap: 15px;">
+            <label class="radio-label">
+              <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
+              <span>{t('baseWindow')}</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
+              <span>{t('baseOriginal')}</span>
+            </label>
+          </div>
         </div>
         <div class="input-row">
           <label for="exportScale">{t('exportScale')}</label>
@@ -822,7 +824,7 @@
   }
 
   dialog.lang-ja button:not(.tab-btn):not(.shortcut-key-btn) {
-    font-size: 10.6px;
+    font-size: 12px;
   }
 
   dialog.lang-ja input[type="text"]::placeholder {

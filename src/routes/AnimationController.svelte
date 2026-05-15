@@ -88,7 +88,8 @@
   }
 
   function handleSpeedInput(e) {
-    const newSpeed = parseFloat(e.target.value);
+    const v = parseFloat(e.target.value);
+    const newSpeed = Math.pow(10, v);
     appState.animation.speed = newSpeed;
     const renderer = getRenderer();
     renderer?.setSpeed?.(newSpeed);
@@ -152,10 +153,10 @@
     <span class="speed-label">Speed: {appState.animation.speed.toFixed(1)}x</span>
     <input
       type="range"
-      min="0.1"
-      max="3.0"
-      step="0.1"
-      value={appState.animation.speed}
+      min="-1"
+      max="1"
+      step="0.01"
+      value={Math.log10(appState.animation.speed)}
       oninput={handleSpeedInput}
       onchange={blurActiveElement}
       class="speed-slider"

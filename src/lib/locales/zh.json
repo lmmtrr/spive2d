@@ -5,7 +5,7 @@
   "openCurrentDirectory": "打开当前文件所在目录",
   "openImage": "打开背景图片",
   "openExportDirectory": "打开导出目录",
-  "removeImage": "删除背景图片",
+  "removeBackground": "删除背景",
   "backgroundColor": "背景颜色:",
   "windowWidth": "窗口宽度:",
   "windowHeight": "窗口高度:",
