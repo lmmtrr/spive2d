@@ -49,3 +49,7 @@ export function formatFileSize(bytes) {
   if (i === 0) return `${bytes} ${sizes[i]}`;
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 }
+
+export function sanitizeFilename(name) {
+  return String(name || '').replace(/[\\/:*?"<>|]/g, '_');
+}

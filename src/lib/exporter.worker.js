@@ -312,12 +312,16 @@ async function processQueue(id) {
       if (t.renderer) {
         t.renderer.seek(sampleTime / (t.renderer._currentDuration || 0.1));
         t.renderer.render();
+        const gl = t.renderer.renderer?.gl || t.renderer._ctx?.gl;
+        if (gl) gl.flush();
       }
       if (t.compositeCtx) {
         t.compositeCtx.clearRect(0, 0, t.canvas.width, t.canvas.height);
         if (t.bgBitmap) t.compositeCtx.drawImage(t.bgBitmap, 0, 0, t.canvas.width, t.canvas.height);
         else if (t.bgColor) { t.compositeCtx.fillStyle = t.bgColor; t.compositeCtx.fillRect(0, 0, t.canvas.width, t.canvas.height); }
         t.compositeCtx.drawImage(t.renderCanvas, 0, 0);
+      } else if (t.renderCanvas !== t.canvas) {
+        throw new Error('Failed to get 2D context for compositing. The resolution might be too high for the GPU.');
       }
       if (t.videoSource) {
         await t.videoSource.add(containerTime, 1 / t.fps);
@@ -339,9 +343,12 @@ self.onmessage = async (e) => {
       self.useNonePMA = (p.rendererType === 'spine' && p.alphaMode !== 'unpack');
       const canvas = new OffscreenCanvas(p.width, p.height);
       const renderCanvas = new OffscreenCanvas(p.width, p.height);
+      const compositeCtx = canvas.getContext('2d');
+      if (!compositeCtx) throw new Error('Failed to create 2D context. The resolution might be too high.');
       let renderer;
       if (p.rendererType === 'live2d') {
         renderer = new WorkerLive2DRenderer(renderCanvas);
+        if (!renderer.renderer) throw new Error('Failed to initialize Live2D renderer.');
         await renderer.load(p.modelUrl, p.alphaMode);
         if (p.transform) {
           renderer.marginX = p.marginX || 0;
@@ -366,6 +373,7 @@ self.onmessage = async (e) => {
       } else {
         renderer = new WorkerSpineRenderer(renderCanvas, self.spineLib);
         await renderer.load(p.selectedDir, p.fileNames, p.isFileJson, p.alphaMode);
+        if (!renderer._ctx) throw new Error('Failed to initialize Spine renderer context.');
         renderer.marginX = p.marginX || 0;
         renderer.marginY = p.marginY || 0;
         renderer.setTransform(
@@ -389,14 +397,31 @@ self.onmessage = async (e) => {
         output.addVideoTrack(videoSource);
         await output.start();
       }
-      currentTasks.set(id, { canvas, renderCanvas, compositeCtx: renderCanvas !== canvas ? canvas.getContext('2d') : null, bgBitmap: p.bgBitmap, bgColor: p.bgColor, renderer, output, videoSource, fps: p.fps, lastSampleTime: 0, ready: true, renderQueue: [], isRendering: false });
+      currentTasks.set(id, { canvas, renderCanvas, compositeCtx, bgBitmap: p.bgBitmap, bgColor: p.bgColor, renderer, output, videoSource, fps: p.fps, lastSampleTime: 0, ready: true, renderQueue: [], isRendering: false });
       self.postMessage({ type: 'READY', id, duration: renderer._currentDuration, fps: renderer.getFPS ? renderer.getFPS() : 60 });
     } else if (type === 'RENDER_FRAME') {
       const t = currentTasks.get(id);
       if (t) { t.renderQueue.push(p); processQueue(id); }
     } else if (type === 'FINISH_VIDEO') {
       const t = currentTasks.get(id);
-      if (t) { await t.output.finalize(); const buffer = t.output.target.buffer; self.postMessage({ type: 'DONE_VIDEO', id, buffer }, { transfer: [buffer] }); currentTasks.delete(id); }
+      if (t) {
+        await t.output.finalize();
+        const buffer = t.output.target.buffer;
+        self.postMessage({ type: 'DONE_VIDEO', id, buffer }, { transfer: [buffer] });
+        if (t.bgBitmap) t.bgBitmap.close();
+        if (t.renderer?.dispose) t.renderer.dispose();
+        currentTasks.delete(id);
+      }
     }
-  } catch (err) { self.postMessage({ type: 'ERROR', id, error: err.message }); }
+  } catch (err) {
+    if (id) {
+      const t = currentTasks.get(id);
+      if (t) {
+        if (t.bgBitmap) t.bgBitmap.close();
+        if (t.renderer?.dispose) t.renderer.dispose();
+        currentTasks.delete(id);
+      }
+    }
+    self.postMessage({ type: 'ERROR', id, error: err?.message || String(err) });
+  }
 };

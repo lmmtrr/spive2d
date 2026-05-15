@@ -1,5 +1,5 @@
 import { appState } from './appState.svelte.js';
-import { parseBackgroundImageUrl, loadImage } from './utils.js';
+import { parseBackgroundImageUrl, loadImage, sanitizeFilename } from './utils.js';
 import { getRenderer } from './rendererStore.svelte.js';
 import { SpineVersionManager } from './renderer/SpineVersionManager.js';
 import { showNotification } from './notificationStore.svelte.js';
@@ -68,8 +68,8 @@ const encoderPoolSize = Math.max(2, Math.min(8, hardwareConcurrency - 1));
 const encoderPool = new WorkerPool(PngEncoderWorker, encoderPoolSize);
 
 async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
-  const safeName = animationName ? animationName.split('.')[0] : 'snapshot';
-  const baseFilename = `${sceneText}_${safeName}${suffix}`;
+  const safeName = sanitizeFilename(animationName ? animationName.split('.')[0] : 'snapshot');
+  const baseFilename = `${sanitizeFilename(sceneText)}_${safeName}${suffix}`;
   try {
     const baseDir = await downloadDir();
     const exportBaseDir = await join(baseDir, 'spive2d_export');
@@ -102,8 +102,8 @@ async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
 
 export async function exportImage(sceneText, animationName) {
   const taskId = `image-${++taskIdCounter}`;
-  const safeName = animationName ? animationName.split('.')[0] : 'snapshot';
-  const baseFilename = `${sceneText}_${safeName}`;
+  const safeName = sanitizeFilename(animationName ? animationName.split('.')[0] : 'snapshot');
+  const baseFilename = `${sanitizeFilename(sceneText)}_${safeName}`;
   exportQueue.add({
     id: taskId,
     type: 'Image',
@@ -223,8 +223,8 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     return;
   }
   const taskId = `video-${++taskIdCounter}`;
-  const safeName = animationName ? animationName.split('.')[0] : 'animation';
-  const baseFilename = `${sceneText}_${safeName}`;
+  const safeName = sanitizeFilename(animationName ? animationName.split('.')[0] : 'animation');
+  const baseFilename = `${sanitizeFilename(sceneText)}_${safeName}`;
   exportQueue.add({
     id: taskId,
     type: 'Video',
@@ -346,8 +346,8 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
 
 export async function exportImageSequence(targetDir, sceneText, animationName, animationValue, expressionValue, onProgress) {
   const taskId = `png-${++taskIdCounter}`;
-  const safeName = animationName ? animationName.split('.')[0] : 'sequence';
-  const baseFilename = `${sceneText}_${safeName}`;
+  const safeName = sanitizeFilename(animationName ? animationName.split('.')[0] : 'sequence');
+  const baseFilename = `${sanitizeFilename(sceneText)}_${safeName}`;
   exportQueue.add({
     id: taskId,
     type: 'PNG Sequence',
@@ -412,7 +412,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
         framesInFlight--;
         const bytes = new Uint8Array(buffer);
         const frameStr = String(frameIndex).padStart(4, '0');
-        const filename = `${sceneText}_${safeName}_${frameStr}.png`;
+        const filename = `${sanitizeFilename(sceneText)}_${sanitizeFilename(safeName)}_${frameStr}.png`;
         const p = join(targetDir, filename).then(filePath => writeFile(filePath, bytes));
         writePromises.push(p);
         framesProcessed++;

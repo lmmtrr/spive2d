@@ -1,5 +1,9 @@
 export function setupWorkerEnv(self) {
   self.window = self;
+  self.requestAnimationFrame = (cb) => setTimeout(cb, 16);
+  self.cancelAnimationFrame = (id) => clearTimeout(id);
+  self.innerWidth = 800;
+  self.innerHeight = 600;
   self.HTMLCanvasElement = OffscreenCanvas;
   self.HTMLImageElement = class HTMLImageElement {
     constructor() {
