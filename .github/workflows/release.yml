@@ -23,17 +23,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@4d991eb9b905813e85d991b96f13b0a2df3d80a1 # v2.10.2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: setup bun
-        uses: oven-sh/setup-bun@403470cc170e83b483da59a358c27e8a939f0464 # v2.0.1
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@eb20067341355c707577579626359521360e28cf
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
@@ -50,11 +50,11 @@ jobs:
         run: bun audit
 
       - name: audit Rust dependencies
-        uses: actions-rust-lang/audit@109923831f280a5e8e895c1d6830501865241776 # v1.1.0
+        uses: actions-rust-lang/audit@72c09e02f132669d52284a3323acdb503cfc1a24 # v1.2.7
 
       - name: Build & Release (macOS / Linux)
         if: matrix.platform != 'windows-latest'
-        uses: tauri-apps/tauri-action@694f877684c3c3a91b48b6348956b668b55e347d # v0.5.15
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
