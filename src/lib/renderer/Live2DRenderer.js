@@ -54,6 +54,9 @@ export class Live2DRenderer extends BaseRenderer {
   #animations = [];
   #disposed = false;
   #renderTexture = null;
+  #paused = false;
+  #updateFn = null;
+  #lastTime = 0;
 
   constructor(isExport = false) {
     super(isExport);
@@ -119,11 +122,29 @@ export class Live2DRenderer extends BaseRenderer {
         await this.setAnimation(animations[0].value);
       }
       if (this.#disposed || !this.#model) return;
-      const originalUpdate = this.#model.update;
-      this.#model.update = function (dt) {
-        originalUpdate.call(this, dt * this._spive2dSpeed);
+      const originalUpdate = PIXI.live2d.Live2DModel.prototype.update;
+      this.#model.autoUpdate = false;
+      this.#lastTime = performance.now();
+      let accumulatedMS = 0;
+      this.#updateFn = () => {
+        if (this.#disposed || !this.#model || this.#paused) return;
+        const now = performance.now();
+        const elapsedMS = now - this.#lastTime;
+        this.#lastTime = now;
+        accumulatedMS += elapsedMS * this.#speed;
+        if (accumulatedMS >= 10) {
+          originalUpdate.call(this.#model, accumulatedMS);
+          accumulatedMS = 0;
+        } else {
+          originalUpdate.call(this.#model, 0);
+        }
+        this.#applyOverrides();
+        if (this.#model.internalModel && this.#model.internalModel.coreModel) {
+          this.#model.internalModel.coreModel.update();
+        }
       };
-      this.#model._spive2dSpeed = this.#speed;
+      this.#app.ticker.add(this.#updateFn);
+      model._spive2dSpeed = this.#speed;
     } catch (err) {
       showNotification("Live2DRenderer Error: " + (err.message || err), 'error');
       console.error(err);
@@ -133,8 +154,9 @@ export class Live2DRenderer extends BaseRenderer {
   dispose() {
     if (this.#disposed) return;
     this.#disposed = true;
-    if (!this.#isExport && this.#canvas) {
-      this.#canvas.style.display = 'none';
+    if (this.#updateFn && this.#app) {
+      this.#app.ticker.remove(this.#updateFn);
+      this.#updateFn = null;
     }
     if (this.#model) {
       if (!this.#isExport && this.#app && this.#app.stage) {
@@ -479,9 +501,18 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   getSyncState() {
-    return {
-      ...super.getSyncState(),
-    };
+    const state = super.getSyncState();
+    if (this.#model) {
+      const coreModel = this.#model.internalModel.coreModel;
+      const partIds = coreModel?._partIds;
+      if (partIds) {
+        state.initialPartOpacities = partIds.map(name => [name, coreModel.getPartOpacityById(name)]);
+      }
+      if (coreModel._parameterIds) {
+        state.initialParameterValues = coreModel._parameterIds.map((id, i) => [id, coreModel._parameterValues[i]]);
+      }
+    }
+    return state;
   }
 
   applySyncState(state) {
@@ -497,17 +528,9 @@ export class Live2DRenderer extends BaseRenderer {
 
   setPaused(paused) {
     if (!this.#model) return;
-    if (paused) {
-      if (this.#model.autoUpdate) this.#model.autoUpdate = false;
-    } else {
-      const { group, index } = this.#currentMotion;
-      if (group !== null && index !== null) {
-        this.#model.motion(group, index, 3).then(() => {
-          this.#model.autoUpdate = true;
-        });
-      } else {
-        this.#model.autoUpdate = true;
-      }
+    this.#paused = paused;
+    if (!paused) {
+      this.#lastTime = performance.now();
     }
   }
 

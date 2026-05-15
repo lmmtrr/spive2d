@@ -99,6 +99,20 @@ class WorkerLive2DRenderer {
         else this.hiddenDrawables.add(index);
       }
     }
+    if (this.model) {
+      const coreModel = this.model.internalModel.coreModel;
+      if (state.initialPartOpacities) {
+        for (const [name, opacity] of state.initialPartOpacities) {
+          coreModel.setPartOpacityById(name, opacity);
+        }
+      }
+      if (state.initialParameterValues) {
+        for (const [id, value] of state.initialParameterValues) {
+          const idx = coreModel._parameterIds.indexOf(id);
+          if (idx !== -1) coreModel._parameterValues[idx] = value;
+        }
+      }
+    }
   }
 
   applyOverrides() {
