@@ -16,6 +16,8 @@
   let propertyScrollEl;
   let checkboxDragging = false;
   let checkboxState = false;
+  let rangeDragging = false;
+  let rangeDragTarget = 'min';
 
   export function setSidebarVisible(visible) {
     sidebarVisible = visible;
@@ -125,34 +127,78 @@
     return e.target.closest?.('.item')?.querySelector('input[type="checkbox"]');
   }
 
+  function getRangeFromEvent(e, isMouseDown) {
+    if (isMouseDown && e.target.tagName === 'INPUT' && e.target.type === 'range') return null;
+    const itemEl = e.target.closest('.item');
+    if (!itemEl) return null;
+    return itemEl.querySelector('input[type="range"]');
+  }
+
   function handlePropertyMouseDown(e) {
     const cb = getCheckboxFromEvent(e);
-    if (!cb) return;
-    checkboxDragging = true;
-    checkboxState = !cb.checked;    
-    if (cb.checked !== checkboxState) {
-      cb.checked = checkboxState;
-      cb.dispatchEvent(new Event('input', { bubbles: true }));
+    if (cb) {
+      checkboxDragging = true;
+      checkboxState = !cb.checked;    
+      if (cb.checked !== checkboxState) {
+        cb.checked = checkboxState;
+        cb.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+    const rangeInput = getRangeFromEvent(e, true);
+    if (rangeInput) {
+      rangeDragging = true;
+      const val = Number(rangeInput.value);
+      const min = Number(rangeInput.min);
+      const max = Number(rangeInput.max);
+      const newValue = val !== min ? min : max;
+      rangeDragTarget = val !== min ? 'min' : 'max';
+      if (val !== newValue) {
+        rangeInput.value = newValue;
+        rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
   }
 
   function handlePropertyMouseOver(e) {
-    const cb = getCheckboxFromEvent(e);
-    if (!checkboxDragging || !cb) return;
-    if (cb.checked !== checkboxState) {
-      cb.checked = checkboxState;
-      cb.dispatchEvent(new Event('input', { bubbles: true }));
+    if (checkboxDragging) {
+      const cb = getCheckboxFromEvent(e);
+      if (cb && cb.checked !== checkboxState) {
+        cb.checked = checkboxState;
+        cb.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+    if (rangeDragging) {
+      const rangeInput = getRangeFromEvent(e, false);
+      if (rangeInput) {
+        const val = Number(rangeInput.value);
+        const min = Number(rangeInput.min);
+        const max = Number(rangeInput.max);
+        const newValue = rangeDragTarget === 'min' ? min : max;
+        if (val !== newValue) {
+          rangeInput.value = newValue;
+          rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
     }
   }
 
   function handlePropertyClick(e) {
     const cb = getCheckboxFromEvent(e);
-    if (!cb) return;
-    if (e.detail !== 0) e.preventDefault();
+    if (cb) {
+      if (e.detail !== 0) e.preventDefault();
+      return;
+    }
+    const rangeInput = getRangeFromEvent(e, true);
+    if (rangeInput) {
+      e.preventDefault();
+    }
   }
 
   function handleGlobalMouseUp() {
     checkboxDragging = false;
+    rangeDragging = false;
   }
 
   $effect(() => {
