@@ -16,6 +16,9 @@ export default defineConfig(async () => ({
       }
     }
   ],
+  optimizeDeps: {
+    include: ['mediabunny']
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
