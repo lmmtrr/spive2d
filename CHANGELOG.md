@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.27] - 2026-05-23
+
+### Added
+
+- Automatically hide MaskMosaic attachments on load
+- Toggle slider parameters between min/max via label clicks and support batch dragging
+- Add settings button to sidebar and unify slider and panel styles
+
 ## [0.1.26] - 2026-05-15
 
 ### Changed
