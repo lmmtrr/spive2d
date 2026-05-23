@@ -66,6 +66,13 @@
     if (propertyScrollEl) propertyScrollEl.scrollTop = 0;
   }
 
+  function handleResetOverrides() {
+    const renderer = getRenderer();
+    if (!renderer) return;
+    renderer.resetOverrides(appState.propertyCategory);
+    refreshProperties();
+  }
+
   async function handleAlphaModeChange(e) {
     appState.alphaMode = e.target.value;
     saveSetting('spive2d_alpha_mode', appState.alphaMode);
@@ -245,11 +252,20 @@
     </select>
   {/if}
 
-  <select id="propertySelector" onchange={handlePropertyCategoryChange} value={appState.propertyCategory}>
-    {#each propertyCategories as cat}
-      <option value={cat}>{t(cat)}</option>
-    {/each}
-  </select>
+  <div class="property-header">
+    <select id="propertySelector" onchange={handlePropertyCategoryChange} value={appState.propertyCategory}>
+      {#each propertyCategories as cat}
+        <option value={cat}>{t(cat)}</option>
+      {/each}
+    </select>
+    {#if propertyCategories.length > 0 && appState.propertyCategory !== 'skins'}
+      <button id="resetOverridesBtn" onclick={handleResetOverrides} title={t('resetState')}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+      </button>
+    {/if}
+  </div>
 
   {#if propertyCategories.includes('attachments')}
     <select id="pmaSelect" onchange={handleAlphaModeChange} value={appState.alphaMode}>
@@ -411,5 +427,42 @@
   #settingsBtn svg {
     width: 18px;
     height: 18px;
+  }
+
+  .property-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .property-header select {
+    flex-grow: 1;
+    border-top: 0 !important;
+  }
+
+  #resetOverridesBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--sidebar-color);
+    border: var(--border-color);
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    width: 32px;
+    height: 28px;
+    min-width: 32px;
+    transition: background-color 0.2s, color 0.2s;
+    outline: none;
+  }
+
+  #resetOverridesBtn:hover {
+    background-color: #555;
+    color: #fff;
+  }
+
+  #resetOverridesBtn svg {
+    width: 16px;
+    height: 16px;
   }
 </style>

@@ -861,6 +861,28 @@ export class SpineRendererBase extends BaseRenderer {
     }
   }
 
+  resetOverrides(category) {
+    super.resetOverrides(category);
+    if (category === 'parameters') {
+      for (const key in this._skeletons) {
+        const { skeleton, state } = this._skeletons[key];
+        skeleton.setToSetupPose();
+        state.apply(skeleton);
+        skeleton.updateWorldTransform(2);
+      }
+    } else if (category === 'attachments') {
+      this._attachmentsCache = {};
+      for (const key in this._skeletons) {
+        const { skeleton, state } = this._skeletons[key];
+        skeleton.setToSetupPose();
+        state.apply(skeleton);
+        skeleton.updateWorldTransform(2);
+      }
+      this._hideMaskMosaicAttachments();
+    }
+    this.render(0);
+  }
+
   _toggleSkin(name, checked) {
     if (!this._activeSkins) this._activeSkins = new Set();
     if (checked) this._activeSkins.add(name);

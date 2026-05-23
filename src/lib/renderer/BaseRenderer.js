@@ -68,6 +68,16 @@ export class BaseRenderer {
   updatePropertyItem(category, name, index, value) {
   }
 
+  resetOverrides(category) {
+    if (category === 'parameters') {
+      this.parameterOverrides.clear();
+    } else if (category === 'parts') {
+      this.partOverrides.clear();
+    } else if (category === 'drawables') {
+      this.drawableOverrides.clear();
+    }
+  }
+
   getAnimationDuration() {
     return 0;
   }

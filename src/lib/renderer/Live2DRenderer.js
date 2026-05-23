@@ -57,6 +57,8 @@ export class Live2DRenderer extends BaseRenderer {
   #paused = false;
   #updateFn = null;
   #lastTime = 0;
+  #initialPartOpacities = new Map();
+  #initialParameterValues = new Map();
 
   constructor(isExport = false) {
     super(isExport);
@@ -101,6 +103,21 @@ export class Live2DRenderer extends BaseRenderer {
         return;
       }
       this.#model = model;
+      this.#initialPartOpacities.clear();
+      this.#initialParameterValues.clear();
+      const coreModel = model.internalModel?.coreModel;
+      if (coreModel) {
+        if (coreModel._partIds) {
+          coreModel._partIds.forEach((name) => {
+            this.#initialPartOpacities.set(name, coreModel.getPartOpacityById(name));
+          });
+        }
+        if (coreModel._parameterIds) {
+          coreModel._parameterIds.forEach((id, idx) => {
+            this.#initialParameterValues.set(idx, coreModel._parameterValues[idx]);
+          });
+        }
+      }
       const { innerWidth: w, innerHeight: h } = window;
       const s = Math.min(
         w / model.internalModel.originalWidth,
@@ -411,6 +428,36 @@ export class Live2DRenderer extends BaseRenderer {
       }
       this.render();
     }
+  }
+
+  resetOverrides(category) {
+    super.resetOverrides(category);
+    if (!this.#model) return;
+    const coreModel = this.#model.internalModel.coreModel;
+    if (category === 'parameters') {
+      if (coreModel._parameterIds) {
+        coreModel._parameterIds.forEach((id, index) => {
+          const defVal = this.#initialParameterValues.has(index)
+            ? this.#initialParameterValues.get(index)
+            : (typeof coreModel.getParameterDefaultValue === 'function'
+                ? coreModel.getParameterDefaultValue(index)
+                : coreModel._parameterValues[index]);
+          coreModel._parameterValues[index] = defVal;
+        });
+      }
+    } else if (category === 'parts') {
+      if (coreModel && coreModel._partIds) {
+        coreModel._partIds.forEach((name) => {
+          const defVal = this.#initialPartOpacities.has(name)
+            ? this.#initialPartOpacities.get(name)
+            : 1.0;
+          coreModel.setPartOpacityById(name, defVal);
+        });
+      }
+    } else if (category === 'drawables') {
+      this.#hiddenDrawables.clear();
+    }
+    this.render();
   }
 
   getAnimationDuration() {
