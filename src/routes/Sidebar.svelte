@@ -4,7 +4,7 @@
   import { t } from '$lib/i18n.svelte.js';
   import { saveSetting } from '$lib/settings.js';
 
-  let { onDirChange, onSceneChange, onAnimationChange, onExpressionChange } = $props();
+  let { onDirChange, onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick } = $props();
   let filterText = $state('');
   let sidebarVisible = $state(false);
   let propertyItems = $state([]);
@@ -129,6 +129,7 @@
 
   function getRangeFromEvent(e, isMouseDown) {
     if (isMouseDown && e.target.tagName === 'INPUT' && e.target.type === 'range') return null;
+    if (!e.target.classList.contains('label-text') && !e.target.closest('.label-text')) return null;
     const itemEl = e.target.closest('.item');
     if (!itemEl) return null;
     return itemEl.querySelector('input[type="range"]');
@@ -301,6 +302,13 @@
       {/each}
     {/if}
   </div>
+
+  <button id="settingsBtn" onclick={onSettingsClick} title={t('settings')}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.09-.16-.26-.25-.44-.25c-.06 0-.12.01-.17.03l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.06-.02-.12-.03-.18-.03c-.17 0-.34.09-.43.25l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.09.16.26.25.44.25c.06 0 .12-.01.17-.03l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l-.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.06.02.12.03.18.03c.17 0 .34-.09.43-.25l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zm-7.43 2.52c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5s3.5 1.57 3.5 3.5s-1.57 3.5-3.5 3.5z"/>
+    </svg>
+    <span>{t('settings')}</span>
+  </button>
 </div>
 
 <style>
@@ -313,6 +321,8 @@
     padding: 10px;
     background: var(--sidebar-color);
     z-index: 100;
+    display: flex;
+    flex-direction: column;
   }
 
   #sidebar.hidden {
@@ -333,7 +343,8 @@
 
   #property {
     overflow-y: auto;
-    height: calc(100% - 181px);
+    flex: 1;
+    min-height: 0;
   }
 
   .item {
@@ -371,5 +382,34 @@
   .item input[type="checkbox"] {
     order: -1;
     margin-right: 8px;
+  }
+
+  #settingsBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background-color: var(--sidebar-color);
+    border: var(--border-color);
+    border-radius: 6px;
+    color: #ccc;
+    text-shadow: var(--text-shadow);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s, border-color 0.2s;
+    outline: none;
+    width: 100%;
+  }
+
+  #settingsBtn:hover {
+    background-color: #555;
+  }
+
+  #settingsBtn svg {
+    width: 18px;
+    height: 18px;
   }
 </style>

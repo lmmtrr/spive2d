@@ -128,11 +128,11 @@
 <div id="animationController" class:show={visible}>
   <button class="icon-button" onclick={togglePlayPause}>
     {#if appState.animation.paused}
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="#ccc">
         <path d="M8 5v14l11-7z" />
       </svg>
     {:else}
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="#ccc">
         <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
       </svg>
     {/if}
@@ -179,7 +179,6 @@
     align-items: center;
     gap: 15px;
     z-index: 2000;
-    backdrop-filter: blur(8px);
     min-width: fit-content;
   }
 
@@ -211,9 +210,10 @@
     flex-grow: 1;
     -webkit-appearance: none;
     appearance: none;
-    background: #555;
-    height: 6px;
-    border-radius: 3px;
+    background: var(--sidebar-color);
+    border: var(--border-color);
+    height: 8px;
+    border-radius: 4px;
     outline: none;
   }
 
@@ -221,7 +221,7 @@
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
-    background: #39d;
+    background: #ccc;
     border-radius: 50%;
     cursor: pointer;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
@@ -261,9 +261,10 @@
     flex-grow: 1;
     -webkit-appearance: none;
     appearance: none;
-    background: #555;
-    height: 6px;
-    border-radius: 3px;
+    background: var(--sidebar-color);
+    border: var(--border-color);
+    height: 8px;
+    border-radius: 4px;
     outline: none;
     width: 80px;
   }
@@ -272,7 +273,7 @@
     -webkit-appearance: none;
     width: 14px;
     height: 14px;
-    background: #39d;
+    background: #ccc;
     border-radius: 50%;
     cursor: pointer;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);

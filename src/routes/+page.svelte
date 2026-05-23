@@ -441,6 +441,7 @@
     onSceneChange={handleSceneChange}
     onAnimationChange={handleAnimationChange}
     onExpressionChange={handleExpressionChange}
+    onSettingsClick={() => dialogOpen = true}
   />
   <div id="canvasContainer" bind:this={canvasContainer}></div>
 </div>
