@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.28] - 2026-05-23
+
+### Added
+
+- Add button to reset parameter and property overrides in sidebar
+
 ## [0.1.27] - 2026-05-23
 
 ### Added
