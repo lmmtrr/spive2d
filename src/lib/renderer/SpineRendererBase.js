@@ -181,6 +181,68 @@ export class SpineRendererBase extends BaseRenderer {
         if (skelN) this._skeletons[String(i + 1)] = skelN;
       }
     }
+    this._hideMaskMosaicAttachments();
+  }
+
+  _hideMaskMosaicAttachments() {
+    for (const key in this._skeletons) {
+      const skelEntry = this._skeletons[key];
+      const skeleton = skelEntry.skeleton;
+      const state = skelEntry.state;
+      const skelId = key;
+      const attachmentMap = new Map();
+      const addFromSkin = (skin) => {
+        if (!skin || !skin.attachments) return;
+        if (Array.isArray(skin.attachments)) {
+          skin.attachments.forEach((slotAttachments, slotIndex) => {
+            if (!slotAttachments) return;
+            if (slotAttachments.name !== undefined && slotAttachments.slotIndex !== undefined) {
+              attachmentMap.set(`${slotAttachments.name}##${slotAttachments.slotIndex}`, slotAttachments.slotIndex);
+            } else {
+              for (const name in slotAttachments) attachmentMap.set(`${name}##${slotIndex}`, slotIndex);
+            }
+          });
+        } else {
+          for (const slotIdx in skin.attachments) {
+            const slotAttachments = skin.attachments[slotIdx];
+            if (!slotAttachments) continue;
+            for (const name in slotAttachments) attachmentMap.set(`${name}##${slotIdx}`, parseInt(slotIdx));
+          }
+        }
+      };
+      if (skeleton.data.defaultSkin) addFromSkin(skeleton.data.defaultSkin);
+      if (skeleton.skin) addFromSkin(skeleton.skin);
+      skeleton.slots.forEach((slot, slotIndex) => {
+        const names = [];
+        if (slot.attachment) names.push(slot.attachment.name);
+        if (slot.data.attachmentName && !names.includes(slot.data.attachmentName)) names.push(slot.data.attachmentName);
+        names.forEach(n => attachmentMap.set(`${n}##${slotIndex}`, slotIndex));
+      });
+      if (state?.tracks?.[0]) {
+        const animation = state.tracks[0].animation;
+        if (animation.timelines) {
+          animation.timelines.forEach(timeline => {
+            if (timeline.attachmentNames) {
+              timeline.attachmentNames.forEach(name => {
+                if (name) attachmentMap.set(`${name}##${timeline.slotIndex}`, timeline.slotIndex);
+              });
+            }
+          });
+        }
+      }
+      attachmentMap.forEach((slotIndex, keyAndIdx) => {
+        const [name] = keyAndIdx.split('##');
+        if (name && name.includes('MaskMosaic')) {
+          const compositeKey = `${skelId}##${name}##${slotIndex}`;
+          this._attachmentsCache[compositeKey] = [slotIndex, name, skelId];
+          const slot = skeleton.slots[slotIndex];
+          if (slot?.attachment && slot.attachment.name === name) {
+            slot.attachment = null;
+          }
+        }
+      });
+    }
+    this._syncAllHiddenAttachments();
   }
 
   async _loadSkeleton(fileName) {
@@ -507,7 +569,7 @@ export class SpineRendererBase extends BaseRenderer {
         if (slot.data.attachmentName && !names.includes(slot.data.attachmentName)) names.push(slot.data.attachmentName);
         names.forEach(n => attachmentMap.set(`${n}##${slotIndex}`, slotIndex));
       });
-      if (state?.tracks[0]) {
+      if (state?.tracks?.[0]) {
         const animation = state.tracks[0].animation;
         if (animation.timelines) {
           animation.timelines.forEach(timeline => {
