@@ -232,10 +232,28 @@
     const animations = renderer.getAnimations();
     if (animations.length > 0) {
       let targetAnim = animations[0].value;
+      let foundMatch = false;
       if (previousAnimationName) {
         const match = animations.find(a => a.name === previousAnimationName);
         if (match) {
           targetAnim = match.value;
+          foundMatch = true;
+        }
+      }
+      if (!foundMatch) {
+        let idleMatch = null;
+        idleMatch = animations.find(a => {
+          const val = a.value || '';
+          return val.startsWith('Idle,') || val.startsWith('idle,');
+        });
+        if (!idleMatch) {
+          idleMatch = animations.find(a => {
+            const base = (a.name || '').split('.')[0].toLowerCase();
+            return base.startsWith('idle') || base.startsWith('wait') || base.endsWith('_idle') || base.endsWith('_wait') ;
+          });
+        }
+        if (idleMatch) {
+          targetAnim = idleMatch.value;
         }
       }
       sidebar?.setSelectedAnimation(targetAnim);
