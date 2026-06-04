@@ -56,4 +56,32 @@ describe('SpineRendererBase Logic', () => {
       expect(renderer._skeletons['0'].skeleton.slots[1].attachment).not.toBeNull();
     });
   });
+  describe('_hideMaskMosaicAttachments', () => {
+    it('should automatically hide MaskMosaic and mozaiku attachments', () => {
+      const renderer = new SpineRendererBase({ width: 800, height: 600 }, mockSpine);
+      renderer._skeletons = {
+        '0': {
+          skeleton: {
+            data: {},
+            slots: [
+              { attachment: { name: 'some_MaskMosaic_part' }, data: { name: 'slot0' } },
+              { attachment: { name: 'some_mozaiku_part' }, data: { name: 'slot1' } },
+              { attachment: { name: 'normal_attachment' }, data: { name: 'slot2' } }
+            ],
+            setToSetupPose: vi.fn(),
+            updateWorldTransform: vi.fn()
+          },
+          state: {}
+        }
+      };
+      renderer._hideMaskMosaicAttachments();
+      expect(renderer._attachmentsCache['0##some_MaskMosaic_part##0']).toBeDefined();
+      expect(renderer._attachmentsCache['0##some_mozaiku_part##1']).toBeDefined();
+      expect(renderer._attachmentsCache['0##normal_attachment##2']).toBeUndefined();
+      
+      expect(renderer._skeletons['0'].skeleton.slots[0].attachment).toBeNull();
+      expect(renderer._skeletons['0'].skeleton.slots[1].attachment).toBeNull();
+      expect(renderer._skeletons['0'].skeleton.slots[2].attachment).not.toBeNull();
+    });
+  });
 });

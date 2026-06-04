@@ -232,7 +232,7 @@ export class SpineRendererBase extends BaseRenderer {
       }
       attachmentMap.forEach((slotIndex, keyAndIdx) => {
         const [name] = keyAndIdx.split('##');
-        if (name && name.includes('MaskMosaic')) {
+        if (name && (name.includes('MaskMosaic') || name.includes('mozaiku'))) {
           const compositeKey = `${skelId}##${name}##${slotIndex}`;
           this._attachmentsCache[compositeKey] = [slotIndex, name, skelId];
           const slot = skeleton.slots[slotIndex];
