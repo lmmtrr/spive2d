@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.29] - 2026-06-04
+
+### Added
+
+- Automatically hide mozaiku attachments on load
+- Auto-select idle/wait animation as fallback on model switch
+
 ## [0.1.28] - 2026-05-23
 
 ### Added
