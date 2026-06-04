@@ -52,14 +52,14 @@ async function waitForServer(url, timeout = 45000) {
     console.log('Updating playback speed...');
     await page.evaluate(() => {
       const slider = document.querySelector('.speed-slider');
-      slider.value = 2.0;
+      slider.value = Math.log10(2.0);
       slider.dispatchEvent(new Event('input', { bubbles: true }));
       slider.dispatchEvent(new Event('change', { bubbles: true }));
     });
     const newSpeed = await page.$eval('.speed-slider', el => el.value);
     const speedLabel = await page.$eval('.speed-label', el => el.textContent);
     console.log('Verifying playback speed:', newSpeed, speedLabel);
-    if (newSpeed !== '2' || !speedLabel.includes('2.0x')) throw new Error('Playback speed did not update');
+    if (Math.abs(parseFloat(newSpeed) - Math.log10(2.0)) > 0.01 || !speedLabel.includes('2.0x')) throw new Error('Playback speed did not update');
     console.log('SUCCESS: Playback controller and speed updates verified.');
   } catch (e) {
     console.error('E2E ERROR:', e);
