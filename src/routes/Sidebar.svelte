@@ -393,11 +393,28 @@
     min-width: 80px;
     flex-shrink: 0;
     margin-left: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid #666;
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+  }
+
+  .item input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #bbb;
+    border-radius: 50%;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
   }
 
   .item input[type="checkbox"] {
     order: -1;
     margin-right: 8px;
+    accent-color: #222;
   }
 
   #settingsBtn {
