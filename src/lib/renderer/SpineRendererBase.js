@@ -517,7 +517,7 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   getPropertyCategories() {
-    const categories = ['attachments'];
+    const categories = [];
     let hasMultipleSkins = false;
     for (const key in this._skeletons) {
       if (this._skeletons[key].skeleton.data.skins.length > 1) {
@@ -526,6 +526,7 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     if (hasMultipleSkins) categories.push('skins');
+    categories.push('attachments');
     categories.push('parameters');
     return categories;
   }
