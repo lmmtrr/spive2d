@@ -404,6 +404,7 @@
 
   .item input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 12px;
     height: 12px;
     background: #bbb;

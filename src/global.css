@@ -63,13 +63,17 @@ textarea {
 }
 
 @keyframes spin {
-  0% { transform: translate(-50%, -50%) rotate(0deg); }
-  100% { transform: translate(-50%, -50%) rotate(360deg); }
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 select {
   -webkit-appearance: none;
-  -moz-appearance: none;
   appearance: none;
   border-radius: 6px;
   width: 100%;
@@ -84,7 +88,7 @@ select {
   background-position: right 6px center;
 }
 
-select + select {
+select+select {
   border-top: 0;
 }
 

@@ -219,6 +219,7 @@
 
   #animationSeeker::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 16px;
     height: 16px;
     background: #ccc;
@@ -271,6 +272,7 @@
 
   .speed-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 14px;
     height: 14px;
     background: #ccc;
