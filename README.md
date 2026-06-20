@@ -93,14 +93,6 @@ To set up a local development environment, you'll need to install the following 
     bun run tauri build
     ```
 
-### 🧪 Testing
-
-Run unit tests and E2E tests:
-
-```bash
-bun run test
-```
-
 ## 🌐 Supported Versions
 
 **🦴 Spine Runtimes:**

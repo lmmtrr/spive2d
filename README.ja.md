@@ -93,14 +93,6 @@ chmod +x /path/to/spive2d_linux_x64
     bun run tauri build
     ```
 
-### 🧪 テスト
-
-ユニットテストおよびE2Eテストを実行します。
-
-```bash
-bun run test
-```
-
 ## 🌐 対応バージョン
 
 **🦴 Spine ランタイム:**

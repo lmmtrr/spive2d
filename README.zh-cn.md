@@ -93,14 +93,6 @@ chmod +x /path/to/spive2d_linux_x64
     bun run tauri build
     ```
 
-### 🧪 测试
-
-运行单元测试和 E2E 测试：
-
-```bash
-bun run test
-```
-
 ## 🌐 支持版本
 
 **🦴 Spine 运行时:**
