@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.30] - 2026-06-20
+
+### Added
+
+- Support loading Live2D and Spine models from Unity asset bundles
+
 ## [0.1.29] - 2026-06-04
 
 ### Added
