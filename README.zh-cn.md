@@ -9,6 +9,7 @@ https://github.com/user-attachments/assets/c8ad28e7-8414-4153-9585-e8c9a8039354
 **主要功能**:
 
 - 📂 拖放加载模型（单个文件夹或单个压缩文件：仅限 zip 或 7z）
+- 📦 支持直接加载/解析 Unity 资源文件
 - 🎭 同时支持 Spine 和 Live2D 模型
 - 🕹️ 实时参数控制
 - 🎨 动画/皮肤切换界面

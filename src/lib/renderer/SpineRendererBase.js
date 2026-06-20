@@ -1,4 +1,4 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { BaseRenderer } from './BaseRenderer.js';
 import {
   setupSpineAssetManager,
@@ -280,9 +280,14 @@ export class SpineRendererBase extends BaseRenderer {
   async _resizeAtlasPages(atlas, atlasPath, isWebUrl) {
     let atlasText = null;
     try {
-      const url = isWebUrl ? atlasPath : convertFileSrc(atlasPath);
-      const res = await fetch(url);
-      if (res.ok) atlasText = await res.text();
+      if (isWebUrl) {
+        const fetched = await invoke('fetch_url_bytes', { url: atlasPath });
+        atlasText = new TextDecoder().decode(new Uint8Array(fetched));
+      } else {
+        const url = convertFileSrc(atlasPath);
+        const res = await fetch(url);
+        if (res.ok) atlasText = await res.text();
+      }
     } catch (e) {
       console.warn('[SpineRendererBase] Could not fetch atlas text for resize check:', e);
     }

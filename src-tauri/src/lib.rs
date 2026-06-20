@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -123,6 +123,137 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
     Ok(())
 }
 
+fn find_all_files(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(find_all_files(&path));
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files
+}
+
+fn is_definitely_not_unity_bundle(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        let ext_lower = ext.to_lowercase();
+        match ext_lower.as_str() {
+            "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tga" | "tiff" | "ico" => true,
+            "json" | "txt" | "xml" | "yaml" | "yml" | "ini" | "conf" | "md" => true,
+            "moc3" | "moc" => true,
+            "skel" | "atlas" => true,
+            "wav" | "mp3" | "ogg" | "flac" | "aac" | "m4a" | "wma" => true,
+            "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" | "webm" => true,
+            "zip" | "7z" | "rar" | "tar" | "gz" | "bz2" | "xz" => true,
+            "dll" | "exe" | "pdb" | "so" | "dylib" | "bin" => true,
+            "html" | "css" | "js" | "ts" => true,
+            _ => false,
+        }
+    } else {
+        false
+    }
+}
+
+fn get_model_group_key(path: &Path) -> String {
+    let mut stem = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "bundle".to_string());
+    stem = stem.to_lowercase();
+    for ext in &[".ab", ".asset", ".assets", ".assetbundle", ".bundle", ".bytes", ".prefab", ".unity3d"] {
+        if stem.ends_with(ext) {
+            stem = stem[..stem.len() - ext.len()].to_string();
+        }
+    }
+    for marker in &["l2d_", "live2d_", "spine_", "chara_", "character_"] {
+        if let Some(idx) = stem.find(marker) {
+            let start_digits = idx + marker.len();
+            let mut end_digits = start_digits;
+            while end_digits < stem.len() && stem.as_bytes()[end_digits].is_ascii_digit() {
+                end_digits += 1;
+            }
+            if end_digits > start_digits {
+                stem = stem[..end_digits].to_string();
+                break;
+            }
+        }
+    }
+    let suffixes = &[
+        "texture", "textures", "tex",
+        "moc", "moc3",
+        "physics", "physics3",
+        "pose", "pose3",
+        "motion", "motion3",
+        "expression", "expressions", "exp", "exp3",
+        "userdata", "userdata3",
+        "cdi", "cdi3",
+        "postprocess", "postprocessing",
+        "material", "materials", "mat",
+        "controller", "controllers",
+        "animator", "animation", "animations",
+        "prefab", "prefabs",
+        "asset", "assets",
+        "bundle", "bundles",
+        "model", "model3"
+    ];
+    let mut changed = true;
+    while changed {
+        changed = false;        
+        if let Some(idx) = stem.rfind('_') {
+            let part = &stem[idx + 1 ..];
+            if part.len() >= 8 && part.chars().all(|c| c.is_ascii_hexdigit()) {
+                stem = stem[..idx].to_string();
+                changed = true;
+                continue;
+            }
+        }        
+        if let Some(idx) = stem.rfind('_') {
+            let part = &stem[idx + 1 ..];
+            if !part.is_empty() && part.len() <= 3 && part.chars().all(|c| c.is_ascii_digit()) {
+                stem = stem[..idx].to_string();
+                changed = true;
+                continue;
+            }
+        }        
+        if let Some(idx) = stem.rfind('_') {
+            let suffix = &stem[idx..];
+            let prefix = &stem[..idx];
+            if prefix.contains(suffix) {
+                stem = prefix.to_string();
+                changed = true;
+                continue;
+            }
+        }        
+        for suffix in suffixes {
+            let suffix_with_underscore = format!("_{}", suffix);
+            if stem.ends_with(&suffix_with_underscore) {
+                stem = stem[..stem.len() - suffix_with_underscore.len()].to_string();
+                changed = true;
+                break;
+            }
+            if stem.ends_with(suffix) {
+                stem = stem[..stem.len() - suffix.len()].to_string();
+                changed = true;
+                break;
+            }
+        }        
+        if stem.ends_with('_') || stem.ends_with('.') || stem.ends_with('-') {
+            stem.pop();
+            changed = true;
+        }
+    }
+    let sanitized = stem.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "");
+    if sanitized.is_empty() {
+        "bundle".to_string()
+    } else {
+        sanitized
+    }
+}
+
 #[tauri::command]
 async fn handle_dropped_path(
     path: String,
@@ -132,8 +263,85 @@ async fn handle_dropped_path(
     app_handle.emit("progress", true).unwrap();
     let path_obj = Path::new(&path);
     if path_obj.is_dir() {
-        get_subdir_files(path, merge_sequential, app_handle)
+        let mut unity_bundles = Vec::new();
+        let all_files = find_all_files(&path_obj);
+        for file_path in &all_files {
+            if is_definitely_not_unity_bundle(file_path) {
+                continue;
+            }
+            if let Ok(mut f) = fs::File::open(file_path) {
+                let mut header = [0u8; 8];
+                if let Ok(n) = f.read(&mut header) {
+                    if unityfs::is_unity_bundle(&header[..n]) {
+                        unity_bundles.push(file_path.clone());
+                    }
+                }
+            }
+        }
+        if !unity_bundles.is_empty() {
+            let spive_temp_root = std::env::temp_dir().join("spive2d");
+            let _ = std::fs::create_dir_all(&spive_temp_root);
+            let temp_dir = tempfile::Builder::new()
+                .prefix("model_")
+                .tempdir_in(spive_temp_root)
+                .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+            let temp_path = temp_dir.path().to_string_lossy().into_owned();
+            let mut extracted_any = false;
+            for bundle_path in unity_bundles {
+                let group_key = get_model_group_key(&bundle_path);
+                let bundle_out_dir = temp_dir.path().join(group_key);
+                if let Err(e) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
+                    eprintln!("Failed to extract bundle {:?}: {}", bundle_path, e);
+                } else {
+                    extracted_any = true;
+                }
+            }
+            if !extracted_any {
+                return Err("Failed to extract any Unity bundles in directory".to_string());
+            }
+            let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
+            let state = app_handle.state::<AppState>();
+            let mut temp_dirs = state.temp_dirs.lock().unwrap();
+            temp_dirs.push(temp_dir);
+            if temp_dirs.len() > 2 {
+                temp_dirs.remove(0);
+            }
+            return result;
+        } else {
+            get_subdir_files(path, merge_sequential, app_handle)
+        }
     } else if path_obj.is_file() {
+        let is_unity = if let Ok(mut f) = fs::File::open(&path_obj) {
+            let mut header = [0u8; 8];
+            if let Ok(n) = f.read(&mut header) {
+                unityfs::is_unity_bundle(&header[..n])
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if is_unity {
+            let spive_temp_root = std::env::temp_dir().join("spive2d");
+            let _ = std::fs::create_dir_all(&spive_temp_root);
+            let temp_dir = tempfile::Builder::new()
+                .prefix("model_")
+                .tempdir_in(spive_temp_root)
+                .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+            let temp_path = temp_dir.path().to_string_lossy().into_owned();
+            let group_key = get_model_group_key(&path_obj);
+            let bundle_out_dir = temp_dir.path().join(group_key);
+            unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir)
+                .map_err(|e| format!("Failed to extract Unity assets: {}", e))?;
+            let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
+            let state = app_handle.state::<AppState>();
+            let mut temp_dirs = state.temp_dirs.lock().unwrap();
+            temp_dirs.push(temp_dir);
+            if temp_dirs.len() > 2 {
+                temp_dirs.remove(0);
+            }
+            return result;
+        }
         match path_obj
             .extension()
             .and_then(|e| e.to_str())
@@ -181,6 +389,295 @@ async fn handle_dropped_path(
 }
 
 #[tauri::command]
+fn handle_unity_bytes(
+    bytes: Vec<u8>,
+    merge_sequential: bool,
+    app_handle: AppHandle,
+) -> Result<Option<HashMap<String, Vec<SceneData>>>, String> {
+    app_handle.emit("progress", true).unwrap();
+    let header_len = std::cmp::min(bytes.len(), 8);
+    let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
+    if is_unity {
+        let spive_temp_root = std::env::temp_dir().join("spive2d");
+        let _ = std::fs::create_dir_all(&spive_temp_root);
+        let mut temp_file = tempfile::Builder::new()
+            .prefix("download_")
+            .suffix(".tmp")
+            .tempfile_in(&spive_temp_root)
+            .map_err(|e| {
+                let _ = app_handle.emit("progress", false);
+                format!("Failed to create download temp file: {}", e)
+            })?;
+        temp_file.write_all(&bytes).map_err(|e| {
+            let _ = app_handle.emit("progress", false);
+            format!("Failed to write downloaded bytes: {}", e)
+        })?;
+        let temp_file_path = temp_file.path().to_path_buf();
+        let temp_dir = tempfile::Builder::new()
+            .prefix("model_")
+            .tempdir_in(&spive_temp_root)
+            .map_err(|e| {
+                let _ = app_handle.emit("progress", false);
+                format!("Failed to create temp dir: {}", e)
+            })?;
+        let temp_path = temp_dir.path().to_string_lossy().into_owned();
+        unityfs::extract_unity_assets_from_path(&temp_file_path, temp_dir.path())
+            .map_err(|e| {
+                let _ = app_handle.emit("progress", false);
+                format!("Failed to extract Unity assets: {}", e)
+            })?;
+        let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
+        let state = app_handle.state::<AppState>();
+        let mut temp_dirs = state.temp_dirs.lock().unwrap();
+        temp_dirs.push(temp_dir);
+        if temp_dirs.len() > 2 {
+            temp_dirs.remove(0);
+        }
+        let _ = app_handle.emit("progress", false);
+        result.map(Some)
+    } else {
+        let _ = app_handle.emit("progress", false);
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+async fn handle_urls(
+    urls: Vec<String>,
+    merge_sequential: bool,
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
+    app_handle.emit("progress", true).unwrap();
+    let spive_temp_root = std::env::temp_dir().join("spive2d");
+    let _ = std::fs::create_dir_all(&spive_temp_root);
+    let temp_dir = tempfile::Builder::new()
+        .prefix("model_")
+        .tempdir_in(&spive_temp_root)
+        .map_err(|e| {
+            let _ = app_handle.emit("progress", false);
+            format!("Failed to create temp dir: {}", e)
+        })?;
+    let temp_path = temp_dir.path().to_string_lossy().into_owned();
+    let mut downloaded_any = false;
+    for url in urls {
+        let output = std::process::Command::new("curl")
+            .arg("-sL")
+            .arg("-A")
+            .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
+            .arg(&url)
+            .output();
+        let output = match output {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("Failed to execute curl for url {}: {}", url, e);
+                continue;
+            }
+        };
+        if !output.status.success() {
+            eprintln!("curl failed for url {} with status: {}", url, output.status);
+            continue;
+        }
+        let bytes = output.stdout;
+        if bytes.is_empty() {
+            continue;
+        }
+        let header_len = std::cmp::min(bytes.len(), 8);
+        let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
+        if is_unity {
+            let url_without_query = url.split('?').next().unwrap_or(&url);
+            let filename = url_without_query.rsplit('/').next().unwrap_or(url_without_query);
+            let group_key = get_model_group_key(Path::new(filename));
+            let bundle_out_dir = temp_dir.path().join(group_key);
+            if let Err(e) = unityfs::extract_unity_assets(&bytes, &bundle_out_dir) {
+                eprintln!("Failed to extract Unity assets from url {}: {}", url, e);
+            } else {
+                downloaded_any = true;
+            }
+        } else {
+            let url_without_query = url.split('?').next().unwrap_or(&url);
+            let filename = url_without_query.rsplit('/').next().unwrap_or(url_without_query);
+            if !filename.is_empty() {
+                let dest_path = temp_dir.path().join(filename);
+                if let Err(e) = std::fs::write(&dest_path, &bytes) {
+                    eprintln!("Failed to write downloaded file to {:?}: {}", dest_path, e);
+                } else {
+                    downloaded_any = true;
+                    let ext = Path::new(filename)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e.to_lowercase());
+                    if let Some(ext_str) = ext {
+                        if ext_str == "zip" || ext_str == "7z" {
+                            let path_str = dest_path.to_string_lossy().into_owned();
+                            if let Err(e) = extract_archive(&path_str, temp_dir.path(), &ext_str) {
+                                eprintln!("Failed to extract archive {:?}: {}", dest_path, e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if !downloaded_any {
+        let _ = app_handle.emit("progress", false);
+        return Err("Failed to download or extract any files from the provided URLs".to_string());
+    }
+    let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
+    let state = app_handle.state::<AppState>();
+    let mut temp_dirs = state.temp_dirs.lock().unwrap();
+    temp_dirs.push(temp_dir);
+    if temp_dirs.len() > 2 {
+        temp_dirs.remove(0);
+    }
+    let _ = app_handle.emit("progress", false);
+    result
+}
+
+#[tauri::command]
+async fn handle_dropped_paths(
+    paths: Vec<String>,
+    merge_sequential: bool,
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
+    app_handle.emit("progress", true).unwrap();
+    if paths.len() == 1 {
+        let result = handle_dropped_path(paths[0].clone(), merge_sequential, app_handle.clone()).await;
+        let _ = app_handle.emit("progress", false);
+        return result;
+    }
+    let spive_temp_root = std::env::temp_dir().join("spive2d");
+    let _ = std::fs::create_dir_all(&spive_temp_root);
+    let temp_dir = tempfile::Builder::new()
+        .prefix("model_")
+        .tempdir_in(&spive_temp_root)
+        .map_err(|e| {
+            let _ = app_handle.emit("progress", false);
+            format!("Failed to create temp dir: {}", e)
+        })?;
+    let temp_path = temp_dir.path().to_string_lossy().into_owned();
+    let mut added_any = false;
+    for path in paths {
+        let path_obj = Path::new(&path);
+        if !path_obj.exists() {
+            continue;
+        }
+        if path_obj.is_dir() {
+            let mut unity_bundles = Vec::new();
+            let all_files = find_all_files(&path_obj);
+            for file_path in &all_files {
+                if is_definitely_not_unity_bundle(file_path) {
+                    continue;
+                }
+                if let Ok(mut f) = fs::File::open(file_path) {
+                    let mut header = [0u8; 8];
+                    if let Ok(n) = f.read(&mut header) {
+                        if unityfs::is_unity_bundle(&header[..n]) {
+                            unity_bundles.push(file_path.clone());
+                        }
+                    }
+                }
+            }
+            if !unity_bundles.is_empty() {
+                for bundle_path in unity_bundles {
+                    let group_key = get_model_group_key(&bundle_path);
+                    let bundle_out_dir = temp_dir.path().join(group_key);
+                    if let Err(e) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
+                        eprintln!("Failed to extract bundle {:?}: {}", bundle_path, e);
+                    } else {
+                        added_any = true;
+                    }
+                }
+            } else {
+                for file_path in all_files {
+                    if let Ok(rel_path) = file_path.strip_prefix(&path_obj) {
+                        let dest_path = temp_dir.path().join(rel_path);
+                        if let Some(parent) = dest_path.parent() {
+                            let _ = fs::create_dir_all(parent);
+                        }
+                        if fs::copy(&file_path, &dest_path).is_ok() {
+                            added_any = true;
+                        }
+                    }
+                }
+            }
+        } else if path_obj.is_file() {
+            let is_unity = if let Ok(mut f) = fs::File::open(&path_obj) {
+                let mut header = [0u8; 8];
+                if let Ok(n) = f.read(&mut header) {
+                    unityfs::is_unity_bundle(&header[..n])
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            if is_unity {
+                let group_key = get_model_group_key(&path_obj);
+                let bundle_out_dir = temp_dir.path().join(group_key);
+                if let Err(e) = unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir) {
+                    eprintln!("Failed to extract Unity assets from {:?}: {}", path_obj, e);
+                } else {
+                    added_any = true;
+                }
+            } else {
+                match path_obj
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase())
+                {
+                    Some(ext) if ext == "zip" || ext == "7z" => {
+                        if let Err(e) = extract_archive(&path, temp_dir.path(), &ext) {
+                            eprintln!("Failed to extract archive {:?}: {}", path_obj, e);
+                        } else {
+                            added_any = true;
+                        }
+                    }
+                    _ => {
+                        if let Some(filename) = path_obj.file_name() {
+                            let dest_path = temp_dir.path().join(filename);
+                            if fs::copy(&path_obj, &dest_path).is_ok() {
+                                added_any = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if !added_any {
+        let _ = app_handle.emit("progress", false);
+        return Err("No valid files or models found in dropped paths".to_string());
+    }
+    let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
+    let state = app_handle.state::<AppState>();
+    let mut temp_dirs = state.temp_dirs.lock().unwrap();
+    temp_dirs.push(temp_dir);
+    if temp_dirs.len() > 2 {
+        temp_dirs.remove(0);
+    }
+    let _ = app_handle.emit("progress", false);
+    result
+}
+
+fn list_files_recursive(dir: &Path) -> Vec<String> {
+    let mut result = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                let sub_files = list_files_recursive(&path);
+                for sub in sub_files {
+                    result.push(format!("{}/{}", entry.file_name().to_string_lossy(), sub));
+                }
+            } else {
+                result.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+    }
+    result
+}
+
+#[tauri::command]
 fn get_subdir_files(
     folder_path: String,
     merge_sequential: bool,
@@ -202,6 +699,13 @@ fn get_subdir_files(
         }
     }
     app_handle.emit("progress", false).unwrap();
+    if dir_files_map.is_empty() {
+        let extracted = list_files_recursive(root_path);
+        return Err(format!(
+            "No supported Spine (.atlas) or Live2D (.moc3) models found in directory.\nExtracted files: {:?}",
+            extracted
+        ));
+    }
     Ok(dir_files_map)
 }
 
@@ -218,6 +722,25 @@ fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     writeln!(file, "{}", text).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+async fn fetch_url_bytes(url: String) -> Result<Vec<u8>, String> {
+    let output = std::process::Command::new("curl")
+        .arg("-sL")
+        .arg("-A")
+        .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
+        .arg(&url)
+        .output()
+        .map_err(|e| format!("Failed to execute curl: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "curl failed with status: {}, stderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(output.stdout)
 }
 
 #[tauri::command]
@@ -353,12 +876,102 @@ fn process_directory_with_subdirs(
     Ok(dir_files_map)
 }
 
+fn is_live2d_texture_name(name: &str) -> bool {
+    let name_lower = name.to_lowercase();
+    if !name_lower.ends_with(".png") {
+        return false;
+    }
+    let stem = &name_lower[..name_lower.len() - 4];
+    if !stem.starts_with("texture") {
+        return false;
+    }
+    let rest = if stem.starts_with("texture_") {
+        &stem["texture_".len()..]
+    } else {
+        &stem["texture".len()..]
+    };
+    !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
+}
+
+fn auto_generate_model3_json(
+    dir: &Path,
+    moc_file_name: &str,
+    moc_stem: &str,
+    dir_files: &[String],
+) -> Result<(), String> {
+    let mut textures = Vec::new();
+    let mut physics = None;
+    let mut display_info = None;
+    let mut userdata = None;
+    let mut pose = None;
+    let mut expressions = Vec::new();
+    let mut motions = HashMap::new();
+    for filename in dir_files {
+        let filename_lower = filename.to_lowercase();
+        if is_live2d_texture_name(filename) {
+            textures.push(filename.clone());
+        } else if filename_lower.ends_with(".physics3.json") {
+            physics = Some(filename.clone());
+        } else if filename_lower.ends_with(".cdi3.json") {
+            display_info = Some(filename.clone());
+        } else if filename_lower.ends_with(".userdata3.json") {
+            userdata = Some(filename.clone());
+        } else if filename_lower.ends_with(".pose3.json") {
+            pose = Some(filename.clone());
+        } else if filename_lower.ends_with(".exp3.json") {
+            expressions.push(serde_json::json!({
+                "Name": filename.strip_suffix(".exp3.json").unwrap_or(filename).to_string(),
+                "File": filename.clone()
+            }));
+        } else if filename_lower.ends_with(".motion3.json") {
+            let group = motions.entry("".to_string()).or_insert_with(Vec::new);
+            group.push(serde_json::json!({
+                "File": filename
+            }));
+        }
+    }
+    textures.sort();
+    let mut file_references = serde_json::json!({
+        "Moc": moc_file_name,
+        "Textures": textures
+    });
+    if let Some(p) = physics {
+        file_references["Physics"] = serde_json::Value::String(p);
+    }
+    if let Some(d) = display_info {
+        file_references["DisplayInfo"] = serde_json::Value::String(d);
+    }
+    if let Some(u) = userdata {
+        file_references["UserData"] = serde_json::Value::String(u);
+    }
+    if let Some(p_pose) = pose {
+        file_references["Pose"] = serde_json::Value::String(p_pose);
+    }
+    if !expressions.is_empty() {
+        file_references["Expressions"] = serde_json::Value::Array(expressions);
+    }
+    if !motions.is_empty() {
+        file_references["Motions"] = serde_json::to_value(motions).unwrap_or(serde_json::Value::Null);
+    }
+    let model3_json = serde_json::json!({
+        "Version": 3,
+        "FileReferences": file_references
+    });
+    let output_path = dir.join(format!("{}.model3.json", moc_stem));
+    let file = fs::File::create(output_path).map_err(|e| e.to_string())?;
+    serde_json::to_writer_pretty(file, &model3_json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<SceneData>, String> {
     let mut file_groups = Vec::new();
     let mut atlas_bases = HashSet::with_capacity(64);
     let mut atlas_original_extensions: HashMap<String, String> = HashMap::with_capacity(64);
     let mut file_paths = HashMap::with_capacity(256);
     let mut all_atlas_info: HashMap<String, String> = HashMap::with_capacity(64);
+    let mut dir_files = Vec::new();
+    let mut moc3_files = Vec::new();
+    let mut moc_files = Vec::new();
     let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -370,6 +983,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             Some(name) => name,
             None => continue,
         };
+        dir_files.push(filename.to_string());
         let relative_path = entry_path
             .strip_prefix(base_path)
             .map(|p| {
@@ -390,41 +1004,54 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 }
             }
         } else if filename_lower.contains(".moc3") {
-            let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
-                &relative_path[slash_pos + 1..]
-            } else {
-                &relative_path
-            };
-            if let Some(moc3_pos) = filename_lower.find(".moc3") {
-                let base_name_part =
-                    &adjusted_path[..adjusted_path.len() - (filename.len() - moc3_pos)];
-                let extension_part = &filename[moc3_pos..];
-                file_groups.push(SceneData {
-                    name: base_name_part.to_string(),
-                    main_ext: extension_part.to_string(),
-                    atlas_ext: "".to_string(),
-                    files: Vec::new(),
-                    is_merged: false,
-                });
-            }
+            moc3_files.push((filename.to_string(), relative_path.clone()));
         } else if filename_lower.contains(".moc") && !filename_lower.contains(".moc3") {
-            let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
-                &relative_path[slash_pos + 1..]
-            } else {
-                &relative_path
-            };
-            if let Some(moc_pos) = filename_lower.find(".moc") {
-                let base_name_part =
-                    &adjusted_path[..adjusted_path.len() - (filename.len() - moc_pos)];
-                let extension_part = &filename[moc_pos..];
-                file_groups.push(SceneData {
-                    name: base_name_part.to_string(),
-                    main_ext: extension_part.to_string(),
-                    atlas_ext: "".to_string(),
-                    files: Vec::new(),
-                    is_merged: false,
-                });
+            moc_files.push((filename.to_string(), relative_path.clone()));
+        }
+    }
+    for (filename, relative_path) in moc3_files {
+        let filename_lower = filename.to_lowercase();
+        let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
+            &relative_path[slash_pos + 1..]
+        } else {
+            &relative_path
+        };
+        if let Some(moc3_pos) = filename_lower.find(".moc3") {
+            let moc_stem = &filename[..moc3_pos];
+            let model3_json_path = dir_path.join(format!("{}.model3.json", moc_stem));
+            if !model3_json_path.exists() {
+                let _ = auto_generate_model3_json(dir_path, &filename, moc_stem, &dir_files);
             }
+            let base_name_part =
+                &adjusted_path[..adjusted_path.len() - (filename.len() - moc3_pos)];
+            let extension_part = &filename[moc3_pos..];
+            file_groups.push(SceneData {
+                name: base_name_part.to_string(),
+                main_ext: extension_part.to_string(),
+                atlas_ext: "".to_string(),
+                files: Vec::new(),
+                is_merged: false,
+            });
+        }
+    }
+    for (filename, relative_path) in moc_files {
+        let filename_lower = filename.to_lowercase();
+        let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
+            &relative_path[slash_pos + 1..]
+        } else {
+            &relative_path
+        };
+        if let Some(moc_pos) = filename_lower.find(".moc") {
+            let base_name_part =
+                &adjusted_path[..adjusted_path.len() - (filename.len() - moc_pos)];
+            let extension_part = &filename[moc_pos..];
+            file_groups.push(SceneData {
+                name: base_name_part.to_string(),
+                main_ext: extension_part.to_string(),
+                atlas_ext: "".to_string(),
+                files: Vec::new(),
+                is_merged: false,
+            });
         }
     }
     let mut potential_extra_atlases = HashSet::new();
@@ -462,63 +1089,45 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             .cloned()
             .unwrap_or_default();
         let mut main_file_info: Option<(String, String, &str)> = None;
-        for rp in file_paths.values() {
-            let original_fn = Path::new(rp)
-                .file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or("");
-            if original_fn.is_empty() {
-                continue;
-            }
-            let original_fn_lower = original_fn.to_lowercase();
-            let target_pattern = format!("{}.skel", base_lower);
-            if let Some(pos) = original_fn_lower.find(&target_pattern) {
-                let ext_start = pos + base_lower.len();
-                if ext_start <= original_fn.len() {
-                    let ext_part = &original_fn[ext_start..];
-                    main_file_info = Some((rp.clone(), ext_part.to_string(), "skel"));
-                    break;
-                }
-            }
-        }
-        if main_file_info.is_none() {
-            for rp in file_paths.values() {
-                let original_fn = Path::new(rp)
-                    .file_name()
-                    .and_then(|f| f.to_str())
-                    .unwrap_or("");
-                if original_fn.is_empty() {
-                    continue;
-                }
-                let original_fn_lower = original_fn.to_lowercase();
-                let target_pattern = format!("{}.json", base_lower);
-                if let Some(pos) = original_fn_lower.find(&target_pattern) {
+        let target_pattern_skel = format!("{}.skel", base_lower);
+        for (filename_lower, rp) in &file_paths {
+            if let Some(pos) = filename_lower.find(&target_pattern_skel) {
+                if let Some(original_fn) = Path::new(rp).file_name().and_then(|f| f.to_str()) {
                     let ext_start = pos + base_lower.len();
                     if ext_start <= original_fn.len() {
                         let ext_part = &original_fn[ext_start..];
-                        main_file_info = Some((rp.clone(), ext_part.to_string(), "json"));
+                        main_file_info = Some((rp.clone(), ext_part.to_string(), "skel"));
                         break;
                     }
                 }
             }
         }
         if main_file_info.is_none() {
-            for rp in file_paths.values() {
-                let original_fn = Path::new(rp)
-                    .file_name()
-                    .and_then(|f| f.to_str())
-                    .unwrap_or("");
-                if original_fn.is_empty() {
-                    continue;
+            let target_pattern_json = format!("{}.json", base_lower);
+            for (filename_lower, rp) in &file_paths {
+                if let Some(pos) = filename_lower.find(&target_pattern_json) {
+                    if let Some(original_fn) = Path::new(rp).file_name().and_then(|f| f.to_str()) {
+                        let ext_start = pos + base_lower.len();
+                        if ext_start <= original_fn.len() {
+                            let ext_part = &original_fn[ext_start..];
+                            main_file_info = Some((rp.clone(), ext_part.to_string(), "json"));
+                            break;
+                        }
+                    }
                 }
-                let original_fn_lower = original_fn.to_lowercase();
-                let target_pattern = format!("{}.asset", base_lower);
-                if let Some(pos) = original_fn_lower.find(&target_pattern) {
-                    let ext_start = pos + base_lower.len();
-                    if ext_start <= original_fn.len() {
-                        let ext_part = &original_fn[ext_start..];
-                        main_file_info = Some((rp.clone(), ext_part.to_string(), "asset"));
-                        break;
+            }
+        }
+        if main_file_info.is_none() {
+            let target_pattern_asset = format!("{}.asset", base_lower);
+            for (filename_lower, rp) in &file_paths {
+                if let Some(pos) = filename_lower.find(&target_pattern_asset) {
+                    if let Some(original_fn) = Path::new(rp).file_name().and_then(|f| f.to_str()) {
+                        let ext_start = pos + base_lower.len();
+                        if ext_start <= original_fn.len() {
+                            let ext_part = &original_fn[ext_start..];
+                            main_file_info = Some((rp.clone(), ext_part.to_string(), "asset"));
+                            break;
+                        }
                     }
                 }
             }
@@ -661,8 +1270,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_subdir_files,
             handle_dropped_path,
+            handle_dropped_paths,
+            handle_unity_bytes,
+            handle_urls,
             append_to_list,
-            clear_cache
+            clear_cache,
+            fetch_url_bytes
         ])
         .plugin(tauri_plugin_dialog::init())
         .run(tauri::generate_context!())

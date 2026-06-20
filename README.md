@@ -9,6 +9,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 **Key Features**:
 
 - 📂 Drag-and-drop model loading (single folder or single compressed file: zip or 7z only)
+- 📦 Direct loading/extracting from Unity asset files
 - 🎭 Dual support for Spine & Live2D models
 - 🕹️ Real-time parameter controls
 - 🎨 Animation/Skin switching UI

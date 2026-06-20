@@ -15,7 +15,6 @@ export async function openSaveDirectory() {
 export async function openArchiveFile() {
   return await tauriOpen({
     multiple: false,
-    filters: [{ name: 'Archive', extensions: ['zip', '7z'] }],
   }) || null;
 }
 

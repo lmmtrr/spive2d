@@ -96,56 +96,120 @@
   }
 
   async function processPath(paths) {
-    if (appState.processing || paths.length !== 1) return;
+    if (appState.processing || paths.length === 0) return;
     const wasInitialized = appState.initialized;
     appState.initialized = false;
     try {
       const inputPath = paths[0];
       let dirFiles = {};
-      if (inputPath.startsWith('http://') || inputPath.startsWith('https://') || inputPath.startsWith('/')) {
-        let url;
+      const isLocalUnixPath = inputPath.startsWith('/') && (
+        inputPath.startsWith('/Users/') || 
+        inputPath.startsWith('/home/') || 
+        inputPath.startsWith('/var/') || 
+        inputPath.startsWith('/tmp/') || 
+        inputPath.startsWith('/private/')
+      );
+      if (inputPath.startsWith('http://') || inputPath.startsWith('https://') || (inputPath.startsWith('/') && !isLocalUnixPath)) {
+        let unityRes = null;
+        let isUnity = false;
+        let shouldInvokeBackend = false;
         try {
-          url = new URL(inputPath, window.location.origin);
-        } catch {
+          showSpinner = true;
+          let bytes;
+          if (inputPath.startsWith('http://') || inputPath.startsWith('https://')) {
+            const fetched = await invoke('fetch_url_bytes', { url: inputPath });
+            bytes = new Uint8Array(fetched);
+          } else {
+            const fetchRes = await fetch(inputPath);
+            if (!fetchRes.ok) {
+              throw new Error(`HTTP error status: ${fetchRes.status}`);
+            }
+            const buffer = await fetchRes.arrayBuffer();
+            bytes = new Uint8Array(buffer);
+          }
+          const header = String.fromCharCode(...bytes.slice(0, 8));
+          isUnity = header.startsWith("UnityFS") || header.startsWith("UnityWeb") || header.startsWith("UnityRaw");
+          let hasArchive = false;
+          for (const p of paths) {
+            try {
+              const url = new URL(p, window.location.origin);
+              const pathname = url.pathname.toLowerCase();
+              if (pathname.endsWith('.zip') || pathname.endsWith('.7z')) {
+                hasArchive = true;
+                break;
+              }
+            } catch {}
+          }
+          shouldInvokeBackend = isUnity || hasArchive;
+          if (shouldInvokeBackend) {
+            unityRes = await invoke('handle_urls', { urls: paths, mergeSequential: appState.mergeSequential });
+          }
+        } catch (e) {
+          console.error(e);
+          showNotification(e.message || String(e), 'error');
           appState.initialized = wasInitialized;
-          showNotification(t('invalidUrl'));
           return;
+        } finally {
+          showSpinner = false;
         }
-        const urlString = url.toString();
-        const lastSlashIndex = urlString.lastIndexOf('/');
-        const dirName = urlString.substring(0, lastSlashIndex + 1);
-        const fileNameWithExt = urlString.substring(lastSlashIndex + 1);
-        let baseName = fileNameWithExt;
-        let ext1 = '';
-        let ext2 = '';
-        if (fileNameWithExt.endsWith('.model3.json')) {
-          baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.model3.json'.length);
-          ext1 = '.model3.json';
-          ext2 = '.moc3';
-        } else if (fileNameWithExt.endsWith('.skel')) {
-          baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.skel'.length);
-          ext1 = '.skel';
-          ext2 = '.atlas';
-        } else if (fileNameWithExt.endsWith('.json')) {
-          baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.json'.length);
-          ext1 = '.json';
-          ext2 = '.atlas';
-        } else if (fileNameWithExt.endsWith('.asset')) {
-          baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.asset'.length);
-          ext1 = '.asset';
-          ext2 = '.atlas';
+        if (shouldInvokeBackend) {
+          if (unityRes && Object.keys(unityRes).length > 0) {
+            dirFiles = unityRes;
+          } else {
+            showNotification(t('noFilesFound'));
+            appState.initialized = wasInitialized;
+            return;
+          }
         } else {
-          appState.initialized = wasInitialized;
-          showNotification(t('invalidUrl'));
-          return;
+          dirFiles = {};
+          for (const path of paths) {
+            let url;
+            try {
+              url = new URL(path, window.location.origin);
+            } catch {
+              continue;
+            }
+            const urlString = url.toString();
+            const lastSlashIndex = urlString.lastIndexOf('/');
+            const dirName = urlString.substring(0, lastSlashIndex + 1);
+            const fileNameWithExt = urlString.substring(lastSlashIndex + 1);
+            let baseName = fileNameWithExt;
+            let ext1 = '';
+            let ext2 = '';
+            if (fileNameWithExt.endsWith('.model3.json')) {
+              baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.model3.json'.length);
+              ext1 = '.model3.json';
+              ext2 = '.moc3';
+            } else if (fileNameWithExt.endsWith('.skel')) {
+              baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.skel'.length);
+              ext1 = '.skel';
+              ext2 = '.atlas';
+            } else if (fileNameWithExt.endsWith('.json')) {
+              baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.json'.length);
+              ext1 = '.json';
+              ext2 = '.atlas';
+            } else if (fileNameWithExt.endsWith('.asset')) {
+              baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.asset'.length);
+              ext1 = '.asset';
+              ext2 = '.atlas';
+            } else {
+              continue;
+            }
+            if (!dirFiles[dirName]) {
+              dirFiles[dirName] = [];
+            }
+            if (!dirFiles[dirName].some(item => item.name === baseName)) {
+              dirFiles[dirName].push({ name: baseName, mainExt: ext1, atlasExt: ext2, files: [], isMerged: false });
+            }
+          }
+          if (Object.keys(dirFiles).length === 0) {
+            appState.initialized = wasInitialized;
+            showNotification(t('invalidUrl'));
+            return;
+          }
         }
-        dirFiles = {
-          [dirName]: [
-             { name: baseName, mainExt: ext1, atlasExt: ext2, files: [], isMerged: false }
-          ]
-        };
       } else {
-        dirFiles = await invoke('handle_dropped_path', { path: inputPath, mergeSequential: appState.mergeSequential });
+        dirFiles = await invoke('handle_dropped_paths', { paths, mergeSequential: appState.mergeSequential });
       }
       const dirs = Object.keys(dirFiles);
       dirs.sort((a, b) => {
@@ -172,10 +236,23 @@
     } catch (error) {
       console.error('Error handling dropped path:', error);
       appState.initialized = wasInitialized;
-      if (error?.message?.startsWith('HTTP ')) {
+      const errMsg = typeof error === 'string' ? error : (error?.message || String(error));
+      if (errMsg.startsWith('HTTP ')) {
         showNotification(t('resourceNotFound'));
+      } else if (errMsg.includes('Unsupported file type')) {
+        showNotification(t('unsupportedFileType'));
+      } else if (errMsg.includes('No supported Spine') || errMsg.includes('No valid files or models')) {
+        showNotification(t('noSupportedModels'));
+      } else if (errMsg.includes('Invalid path')) {
+        showNotification(t('invalidPath'));
       } else {
-        showNotification(t('invalidUrl'));
+        const inputPath = paths[0] || '';
+        const isUrl = inputPath.startsWith('http://') || inputPath.startsWith('https://');
+        if (isUrl) {
+          showNotification(t('invalidUrl'));
+        } else {
+          showNotification(errMsg);
+        }
       }
       showSpinner = false;
     }
@@ -325,7 +402,7 @@
   }
 
   function handleKeyDown(e) {
-    if (document.activeElement?.matches('input')) return;
+    if (document.activeElement?.matches('input, textarea')) return;
     const key = e.key.toLowerCase();    
     if ((key === 'w' || key === 'q') && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();

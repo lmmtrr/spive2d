@@ -105,6 +105,8 @@ export class Live2DRenderer extends BaseRenderer {
       this.#model = model;
       this.#initialPartOpacities.clear();
       this.#initialParameterValues.clear();
+      this.#hiddenDrawables.clear();
+      this.#opacities = null;
       const coreModel = model.internalModel?.coreModel;
       if (coreModel) {
         if (coreModel._partIds) {
@@ -162,6 +164,8 @@ export class Live2DRenderer extends BaseRenderer {
       };
       this.#app.ticker.add(this.#updateFn);
       model._spive2dSpeed = this.#speed;
+      this.#hideMaskMosaicDrawables();
+      this.#setupDrawableOpacitiesProxy();
     } catch (err) {
       showNotification("Live2DRenderer Error: " + (err.message || err), 'error');
       console.error(err);
@@ -182,6 +186,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.#model.destroy();
       this.#model = null;
     }
+    this.#opacities = null;
     if (this.#renderTexture) {
       this.#renderTexture.destroy(true);
       this.#renderTexture = null;
@@ -411,21 +416,7 @@ export class Live2DRenderer extends BaseRenderer {
         this.#hiddenDrawables.add(index);
         this.drawableOverrides.set(index, false);
       }
-      if (!this.#opacities && coreModel._model?.drawables?.opacities) {
-        const wasmOpacities = coreModel._model.drawables.opacities;
-        const renderer = this;
-        this.#opacities = new Proxy(wasmOpacities, {
-          get(target, prop) {
-            if (typeof prop === 'string') {
-              const idx = Number(prop);
-              if (!isNaN(idx) && renderer.#hiddenDrawables.has(idx)) return 0;
-            }
-            const val = target[prop];
-            return typeof val === 'function' ? val.bind(target) : val;
-          }
-        });
-        coreModel._model.drawables.opacities = this.#opacities;
-      }
+      this.#setupDrawableOpacitiesProxy();
       this.render();
     }
   }
@@ -440,8 +431,8 @@ export class Live2DRenderer extends BaseRenderer {
           const defVal = this.#initialParameterValues.has(index)
             ? this.#initialParameterValues.get(index)
             : (typeof coreModel.getParameterDefaultValue === 'function'
-                ? coreModel.getParameterDefaultValue(index)
-                : coreModel._parameterValues[index]);
+              ? coreModel.getParameterDefaultValue(index)
+              : coreModel._parameterValues[index]);
           coreModel._parameterValues[index] = defVal;
         });
       }
@@ -456,6 +447,7 @@ export class Live2DRenderer extends BaseRenderer {
       }
     } else if (category === 'drawables') {
       this.#hiddenDrawables.clear();
+      this.#hideMaskMosaicDrawables();
     }
     this.render();
   }
@@ -600,9 +592,38 @@ export class Live2DRenderer extends BaseRenderer {
     for (const [name, opacity] of this.partOverrides) {
       coreModel.setPartOpacityById(name, opacity);
     }
-    if (this.drawableOverrides.size > 0 && !this.#opacities) {
-      this.getPropertyItems('drawables');
+    if (this.#hiddenDrawables.size > 0 && !this.#opacities) {
+      this.#setupDrawableOpacitiesProxy();
     }
+  }
+
+  #hideMaskMosaicDrawables() {
+    const coreModel = this.#model?.internalModel?.coreModel;
+    if (!coreModel || !coreModel._drawableIds) return;
+    coreModel._drawableIds.forEach((name, index) => {
+      if (name && name.includes('Mosaic')) {
+        this.#hiddenDrawables.add(index);
+      }
+    });
+  }
+
+  #setupDrawableOpacitiesProxy() {
+    if (this.#opacities) return;
+    const coreModel = this.#model?.internalModel?.coreModel;
+    if (!coreModel || !coreModel._model?.drawables?.opacities) return;
+    const wasmOpacities = coreModel._model.drawables.opacities;
+    const renderer = this;
+    this.#opacities = new Proxy(wasmOpacities, {
+      get(target, prop) {
+        if (typeof prop === 'string') {
+          const idx = Number(prop);
+          if (!isNaN(idx) && renderer.#hiddenDrawables.has(idx)) return 0;
+        }
+        const val = target[prop];
+        return typeof val === 'function' ? val.bind(target) : val;
+      }
+    });
+    coreModel._model.drawables.opacities = this.#opacities;
   }
 
   getModel() {

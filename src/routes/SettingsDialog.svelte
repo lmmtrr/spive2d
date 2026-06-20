@@ -482,8 +482,9 @@
   }
 
   function handleLoadUrl() {
-    if (urlInput.trim()) {
-      onPathSelected([urlInput.trim()]);
+    const urls = urlInput.split(/[\s,]+/).map(u => u.trim()).filter(Boolean);
+    if (urls.length > 0) {
+      onPathSelected(urls);
     }
   }
 
@@ -590,9 +591,11 @@
         <button onclick={handleOpenCurrentDir} disabled={isCurrentDirUrl}>{t('openCurrentDirectory')}</button>
       </div>
       <hr>
-      <div class="input-row">
-        <input id="urlInput" type="text" placeholder={t('enterUrlPrompt')} bind:value={urlInput} onkeydown={(e) => e.key === 'Enter' && handleLoadUrl()} style="margin-right: 10px;">
-        <button id="loadUrlBtn" style="width: auto; margin: 0; padding: 0 15px;" onclick={handleLoadUrl}>{t('loadFromUrl')}</button>
+      <div class="input-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+        <textarea id="urlInput" placeholder={t('enterUrlPrompt')} bind:value={urlInput} rows="3"></textarea>
+        <div style="display: flex; justify-content: flex-end;">
+          <button id="loadUrlBtn" style="width: auto; margin: 0; padding: 0 15px;" onclick={handleLoadUrl}>{t('loadFromUrl')}</button>
+        </div>
       </div>
       <hr>
       <div class="input-row">
@@ -877,6 +880,21 @@
     border: var(--border-color);
     opacity: 0.6;
     cursor: default;
+  }
+
+  .input-row textarea {
+    padding: 6px;
+    border-radius: 6px;
+    height: 80px;
+    width: 100%;
+    outline: none;
+    color: var(--text-color);
+    border: var(--border-color);
+    background-color: #0006;
+    font-size: 14px;
+    user-select: text;
+    resize: vertical;
+    font-family: inherit;
   }
 
   .radio-label {

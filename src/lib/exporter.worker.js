@@ -145,6 +145,16 @@ class WorkerLive2DRenderer {
     }
   }
 
+  hideMaskMosaicDrawables() {
+    const coreModel = this.model?.internalModel?.coreModel;
+    if (!coreModel || !coreModel._drawableIds) return;
+    coreModel._drawableIds.forEach((name, index) => {
+      if (name && name.includes('Mosaic')) {
+        this.hiddenDrawables.add(index);
+      }
+    });
+  }
+
   async load(modelUrl) {
     const { live2d: { Live2DModel } } = PIXI;
     this.model = await Live2DModel.from(modelUrl, { autoInteract: false, idleMotionGroup: 'None' });
@@ -160,6 +170,7 @@ class WorkerLive2DRenderer {
     if (this.model.internalModel && this.model.internalModel.breath) {
       this.model.internalModel.breath = null;
     }
+    this.hideMaskMosaicDrawables();
   }
 
   async setAnimation(value) {

@@ -1,5 +1,5 @@
 import { showNotification } from '../notificationStore.svelte.js';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
 const spineLibs = {};
@@ -48,15 +48,22 @@ export class SpineVersionManager {
       baseName = scene.files[0];
     }
     const rawUrl = `${dirName}${baseName}${scene.mainExt}`;
-    const url = /^https?:\/\//.test(rawUrl) ? rawUrl : convertFileSrc(rawUrl);
+    const isRemote = /^https?:\/\//.test(rawUrl);
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        showNotification(`HTTP ${response.status}`, 'error');
-        throw new Error(`HTTP ${response.status}`);
+      let data;
+      if (isRemote) {
+        const fetched = await invoke('fetch_url_bytes', { url: rawUrl });
+        data = new Uint8Array(fetched);
+      } else {
+        const url = convertFileSrc(rawUrl);
+        const response = await fetch(url);
+        if (!response.ok) {
+          showNotification(`HTTP ${response.status}`, 'error');
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        data = new Uint8Array(buffer);
       }
-      const buffer = await response.arrayBuffer();
-      const data = new Uint8Array(buffer);
       const head = data.subarray(0, 100);
       const isJson = isJsonSpineData(head);
       if (isJson) {

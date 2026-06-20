@@ -27,3 +27,43 @@ serde_json = "1"
 tempfile = "3"
 zip = "2"
 sevenz-rust2 = "0"
+unityfs = "0.1.0"
+
+[profile.dev]
+opt-level = 0
+overflow-checks = true
+
+[profile.dev.package.unityfs]
+opt-level = 3
+[profile.dev.package.lz4_flex]
+opt-level = 3
+[profile.dev.package.lzma-rs]
+opt-level = 3
+[profile.dev.package.sevenz-rust2]
+opt-level = 3
+[profile.dev.package.lzma-rust2]
+opt-level = 3
+[profile.dev.package.zip]
+opt-level = 3
+[profile.dev.package.texture2ddecoder]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.flate2]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.brotli-decompressor]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
