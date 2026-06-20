@@ -31,11 +31,21 @@ struct SceneData {
     is_merged: bool,
 }
 
+fn create_command(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String> {
     let os_success = match ext {
         "zip" => {
             if cfg!(target_os = "windows") {
-                std::process::Command::new("tar")
+                create_command("tar")
                     .arg("-xf")
                     .arg(path)
                     .arg("-C")
@@ -46,7 +56,7 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
                     .map(|s| s.success())
                     .unwrap_or(false)
             } else {
-                let success = std::process::Command::new("unzip")
+                let success = create_command("unzip")
                     .arg("-q")
                     .arg(path)
                     .arg("-d")
@@ -57,7 +67,7 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
                     .map(|s| s.success())
                     .unwrap_or(false);
                 if !success {
-                    std::process::Command::new("tar")
+                    create_command("tar")
                         .arg("-xf")
                         .arg(path)
                         .arg("-C")
@@ -74,7 +84,7 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
         }
         "7z" => {
             if cfg!(target_os = "windows") {
-                std::process::Command::new("tar")
+                create_command("tar")
                     .arg("-xf")
                     .arg(path)
                     .arg("-C")
@@ -87,7 +97,7 @@ fn extract_archive(path: &str, temp_dir: &Path, ext: &str) -> Result<(), String>
             } else {
                 let mut out_arg = std::ffi::OsString::from("-o");
                 out_arg.push(temp_dir.as_os_str());                
-                std::process::Command::new("7z")
+                create_command("7z")
                     .arg("x")
                     .arg(path)
                     .arg(&out_arg)
@@ -460,7 +470,7 @@ async fn handle_urls(
     let temp_path = temp_dir.path().to_string_lossy().into_owned();
     let mut downloaded_any = false;
     for url in urls {
-        let output = std::process::Command::new("curl")
+        let output = create_command("curl")
             .arg("-sL")
             .arg("-A")
             .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
@@ -726,7 +736,7 @@ fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn fetch_url_bytes(url: String) -> Result<Vec<u8>, String> {
-    let output = std::process::Command::new("curl")
+    let output = create_command("curl")
         .arg("-sL")
         .arg("-A")
         .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
