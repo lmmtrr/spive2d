@@ -10,7 +10,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 - 📂 Drag-and-drop model loading (single folder or single compressed file: zip or 7z only)
 - 📦 Direct loading/extracting from Unity asset files
-- 🎭 Dual support for Spine & Live2D models
+- 🎭 Triple support for Spine, Live2D, and Layered Sprite (Unity files only) models
 - 🕹️ Real-time parameter controls
 - 🎨 Animation/Skin switching UI
 - 🖱️ Mouse interaction support
@@ -103,6 +103,10 @@ To set up a local development environment, you'll need to install the following 
 
 - Cubism 2.1
 - Cubism 4.x
+
+**🖼️ Layered Sprite (Tachie):**
+
+- Unity Sprite / RectTransform bundles
 
 ## 📦 Dependencies
 

@@ -264,6 +264,326 @@ fn get_model_group_key(path: &Path) -> String {
     }
 }
 
+fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::path::Path) -> Result<bool, String> {
+    unityfs::extract_unity_assets_from_path(bundle_path, out_dir)
+        .map_err(|e| format!("Failed to extract assets via unityfs: {:?}", e))?;
+    let bytes = std::fs::read(bundle_path).map_err(|e| e.to_string())?;
+    let mut reader = unityfs::Reader::new(bytes, unityfs::unity_version::UnityVersion::default());
+    let bundle = unityfs::Bundle::read(&mut reader).map_err(|e| format!("Failed to read bundle: {:?}", e))?;
+    let mut asset_manager = unityfs::assets::AssetManager::new();
+    for entry in bundle.files {
+        if entry.name.ends_with(".resS") || entry.name.ends_with(".resource") {
+            asset_manager.add_raw_file(entry.name, entry.data);
+        } else if entry.data.len() > 20 {
+            let mut sf_reader = unityfs::Reader::new(entry.data, bundle.engine_version.clone());
+            let sf = unityfs::serializedfile::SerializedFile::read(&mut sf_reader);
+            asset_manager.add_file(entry.name, sf);
+        }
+    }
+    let mut rect_transforms = std::collections::BTreeMap::new();
+    let mut go_names = std::collections::BTreeMap::new();
+    let mut atlas_entries = Vec::new();
+    let mut sprites = Vec::new();
+    for (asset_name, sf) in &asset_manager.files {
+        for obj in &sf.objects {
+            if obj.class_id == 1 {
+                if let Ok(v) = asset_manager.read_object_value(asset_name, 0, obj.path_id) {
+                    if let Some(unityfs::value::UnityValue::String(name)) = v.get("m_Name") {
+                        go_names.insert(obj.path_id, name.clone());
+                    }
+                }
+            } else if obj.class_id == 213 {
+                if let Ok(v) = asset_manager.read_object_value(asset_name, 0, obj.path_id) {
+                    sprites.push(v);
+                }
+            } else if obj.class_id == 224 {
+                if let Ok(v) = asset_manager.read_object_value(asset_name, 0, obj.path_id) {
+                    rect_transforms.insert(obj.path_id, v);
+                }
+            } else if obj.class_id == 687078895 {
+                if let Ok(v) = asset_manager.read_object_value(asset_name, 0, obj.path_id) {
+                    if let Some(unityfs::value::UnityValue::Array(render_data_map)) = v.get("m_RenderDataMap") {
+                        for entry in render_data_map {
+                            if let (Some(first), Some(second)) = (entry.get("first"), entry.get("second")) {
+                                atlas_entries.push((first.clone(), second.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut body_rect = None;
+    let mut face_content_rect = None;
+    let mut texture_names = std::collections::BTreeMap::new();
+    for (asset_name, sf) in &asset_manager.files {
+        for obj in &sf.objects {
+            if obj.class_id == 28 {
+                if let Ok(v) = asset_manager.read_object_value(asset_name, 0, obj.path_id) {
+                    if let Some(name) = v.get("m_Name").and_then(|x| x.as_str()) {
+                        texture_names.insert(obj.path_id, format!("{}.png", name));
+                    }
+                }
+            }
+        }
+    }
+    #[derive(serde::Serialize)]
+    struct Point { x: f32, y: f32 }
+    #[derive(serde::Serialize)]
+    struct Scale { x: f32, y: f32, z: f32 }
+    #[derive(serde::Serialize)]
+    struct RectData { x: f32, y: f32, w: f32, h: f32 }
+    #[derive(serde::Serialize)]
+    struct SpriteMeta {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        #[serde(rename = "textureRect")]
+        texture_rect: RectData,
+        #[serde(rename = "textureRectOffset")]
+        texture_rect_offset: Point,
+        texture: String,
+    }
+    #[derive(serde::Serialize)]
+    struct BodySpriteMeta {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        #[serde(rename = "textureRectOffset")]
+        texture_rect_offset: Point,
+        texture: String,
+        ow: f32,
+        oh: f32,
+    }
+    #[derive(serde::Serialize)]
+    struct RectTransformData {
+        #[serde(rename = "anchorMin")]
+        anchor_min: Point,
+        #[serde(rename = "anchorMax")]
+        anchor_max: Point,
+        #[serde(rename = "anchoredPosition")]
+        anchored_position: Point,
+        #[serde(rename = "sizeDelta")]
+        size_delta: Point,
+        pivot: Point,
+        #[serde(rename = "localScale")]
+        local_scale: Scale,
+    }
+    fn get_float(v: &unityfs::value::UnityValue) -> Option<f32> {
+        match v {
+            unityfs::value::UnityValue::Float(f) => Some(*f),
+            unityfs::value::UnityValue::Double(d) => Some(*d as f32),
+            unityfs::value::UnityValue::Int8(i) => Some(*i as f32),
+            unityfs::value::UnityValue::UInt8(u) => Some(*u as f32),
+            unityfs::value::UnityValue::Int16(i) => Some(*i as f32),
+            unityfs::value::UnityValue::UInt16(u) => Some(*u as f32),
+            unityfs::value::UnityValue::Int32(i) => Some(*i as f32),
+            unityfs::value::UnityValue::UInt32(u) => Some(*u as f32),
+            unityfs::value::UnityValue::Int64(i) => Some(*i as f32),
+            unityfs::value::UnityValue::UInt64(u) => Some(*u as f32),
+            _ => None,
+        }
+    }
+    fn get_point(val: &unityfs::value::UnityValue) -> Point {
+        let x = val.get("x").and_then(get_float).unwrap_or(0.0);
+        let y = val.get("y").and_then(get_float).unwrap_or(0.0);
+        Point { x, y }
+    }
+    fn get_scale(val: &unityfs::value::UnityValue) -> Scale {
+        let x = val.get("x").and_then(get_float).unwrap_or(1.0);
+        let y = val.get("y").and_then(get_float).unwrap_or(1.0);
+        let z = val.get("z").and_then(get_float).unwrap_or(1.0);
+        Scale { x, y, z }
+    }
+    fn get_rect_transform(val: &unityfs::value::UnityValue) -> RectTransformData {
+        RectTransformData {
+            anchor_min: val.get("m_AnchorMin").map(get_point).unwrap_or(Point { x: 0.5, y: 0.5 }),
+            anchor_max: val.get("m_AnchorMax").map(get_point).unwrap_or(Point { x: 0.5, y: 0.5 }),
+            anchored_position: val.get("m_AnchoredPosition").map(get_point).unwrap_or(Point { x: 0.0, y: 0.0 }),
+            size_delta: val.get("m_SizeDelta").map(get_point).unwrap_or(Point { x: 100.0, y: 100.0 }),
+            pivot: val.get("m_Pivot").map(get_point).unwrap_or(Point { x: 0.5, y: 0.5 }),
+            local_scale: val.get("m_LocalScale").map(get_scale).unwrap_or(Scale { x: 1.0, y: 1.0, z: 1.0 }),
+        }
+    }
+    fn keys_equal(k1: &unityfs::value::UnityValue, k2: &unityfs::value::UnityValue) -> bool {
+        let get_key_data = |k: &unityfs::value::UnityValue| -> Option<(Vec<u32>, i64)> {
+            let first = k.get("first")?;
+            let second = k.get("second")?.as_i64()?;
+            
+            let mut d = Vec::new();
+            for i in 0..4 {
+                let key = format!("data[{}]", i);
+                let val = first.get(&key)?.as_i32()?;
+                d.push(val as u32);
+            }
+            Some((d, second))
+        };
+        if let (Some(d1), Some(d2)) = (get_key_data(k1), get_key_data(k2)) {
+            d1 == d2
+        } else {
+            false
+        }
+    }
+    for rt in rect_transforms.values() {
+        if let Some(unityfs::value::UnityValue::PPtr { file_id: _, path_id: go_id }) = rt.get("m_GameObject") {
+            if let Some(name) = go_names.get(go_id) {
+                let name_lower = name.to_lowercase();
+                if name_lower == "body" {
+                    body_rect = Some(get_rect_transform(rt));
+                } else if name_lower == "facecontent" {
+                    face_content_rect = Some(get_rect_transform(rt));
+                }
+            }
+        }
+    }
+    if body_rect.is_none() {
+        for rt in rect_transforms.values() {
+            if let Some(unityfs::value::UnityValue::PPtr { file_id: _, path_id: go_id }) = rt.get("m_GameObject") {
+                if let Some(name) = go_names.get(go_id) {
+                    let name_lower = name.to_lowercase();
+                    if name_lower == "image" {
+                        body_rect = Some(get_rect_transform(rt));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if face_content_rect.is_none() {
+        for rt in rect_transforms.values() {
+            if let Some(unityfs::value::UnityValue::PPtr { file_id: _, path_id: go_id }) = rt.get("m_GameObject") {
+                if let Some(name) = go_names.get(go_id) {
+                    let name_lower = name.to_lowercase();
+                    if name_lower == "facial" || name_lower == "face" {
+                        face_content_rect = Some(get_rect_transform(rt));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    let mut faces_meta = std::collections::BTreeMap::new();
+    let mut body_sprite_rect = None;
+    for sprite in &sprites {
+        let name = sprite.get("m_Name").and_then(|x| x.as_str()).unwrap_or("");
+        let name_lower = name.to_lowercase();
+        let rect_val = match sprite.get("m_Rect") {
+            Some(v) => v,
+            None => continue,
+        };
+        let w = rect_val.get("width").and_then(get_float).unwrap_or(0.0);
+        let h = rect_val.get("height").and_then(get_float).unwrap_or(0.0);
+        let x = rect_val.get("x").and_then(get_float).unwrap_or(0.0);
+        let y = rect_val.get("y").and_then(get_float).unwrap_or(0.0);
+        let mut tex_rect = None;
+        let mut tex_offset = None;
+        let mut sprite_texture_path_id = None;
+        if let Some(sprite_key) = sprite.get("m_RenderDataKey") {
+            for (atlas_key, atlas_val) in &atlas_entries {
+                if keys_equal(sprite_key, atlas_key) {
+                    if let Some(tr) = atlas_val.get("textureRect") {
+                        let tx = tr.get("x").and_then(get_float).unwrap_or(0.0);
+                        let ty = tr.get("y").and_then(get_float).unwrap_or(0.0);
+                        let tw = tr.get("width").and_then(get_float).unwrap_or(0.0);
+                        let th = tr.get("height").and_then(get_float).unwrap_or(0.0);
+                        tex_rect = Some(RectData { x: tx, y: ty, w: tw, h: th });
+                    }
+                    if let Some(offset_val) = atlas_val.get("textureRectOffset") {
+                        tex_offset = Some(get_point(offset_val));
+                    }
+                    if let Some(unityfs::value::UnityValue::PPtr { path_id, .. }) = atlas_val.get("texture") {
+                        sprite_texture_path_id = Some(*path_id);
+                    }
+                    break;
+                }
+            }
+        }
+        if tex_rect.is_none() {
+            if let Some(rd) = sprite.get("m_RD") {
+                if let Some(tr) = rd.get("textureRect") {
+                    let tx = tr.get("x").and_then(get_float).unwrap_or(0.0);
+                    let ty = tr.get("y").and_then(get_float).unwrap_or(0.0);
+                    let tw = tr.get("width").and_then(get_float).unwrap_or(0.0);
+                    let th = tr.get("height").and_then(get_float).unwrap_or(0.0);
+                    tex_rect = Some(RectData { x: tx, y: ty, w: tw, h: th });
+                }
+                if let Some(offset_val) = rd.get("textureRectOffset") {
+                    tex_offset = Some(get_point(offset_val));
+                }
+                if let Some(unityfs::value::UnityValue::PPtr { path_id, .. }) = rd.get("texture") {
+                    sprite_texture_path_id = Some(*path_id);
+                }
+            }
+        }
+        let tex_rect = tex_rect.unwrap_or(RectData { x, y, w, h });
+        let tex_offset = tex_offset.unwrap_or(Point { x: 0.0, y: 0.0 });
+        let tex_file = sprite_texture_path_id
+            .and_then(|pid| texture_names.get(&pid))
+            .cloned()
+            .unwrap_or_default();
+        if tex_rect.w <= 16.0 || tex_rect.h <= 16.0 || w <= 16.0 || h <= 16.0 {
+            continue;
+        }
+        let is_body = name_lower == "body"
+            || name_lower.contains("stand")
+            || (name_lower.parse::<u32>().is_ok() && w >= 500.0 && h >= 500.0);
+        if is_body {
+            body_sprite_rect = Some(BodySpriteMeta {
+                x: tex_rect.x,
+                y: tex_rect.y,
+                w: tex_rect.w,
+                h: tex_rect.h,
+                texture_rect_offset: tex_offset,
+                texture: tex_file,
+                ow: w,
+                oh: h,
+            });
+        } else if name_lower != "silhouette" {
+            let meta = SpriteMeta {
+                x,
+                y,
+                w,
+                h,
+                texture_rect: tex_rect,
+                texture_rect_offset: tex_offset,
+                texture: tex_file,
+            };
+            faces_meta.insert(name_lower, meta);
+        }
+    }
+    let mut atlas_name = String::new();
+    if let Ok(entries) = std::fs::read_dir(out_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                if ext == "png" {
+                    let name = path.file_name().unwrap().to_string_lossy();
+                    if !name.contains("Silhouette") && !name.contains("silhouette") {
+                        atlas_name = name.into_owned();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if body_sprite_rect.is_none() && faces_meta.is_empty() {
+        return Ok(false);
+    }
+    let final_json = serde_json::json!({
+        "atlas": atlas_name,
+        "bodyRect": body_rect,
+        "faceContentRect": face_content_rect,
+        "bodySpriteRect": body_sprite_rect,
+        "faces": faces_meta,
+    });
+    let meta_path = out_dir.join("meta.json");
+    let file = std::fs::File::create(&meta_path).map_err(|e| e.to_string())?;
+    serde_json::to_writer_pretty(file, &final_json).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 #[tauri::command]
 async fn handle_dropped_path(
     path: String,
@@ -300,9 +620,25 @@ async fn handle_dropped_path(
             for bundle_path in unity_bundles {
                 let group_key = get_model_group_key(&bundle_path);
                 let bundle_out_dir = temp_dir.path().join(group_key);
-                if let Err(e) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
-                    eprintln!("Failed to extract bundle {:?}: {}", bundle_path, e);
-                } else {
+                let mut success = false;
+                let _ = std::fs::create_dir_all(&bundle_out_dir);
+                match extract_layered_sprite_native(&bundle_path, &bundle_out_dir) {
+                    Ok(true) => {
+                        success = true;
+                    }
+                    _ => {
+                        let _ = std::fs::remove_dir_all(&bundle_out_dir);
+                        let _ = std::fs::create_dir_all(&bundle_out_dir);
+                        if let Ok(_) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
+                            if let Ok(res) = get_subdir_files(bundle_out_dir.to_string_lossy().to_string(), merge_sequential, app_handle.clone()) {
+                                if !res.is_empty() {
+                                    success = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if success {
                     extracted_any = true;
                 }
             }
@@ -340,9 +676,16 @@ async fn handle_dropped_path(
                 .map_err(|e| format!("Failed to create temp dir: {}", e))?;
             let temp_path = temp_dir.path().to_string_lossy().into_owned();
             let group_key = get_model_group_key(&path_obj);
-            let bundle_out_dir = temp_dir.path().join(group_key);
-            unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir)
-                .map_err(|e| format!("Failed to extract Unity assets: {}", e))?;
+            let bundle_out_dir = temp_dir.path().join(&group_key);
+            let _ = std::fs::create_dir_all(&bundle_out_dir);
+            match extract_layered_sprite_native(&path_obj, &bundle_out_dir) {
+                Ok(true) => {}
+                _ => {
+                    let _ = std::fs::remove_dir_all(&bundle_out_dir);
+                    let _ = std::fs::create_dir_all(&bundle_out_dir);
+                    let _ = unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir);
+                }
+            }
             let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
             let state = app_handle.state::<AppState>();
             let mut temp_dirs = state.temp_dirs.lock().unwrap();
@@ -1012,6 +1355,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     let mut dir_files = Vec::new();
     let mut moc3_files = Vec::new();
     let mut moc_files = Vec::new();
+    let mut has_meta_json = false;
     let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -1047,6 +1391,8 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             moc3_files.push((filename.to_string(), relative_path.clone()));
         } else if filename_lower.contains(".moc") && !filename_lower.contains(".moc3") {
             moc_files.push((filename.to_string(), relative_path.clone()));
+        } else if filename_lower == "meta.json" {
+            has_meta_json = true;
         }
     }
     for (filename, relative_path) in moc3_files {
@@ -1093,6 +1439,15 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 is_merged: false,
             });
         }
+    }
+    if has_meta_json {
+        file_groups.push(SceneData {
+            name: "meta".to_string(),
+            main_ext: ".json".to_string(),
+            atlas_ext: "".to_string(),
+            files: Vec::new(),
+            is_merged: false,
+        });
     }
     let mut potential_extra_atlases = HashSet::new();
     for (base_name, extension) in &all_atlas_info {

@@ -400,8 +400,8 @@
       crop = {
         cx: originalWidth / 2,
         cy: originalHeight / 2,
-        w: originalWidth + (2 * mX / (eS * dpr)),
-        h: originalHeight + (2 * mY / (eS * dpr))
+        w: originalWidth + (2 * mX / eS),
+        h: originalHeight + (2 * mY / eS)
       };
     } else {
       const vw = windowWidth;

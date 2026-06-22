@@ -465,6 +465,9 @@
   }
 
   function doExportAnimation() {
+    if (getRenderer()?.constructor.name === 'LayeredSpriteRenderer') {
+      return;
+    }
     const sceneText = getSceneText();
     const animText = sidebar?.getSelectedAnimationText() || '';
     const animValue = sidebar?.getSelectedAnimation?.() || '';
@@ -473,6 +476,9 @@
   }
 
   async function doExportImageSequence() {
+    if (getRenderer()?.constructor.name === 'LayeredSpriteRenderer') {
+      return;
+    }
     const sceneText = getSceneText();
     const animText = sidebar?.getSelectedAnimationText() || '';
     const animValue = sidebar?.getSelectedAnimation?.() || '';

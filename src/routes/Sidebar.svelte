@@ -28,6 +28,11 @@
     if (!renderer) return;
     animations = renderer.getAnimations() ?? [];
     expressions = renderer.getExpressions() ?? null;
+    if (expressions && renderer.currentFaceKey !== undefined) {
+      selectedExpression = renderer.currentFaceKey || '';
+    } else {
+      selectedExpression = '';
+    }
     propertyCategories = renderer.getPropertyCategories() ?? [];
     if (!propertyCategories.includes(appState.propertyCategory)) {
       appState.propertyCategory = propertyCategories[0] || 'attachments';
@@ -53,11 +58,17 @@
   }
 
   export function navigateAnimation(delta) {
-    if (animations.length <= 1) return;
-    const currentIndex = animations.findIndex(a => a.value === selectedAnimation);
-    const newIndex = (currentIndex + delta + animations.length) % animations.length;
-    selectedAnimation = animations[newIndex].value;
-    onAnimationChange(selectedAnimation);
+    if (animations && animations.length > 1) {
+      const currentIndex = animations.findIndex(a => a.value === selectedAnimation);
+      const newIndex = (currentIndex + delta + animations.length) % animations.length;
+      selectedAnimation = animations[newIndex].value;
+      onAnimationChange(selectedAnimation);
+    } else if (expressions && expressions.length > 1) {
+      const currentIndex = expressions.findIndex(e => e.value === selectedExpression);
+      const newIndex = (currentIndex + delta + expressions.length) % expressions.length;
+      selectedExpression = expressions[newIndex].value;
+      onExpressionChange(selectedExpression);
+    }
   }
 
   function handlePropertyCategoryChange(e) {

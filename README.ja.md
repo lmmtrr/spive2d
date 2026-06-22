@@ -10,7 +10,7 @@ Spine スケルタルアニメーションと Live2D モデルを表示・操作
 
 - 📂 ドラッグ＆ドロップでモデルを読み込み（単一フォルダまたは単一圧縮ファイル：zip・7z のみ）
 - 📦 Unityファイルの直接読み込み・展開に対応
-- 🎭 Spine と Live2D の両方に対応
+- 🎭 Spine, Live2D, および Layered Sprite (Unityファイルのみ) モデルの3方式に対応
 - 🕹️ リアルタイムパラメータ制御
 - 🎨 アニメーション/スキン切り替えUI
 - 🖱️ マウスインタラクション対応
@@ -103,6 +103,10 @@ chmod +x /path/to/spive2d_linux_x64
 
 - Cubism 2.1
 - Cubism 4.x
+
+**🖼️ Layered Sprite (立ち絵):**
+
+- Unity Sprite / RectTransform バンドルファイル
 
 ## 📦 依存関係
 
