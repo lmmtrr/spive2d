@@ -1,9 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Default)]
@@ -583,6 +582,41 @@ fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::p
     let file = std::fs::File::create(&meta_path).map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(file, &final_json).map_err(|e| e.to_string())?;
     Ok(true)
+}
+
+#[tauri::command]
+fn is_debug() -> bool {
+    cfg!(debug_assertions)
+}
+
+static LOG_FILE: OnceLock<Option<Mutex<File>>> = OnceLock::new();
+
+#[tauri::command]
+fn log_frontend_error(msg: String) {
+    #[cfg(debug_assertions)]
+    {
+        println!("[JS] {msg}");
+        let _ = std::io::stdout().flush();
+    }
+
+    let log_option = LOG_FILE.get_or_init(|| {
+        let exe = std::env::current_exe().expect("current_exe");
+        let dir = exe.parent().expect("parent");
+        let path = dir.join("app.txt");
+
+        match OpenOptions::new().write(true).create(true).truncate(true).open(&path) {
+            Ok(f) => Some(Mutex::new(f)),
+            Err(e) => {
+                println!("open log at {:?} failed: {e}", path);
+                None
+            }
+        }
+    });
+    if let Some(mutex) = log_option {
+        if let Ok(mut file) = mutex.lock() {
+            let _ = writeln!(file, "[JS] {msg}");
+        }
+    }
 }
 
 #[tauri::command]
@@ -1671,6 +1705,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            is_debug,
+            log_frontend_error,
             get_subdir_files,
             handle_dropped_path,
             handle_dropped_paths,
