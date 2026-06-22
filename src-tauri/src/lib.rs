@@ -623,18 +623,12 @@ async fn handle_dropped_path(
                 let mut success = false;
                 let _ = std::fs::create_dir_all(&bundle_out_dir);
                 match extract_layered_sprite_native(&bundle_path, &bundle_out_dir) {
-                    Ok(true) => {
+                    Ok(_) => {
                         success = true;
                     }
                     _ => {
-                        let _ = std::fs::remove_dir_all(&bundle_out_dir);
-                        let _ = std::fs::create_dir_all(&bundle_out_dir);
                         if let Ok(_) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
-                            if let Ok(res) = get_subdir_files(bundle_out_dir.to_string_lossy().to_string(), merge_sequential, app_handle.clone()) {
-                                if !res.is_empty() {
-                                    success = true;
-                                }
-                            }
+                            success = true;
                         }
                     }
                 }
@@ -679,10 +673,8 @@ async fn handle_dropped_path(
             let bundle_out_dir = temp_dir.path().join(&group_key);
             let _ = std::fs::create_dir_all(&bundle_out_dir);
             match extract_layered_sprite_native(&path_obj, &bundle_out_dir) {
-                Ok(true) => {}
+                Ok(_) => {}
                 _ => {
-                    let _ = std::fs::remove_dir_all(&bundle_out_dir);
-                    let _ = std::fs::create_dir_all(&bundle_out_dir);
                     let _ = unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir);
                 }
             }
