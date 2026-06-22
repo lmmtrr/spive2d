@@ -68,8 +68,8 @@ const encoderPoolSize = Math.max(2, Math.min(8, hardwareConcurrency - 1));
 const encoderPool = new WorkerPool(PngEncoderWorker, encoderPoolSize);
 
 async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
-  const safeName = sanitizeFilename(animationName ? animationName.split('.')[0] : 'snapshot');
-  const baseFilename = `${sanitizeFilename(sceneText)}_${safeName}${suffix}`;
+  const safeName = animationName ? `_${sanitizeFilename(animationName.split('.')[0])}` : '';
+  const baseFilename = `${sanitizeFilename(sceneText)}${safeName}${suffix}`;
   try {
     const baseDir = await downloadDir();
     const exportBaseDir = await join(baseDir, 'spive2d_export');
@@ -102,8 +102,8 @@ async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
 
 export async function exportImage(sceneText, animationName) {
   const taskId = `image-${++taskIdCounter}`;
-  const safeName = sanitizeFilename(animationName ? animationName.split('.')[0] : 'snapshot');
-  const baseFilename = `${sanitizeFilename(sceneText)}_${safeName}`;
+  const safeName = animationName ? `_${sanitizeFilename(animationName.split('.')[0])}` : '';
+  const baseFilename = `${sanitizeFilename(sceneText)}${safeName}`;
   exportQueue.add({
     id: taskId,
     type: 'Image',

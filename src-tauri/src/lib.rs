@@ -578,7 +578,8 @@ fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::p
         "bodySpriteRect": body_sprite_rect,
         "faces": faces_meta,
     });
-    let meta_path = out_dir.join("meta.json");
+    let model_name = get_model_group_key(bundle_path);
+    let meta_path = out_dir.join(format!("{}.meta.json", model_name));
     let file = std::fs::File::create(&meta_path).map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(file, &final_json).map_err(|e| e.to_string())?;
     Ok(true)
@@ -1347,6 +1348,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     let mut dir_files = Vec::new();
     let mut moc3_files = Vec::new();
     let mut moc_files = Vec::new();
+    let mut meta_json_files = Vec::new();
     let mut has_meta_json = false;
     let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
     for entry in entries {
@@ -1385,6 +1387,8 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             moc_files.push((filename.to_string(), relative_path.clone()));
         } else if filename_lower == "meta.json" {
             has_meta_json = true;
+        } else if filename_lower.ends_with(".meta.json") {
+            meta_json_files.push(filename.to_string());
         }
     }
     for (filename, relative_path) in moc3_files {
@@ -1436,6 +1440,18 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         file_groups.push(SceneData {
             name: "meta".to_string(),
             main_ext: ".json".to_string(),
+            atlas_ext: "".to_string(),
+            files: Vec::new(),
+            is_merged: false,
+        });
+    }
+    for meta_filename in meta_json_files {
+        let stem = meta_filename.strip_suffix(".meta.json")
+            .or_else(|| meta_filename.strip_suffix(".META.JSON"))
+            .unwrap_or(&meta_filename);
+        file_groups.push(SceneData {
+            name: stem.to_string(),
+            main_ext: ".meta.json".to_string(),
             atlas_ext: "".to_string(),
             files: Vec::new(),
             is_merged: false,

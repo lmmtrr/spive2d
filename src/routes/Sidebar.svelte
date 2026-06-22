@@ -53,6 +53,12 @@
     return selectedExpression;
   }
 
+  export function getSelectedExpressionText() {
+    if (!expressions) return '';
+    const expr = expressions.find(e => e.value === selectedExpression);
+    return expr ? expr.name : selectedExpression;
+  }
+
   export function setSelectedAnimation(value) {
     selectedAnimation = value;
   }

@@ -5,6 +5,7 @@ import { showNotification } from '../notificationStore.svelte.js';
 export class LayeredSpriteRenderer extends BaseRenderer {
   constructor(isExport = false) {
     super(isExport);
+    this.rendererType = 'layered';
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'none';
     this.canvas.style.verticalAlign = 'top';

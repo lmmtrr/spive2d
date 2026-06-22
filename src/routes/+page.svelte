@@ -180,6 +180,10 @@
               baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.model3.json'.length);
               ext1 = '.model3.json';
               ext2 = '.moc3';
+            } else if (fileNameWithExt.endsWith('.meta.json')) {
+              baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.meta.json'.length);
+              ext1 = '.meta.json';
+              ext2 = '';
             } else if (fileNameWithExt.endsWith('.skel')) {
               baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.skel'.length);
               ext1 = '.skel';
@@ -460,12 +464,15 @@
 
   function doExportImage() {
     const sceneText = getSceneText();
-    const animText = sidebar?.getSelectedAnimationText() || '';
+    let animText = sidebar?.getSelectedAnimationText() || '';
+    if (!animText && sidebar) {
+      animText = sidebar.getSelectedExpressionText() || '';
+    }
     exportImage(sceneText, animText);
   }
 
   function doExportAnimation() {
-    if (getRenderer()?.constructor.name === 'LayeredSpriteRenderer') {
+    if (getRenderer()?.rendererType === 'layered') {
       return;
     }
     const sceneText = getSceneText();
@@ -476,7 +483,7 @@
   }
 
   async function doExportImageSequence() {
-    if (getRenderer()?.constructor.name === 'LayeredSpriteRenderer') {
+    if (getRenderer()?.rendererType === 'layered') {
       return;
     }
     const sceneText = getSceneText();
