@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.33] - 2026-06-22
+
+### Fixed
+
+- Fix export filename without animation for layered sprites
+
 ## [0.1.32] - 2026-06-22
 
 ### Added
