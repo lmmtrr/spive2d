@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.32] - 2026-06-22
+
+### Added
+
+- Support loading and rendering layered sprites from Unity asset bundles
+
 ## [0.1.31] - 2026-06-20
 
 ### Added
