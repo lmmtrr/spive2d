@@ -76,7 +76,7 @@ async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
     await mkdir(exportBaseDir, { recursive: true });
     let finalFilename = `${baseFilename}.png`;
     let filePath = await join(exportBaseDir, finalFilename);
-    let counter = 1;
+    let counter = 2;
     while (await exists(filePath)) {
       finalFilename = `${baseFilename} (${counter}).png`;
       filePath = await join(exportBaseDir, finalFilename);
@@ -207,7 +207,7 @@ async function saveExportedFile(baseFilename, extension, buffer) {
   await mkdir(exportBaseDir, { recursive: true });
   let finalOutputFilename = `${baseFilename}.${extension}`;
   let filePath = await join(exportBaseDir, finalOutputFilename);
-  let counter = 1;
+  let counter = 2;
   while (await exists(filePath)) {
     finalOutputFilename = `${baseFilename} (${counter}).${extension}`;
     filePath = await join(exportBaseDir, finalOutputFilename);
