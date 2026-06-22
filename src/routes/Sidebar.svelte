@@ -56,7 +56,7 @@
   export function getSelectedExpressionText() {
     if (!expressions) return '';
     const expr = expressions.find(e => e.value === selectedExpression);
-    return expr ? expr.name : selectedExpression;
+    return expr ? expr.name : (expressions.length > 0 ? selectedExpression : '');
   }
 
   export function setSelectedAnimation(value) {
@@ -262,7 +262,10 @@
   </select>
 
   {#if expressions}
-    <select id="expressionSelector" bind:value={selectedExpression} onchange={(e) => onExpressionChange(e.currentTarget.value)}>
+    <select id="expressionSelector" value={selectedExpression} onchange={(e) => {
+      selectedExpression = e.currentTarget.value;
+      onExpressionChange(selectedExpression);
+    }}>
       {#each expressions as expr}
         <option value={expr.value}>{expr.name}</option>
       {/each}
