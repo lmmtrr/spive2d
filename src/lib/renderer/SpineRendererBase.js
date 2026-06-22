@@ -182,6 +182,255 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     this._hideMaskMosaicAttachments();
+    this._computeFitBoundsAsync();
+  }
+
+  _getFitBounds(skel) {
+    // Animation-derived body box when present; window.__USE_FIT__ = false forces setup for A/B.
+    const useFit = (typeof window === 'undefined') || window.__USE_FIT__ !== false;
+    return (useFit && skel.fitBounds) ? skel.fitBounds : skel.bounds;
+  }
+ 
+  // ---- async adaptive fit -------------------------------------------------
+ 
+  _idle() {
+    // yield between animations; setTimeout fallback for WKWebView (no requestIdleCallback)
+    return new Promise((res) => {
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => res(), { timeout: 100 });
+      else setTimeout(res, 0);
+    });
+  }
+ 
+  _cancelFit() {
+    this._fitToken = (this._fitToken || 0) + 1; // bump => any in-flight pass sees a stale token and bails
+  }
+ 
+  _revealCanvas() {
+    if (this._revealed) return;
+    this._revealed = true;
+    if (this._canvas) this._canvas.style.opacity = '1';
+    console.log('[load] REVEAL', this._loadT0 ? (performance.now() - this._loadT0).toFixed(0) : '?');
+  }
+ 
+  _scheduleFitBounds() {
+    this._cancelFit();
+    this._revealed = false;
+    this._fitRevealReady = false;
+    if (this._revealTimer) clearTimeout(this._revealTimer);
+    // failsafe: never leave the canvas hidden if fit stalls (very heavy model / error).
+    // If this fires before fit lands, you may see one setup-framed frame + a small jump;
+    // set it above your slowest [fit] time to avoid that (1203 was ~0.9s).
+    this._revealTimer = setTimeout(() => { this._fitRevealReady = true; this._revealCanvas(); }, 1200);
+    this._computeFitBoundsAsync(this._fitToken); // fire and forget; self-cancels via token
+  }
+ 
+  async _computeFitBoundsAsync(token) {
+    let primaryDone = false;
+    for (const key of Object.keys(this._skeletons)) {
+      if (token !== this._fitToken || !this._ctx) return; // superseded or disposed
+      const e = this._skeletons[key];
+      if (!e) continue;
+      const ab = await this._sampleAnimBounds(e, key, token);
+      if (token !== this._fitToken || !this._ctx) return;
+      if (ab) {
+        e._ab = ab;
+        const nb = ab.normalUnion;
+        if (!ab.weakAnchor && nb && nb.w > 0 && nb.h > 0) {
+          e.fitBounds = { offset: { x: nb.offX, y: nb.offY }, size: { x: nb.w, y: nb.h } };
+        }
+      }
+      if (!primaryDone) {
+        // First skeleton resolved => framing for '0' is final (fit box or setup fallback).
+        // Arm reveal; the render loop draws one final-framed frame, then shows the canvas.
+        primaryDone = true;
+        this._fitRevealReady = true;
+        if (this._paused) { this.render(0, { dpr: window.devicePixelRatio || 1 }); this._revealCanvas(); }
+      }
+    }
+    if (token === this._fitToken && this._ctx) this._dumpGeometry();
+  }
+ 
+  // Samples animation extents on a throwaway skeleton (live one is never touched),
+  // yielding between animations. Returns null if cancelled.
+  async _sampleAnimBounds(entry, key, token, samplesPerSec = 12) {
+    const data = entry.skeleton.data;
+    const probe = new this._spine.Skeleton(data); // shares SkeletonData, independent pose
+ 
+    if (data.skins.length > 1) {
+      const combined = new this._spine.Skin('_fit');
+      for (const s of data.skins) combined.addSkin(s);
+      probe.setSkin(combined);
+    } else {
+      probe.setSkin(entry.skeleton.skin || data.defaultSkin);
+    }
+ 
+    const off = new this._spine.Vector2();
+    const sz  = new this._spine.Vector2();
+    const perAnim = [];
+ 
+    for (const anim of data.animations) {
+      if (token !== this._fitToken) return null;
+      const a = { name: anim.name, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      const n = Math.min(48, Math.max(2, Math.ceil((anim.duration || 0) * samplesPerSec))); // cap long anims
+      for (let i = 0; i <= n; i++) {
+        const t = anim.duration ? (anim.duration * i) / n : 0;
+        probe.setToSetupPose();
+        anim.apply(probe, 0, t, true, null, 1.0, 0, 0);
+        probe.updateWorldTransform(2);
+        this._syncHiddenAttachments(probe, key); // mirror MaskMosaic hiding so it doesn't inflate bounds
+        probe.getBounds(off, sz, []);
+        if (sz.x === -Infinity) continue;
+        a.minX = Math.min(a.minX, off.x);       a.minY = Math.min(a.minY, off.y);
+        a.maxX = Math.max(a.maxX, off.x + sz.x); a.maxY = Math.max(a.maxY, off.y + sz.y);
+      }
+      perAnim.push(a);
+      await this._idle(); // one animation per slice
+    }
+    return this._reduceAnimBounds(perAnim);
+  }
+ 
+  // Outlier filtering (cheap, synchronous).
+  _reduceAnimBounds(perAnim) {
+    const toBox = (b) => ({ offX: b.minX, offY: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY });
+ 
+    const union = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (const a of perAnim) {
+      if (!isFinite(a.minX)) continue;
+      union.minX = Math.min(union.minX, a.minX); union.minY = Math.min(union.minY, a.minY);
+      union.maxX = Math.max(union.maxX, a.maxX); union.maxY = Math.max(union.maxY, a.maxY);
+    }
+ 
+    // Anchor = per-axis max of the smallest-40%-by-area boxes = upper edge of the normal body.
+    // Lower 40% stays clear of the 50% boundary (first effect frame); per-axis max keeps a single
+    // thin pose from dragging the anchor down and flipping the whole set to "effect".
+    const valid = perAnim.filter(b => isFinite(b.minX));
+    const wOf = b => b.maxX - b.minX, hOf = b => b.maxY - b.minY, aOf = b => wOf(b) * hOf(b);
+    const sorted = valid.map(aOf).sort((x, y) => x - y);
+    const cut = sorted.length ? sorted[Math.floor(sorted.length * 0.4)] : Infinity;
+    const base = valid.filter(b => aOf(b) <= cut);
+    const aw = base.length ? Math.max(...base.map(wOf)) : 0;
+    const ah = base.length ? Math.max(...base.map(hOf)) : 0;
+    const K = 2.2; // anchor + 120% headroom; beyond -> effect
+    const isEffect = (b) => aw > 0 && (wOf(b) > K * aw || hOf(b) > K * ah);
+    const effectAnims = valid.filter(isEffect).map(b => b.name);
+    const kept = valid.filter(b => !isEffect(b));
+    const normals = kept.length ? kept : valid;
+    const nu = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (const b of normals) {
+      nu.minX = Math.min(nu.minX, b.minX); nu.minY = Math.min(nu.minY, b.minY);
+      nu.maxX = Math.max(nu.maxX, b.maxX); nu.maxY = Math.max(nu.maxY, b.maxY);
+    }
+ 
+    return {
+      union: toBox(union),
+      normalUnion: toBox(nu),
+      perAnim: perAnim.map(toBox),
+      effectAnims,
+      anchorBox: { w: aw, h: ah },
+      weakAnchor: valid.length > 0 && effectAnims.length > valid.length * 0.6,
+    };
+  }
+
+  // Project a skeleton-space point to canvas pixels through the current MVP.
+  _projectToPixel(x, y) {
+    const m = this._mvp.values; // column-major 4x4
+    const cx = m[0]*x + m[4]*y + m[12];
+    const cy = m[1]*x + m[5]*y + m[13];
+    const cw = m[3]*x + m[7]*y + m[15] || 1;
+    const ndcX = cx / cw, ndcY = cy / cw;
+    return {
+      px: (ndcX * 0.5 + 0.5) * this._canvas.width,
+      py: (1 - (ndcY * 0.5 + 0.5)) * this._canvas.height,
+    };
+  }
+ 
+  // calculateSpineMVP fits a box to the full canvas (no margin), so a perfectly-fit
+  // box reports fill ~= 1/(1-2*margin) ~= 1.11, not 1.0.
+  _evalFit(box, margin = 0.05) {
+    const W = this._canvas.width, H = this._canvas.height;
+    const corners = [
+      this._projectToPixel(box.offX, box.offY),
+      this._projectToPixel(box.offX + box.w, box.offY),
+      this._projectToPixel(box.offX, box.offY + box.h),
+      this._projectToPixel(box.offX + box.w, box.offY + box.h),
+    ];
+    const xs = corners.map(c => c.px), ys = corners.map(c => c.py);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const boxW = maxX - minX, boxH = maxY - minY;
+    const safeW = W * (1 - 2*margin), safeH = H * (1 - 2*margin);
+    const pad = 1;
+    return {
+      rectPx: { x: minX, y: minY, w: boxW, h: boxH },
+      clipped: minX < -pad || minY < -pad || maxX > W + pad || maxY > H + pad,
+      fill: +Math.max(boxW / safeW, boxH / safeH).toFixed(3),
+      centerErr: +(Math.hypot((minX + maxX) / 2 - W / 2, (minY + maxY) / 2 - H / 2) / Math.hypot(W, H)).toFixed(4),
+    };
+  }
+ 
+  _dumpGeometry() {
+    try {
+      const dpr = window.devicePixelRatio || 1;
+      this.updateMVP({ dpr }); // mirror the live frame's MVP; fitNormal lands on this
+ 
+      const FILL_LO = 0.85, FILL_HI = 1.25, CENTER_MAX = 0.05; // fill ideal ~1.11
+      const force = (typeof window !== 'undefined' && window.__GEO_FORCE__) === true;
+      const isPrimary = (s) => s.key === '0' && !/_bg|_fg/i.test(s.name || '');
+ 
+      const skeletons = Object.entries(this._skeletons).map(([key, e]) => {
+        const ab = e._ab;
+        if (!ab) return null; // fit hasn't landed for this skeleton (shouldn't happen post-async)
+        const off = e.bounds?.offset || {}, sz = e.bounds?.size || {};
+        return {
+          key, name: e.name,
+          usingFit: !!e.fitBounds,
+          idleBounds: { offX: off.x, offY: off.y, w: sz.x, h: sz.y },
+          animBounds: ab.union,
+          normalBounds: ab.normalUnion,
+          perAnimBounds: ab.perAnim,
+          effectAnims: ab.effectAnims,
+          fitNormal: this._evalFit(ab.normalUnion),
+          diag: { anchorBox: ab.anchorBox, weakAnchor: ab.weakAnchor, effectCount: ab.effectAnims.length },
+        };
+      }).filter(Boolean);
+ 
+      const flagsFor = (s) => {
+        if (!isPrimary(s)) return [];
+        if (!s.usingFit) {
+          // setup fallback. weakAnchor is expected (effect-heavy char) -> quiet; otherwise nb
+          // degenerated unexpectedly -> surface it.
+          return s.diag?.weakAnchor ? [] : ['noFit'];
+        }
+        const r = [], fn = s.fitNormal || {};
+        if (fn.clipped) r.push('clip');
+        if (fn.fill != null && (fn.fill < FILL_LO || fn.fill > FILL_HI)) r.push('fill=' + fn.fill);
+        if (fn.centerErr != null && fn.centerErr > CENTER_MAX) r.push('center=' + fn.centerErr);
+        return r;
+      };
+ 
+      const reasons = skeletons.flatMap(flagsFor);
+      const primary = skeletons.find(isPrimary);
+ 
+      if (reasons.length === 0 && !force) {
+        const tag = primary
+          ? (primary.usingFit
+              ? `fill=${primary.fitNormal.fill} center=${primary.fitNormal.centerErr}`
+              : `fallback=${primary.diag.weakAnchor ? 'weakAnchor' : 'noFit'}`)
+          : '';
+        console.log('[GEO-OK]', this._fileNames?.name, tag);
+        return;
+      }
+ 
+      console.error('[GEO]', JSON.stringify({
+        type: 'spine', ts: Date.now(),
+        dir: this._dirName, scene: this._fileNames?.name,
+        isExport: this.isExport,
+        viewport: { vw: window.innerWidth, vh: window.innerHeight, dpr },
+        canvas: { w: this._canvas?.width, h: this._canvas?.height },
+        attention: reasons,
+        skeletons,
+      }));
+    } catch (e) { }
   }
 
   _hideMaskMosaicAttachments() {
@@ -379,15 +628,15 @@ export class SpineRendererBase extends BaseRenderer {
     if (!this._ctx) return;
     const firstSkel = this._skeletons['0'] || Object.values(this._skeletons)[0];
     if (!firstSkel) return;
+    const fitBounds = this._getFitBounds(firstSkel);
     let screenBaseScale = options.screenBaseScale;
     if (!screenBaseScale && !this.isExport) {
-      const bounds = firstSkel.bounds;
       screenBaseScale = Math.max(
-        bounds.size.x / (window.innerWidth),
-        bounds.size.y / (window.innerHeight)
+        fitBounds.size.x / (window.innerWidth),
+        fitBounds.size.y / (window.innerHeight)
       );
     }
-    calculateSpineMVP(this._spine, this._mvp, this._canvas.width, this._canvas.height, firstSkel.bounds, {
+    calculateSpineMVP(this._spine, this._mvp, this._canvas.width, this._canvas.height, fitBounds, {
       scale: this._scale,
       x: this._moveX,
       y: this._moveY,

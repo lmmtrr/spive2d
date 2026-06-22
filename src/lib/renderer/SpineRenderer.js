@@ -76,8 +76,11 @@ export class SpineRenderer extends SpineRendererBase {
     const delta = now - this.#lastFrameTime;
     this.#lastFrameTime = now;
     this.render(delta, { dpr: window.devicePixelRatio || 1 });
+    if (this._fitRevealReady) this._revealCanvas();
     if (this.#firstRender) {
       this.#firstRender = false;
+      console.log('[load] FIRST RENDER', (performance.now() - this._loadT0).toFixed(0),
+                  '_revealed=', this._revealed, 'opacity=', this._canvas.style.opacity);
       this.#triggerFirstRender();
     }
     this.#requestId = requestAnimationFrame(() => this.#renderLoop());
