@@ -27,7 +27,7 @@ serde_json = "1"
 tempfile = "3"
 zip = "2"
 sevenz-rust2 = "0"
-unityfs = "0.1.0"
+unityfs = "0"
 
 [profile.dev]
 opt-level = 0
