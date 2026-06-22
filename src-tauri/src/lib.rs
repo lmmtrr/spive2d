@@ -18,6 +18,13 @@ impl AppState {
     }
 }
 
+fn skip_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n.starts_with('_'))
+        .unwrap_or(false)
+}
+
 #[derive(serde::Serialize, Clone)]
 struct SceneData {
     name: String,
@@ -1241,6 +1248,7 @@ fn process_directory_with_subdirs(
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
         if entry_path.is_dir() {
+            if skip_dir(&entry_path) { continue }
             let subdir_file_groups = process_directory(&entry_path, base_path, merge_sequential)?;
             if !subdir_file_groups.is_empty() {
                 let mut normalized_subdir_path = entry_path
@@ -1677,6 +1685,7 @@ fn process_directory(dir_path: &Path, base_path: &Path, merge_sequential: bool) 
         let entry = entry.map_err(|e| e.to_string())?;
         let entry_path = entry.path();
         if entry_path.is_dir() {
+            if skip_dir(&entry_path) { continue }
             let subdir_file_groups = process_directory(&entry_path, base_path, merge_sequential)?;
             all_file_groups.extend(subdir_file_groups);
         }
