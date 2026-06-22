@@ -125,20 +125,18 @@ export function getInitialSkinName(skins) {
 export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson) {
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
   const originalNewRegionAttachment = atlasLoader.newRegionAttachment;
-  atlasLoader.newRegionAttachment = function (skin, name, path) {
-    if (!atlas.findRegion(path)) {
-      console.warn(`[Spine] Skipping missing region attachment: ${path}`);
+  atlasLoader.newRegionAttachment = function (skin, name, path, sequence) {
+    if (sequence == null && !atlas.findRegion(path)) {
       return null;
     }
-    return originalNewRegionAttachment.call(atlasLoader, skin, name, path);
+    return originalNewRegionAttachment.call(atlasLoader, skin, name, path, sequence);
   };
   const originalNewMeshAttachment = atlasLoader.newMeshAttachment;
-  atlasLoader.newMeshAttachment = function (skin, name, path) {
-    if (!atlas.findRegion(path)) {
-      console.warn(`[Spine] Skipping missing mesh attachment: ${path}`);
+  atlasLoader.newMeshAttachment = function (skin, name, path, sequence) {
+    if (sequence == null && !atlas.findRegion(path)) {
       return null;
     }
-    return originalNewMeshAttachment.call(atlasLoader, skin, name, path);
+    return originalNewMeshAttachment.call(atlasLoader, skin, name, path, sequence);
   };
   const skeletonLoader = !isFileJson
     ? new spine.SkeletonBinary(atlasLoader)
