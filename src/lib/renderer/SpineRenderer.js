@@ -21,6 +21,8 @@ export class SpineRenderer extends SpineRendererBase {
   }
 
   async load(dirName, scene) {
+    this._loadT0 = performance.now();
+    const ms = () => (performance.now() - this._loadT0).toFixed(0);
     this.dispose();
     this._canvas.style.display = 'block';
     await SpineVersionManager.init();
@@ -37,9 +39,12 @@ export class SpineRenderer extends SpineRendererBase {
     this._canvas.style.width = `${window.innerWidth}px`;
     this._canvas.style.height = `${window.innerHeight}px`;
     await this.initCtx(this._alphaMode);
+    console.log('[load] initCtx done', ms(), 'opacity=', this._canvas.style.opacity);
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
+    console.log('[load] assets ready', ms());
     await this.processLoadedAssets();
+    console.log('[load] skeleton built', ms());
   }
 
   async _waitForAssets() {
