@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.34] - 2026-06-22
+
+### Fixed
+
+- Prevent expression text from returning stale DOM value in release build
+
 ## [0.1.33] - 2026-06-22
 
 ### Fixed
