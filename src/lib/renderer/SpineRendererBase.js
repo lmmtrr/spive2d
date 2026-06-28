@@ -55,16 +55,27 @@ export class SpineRendererBase extends BaseRenderer {
       const patchBlend = (target) => {
         target.blendFunc = (src, dst) => {
           if (dst === gl.ONE_MINUS_SRC_ALPHA) {
-            originalBlendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            const srcFactor = this._alphaMode === 'npm' ? gl.SRC_ALPHA : gl.ONE;
+            originalBlendFuncSeparate(srcFactor, dst, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
           } else if (src === gl.ONE && dst === gl.ONE) {
             originalBlendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
+          } else if (src === gl.SRC_ALPHA && dst === gl.ONE) {
+            originalBlendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);
           } else {
             originalBlendFunc(src, dst);
           }
         };
         target.blendFuncSeparate = (srcRGB, dstRGB, srcAlpha, dstAlpha) => {
           if (dstRGB === gl.ONE_MINUS_SRC_ALPHA) {
-            originalBlendFuncSeparate(srcRGB, dstRGB, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            if (srcAlpha === gl.ONE_MINUS_SRC_COLOR) {
+              if (this._alphaMode === 'npm') {
+                originalBlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_COLOR, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+              } else {
+                originalBlendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_COLOR, gl.ONE, gl.ONE_MINUS_SRC_COLOR);
+              }
+            } else {
+              originalBlendFuncSeparate(srcRGB, dstRGB, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            }
           } else {
             originalBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
           }
@@ -736,7 +747,9 @@ export class SpineRendererBase extends BaseRenderer {
       ctx2d.drawImage(source, 0, 0, declared.width, declared.height);
       tex._image = canvas;
       tex.bind();
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this._alphaMode === 'unpack');
       page.width = declared.width;
       page.height = declared.height;
       resizedPages.add(page);
