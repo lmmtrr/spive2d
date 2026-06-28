@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.36] - 2026-06-28
+
+### Added
+
+- Support automatically sanitizing GitHub URLs to raw URLs when loading assets
+
+### Fixed
+
+- Improve detection of Tauri local assets to prevent load failures across domains
+
 ## [0.1.35] - 2026-06-28
 
 ### Added
