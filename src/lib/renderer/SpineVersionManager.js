@@ -48,10 +48,16 @@ export class SpineVersionManager {
       baseName = scene.files[0];
     }
     const rawUrl = `${dirName}${baseName}${scene.mainExt}`;
-    const isTauriAsset = rawUrl.startsWith('http://asset.localhost') || 
-                         rawUrl.startsWith('https://tauri.localhost') ||
-                         rawUrl.startsWith('http://tauri.localhost') ||
-                         rawUrl.startsWith('tauri://');
+    const isTauriAsset = (() => {
+      try {
+        const url = new URL(rawUrl);
+        return url.protocol === 'tauri:' ||
+               url.hostname === 'tauri.localhost' ||
+               url.hostname === 'asset.localhost';
+      } catch (e) {
+        return rawUrl.startsWith('tauri://');
+      }
+    })();
     const isRemote = /^https?:\/\//.test(rawUrl) && !isTauriAsset;
     const hasTauriInvoke = typeof window !== 'undefined' && 
                           ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') || 

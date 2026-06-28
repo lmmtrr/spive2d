@@ -53,3 +53,31 @@ export function formatFileSize(bytes) {
 export function sanitizeFilename(name) {
   return String(name || '').replace(/[\\/:*?"<>|]/g, '_');
 }
+
+export function sanitizeInputUrl(urlStr) {
+  const url = new URL(urlStr);
+  if (url.hostname === 'github.com') {
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length >= 4 && (parts[2] === 'blob' || parts[2] === 'raw')) {
+      const owner = parts[0];
+      const repo = parts[1];
+      let refAndPath = parts.slice(3);
+      if (refAndPath[0] === 'refs' && refAndPath[1] === 'heads') {
+        refAndPath = refAndPath.slice(2);
+      }
+      url.hostname = 'raw.githubusercontent.com';
+      url.pathname = `/${owner}/${repo}/${refAndPath.join('/')}`;
+      return url.toString();
+    }
+  } else if (url.hostname === 'raw.githubusercontent.com') {
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length >= 4 && parts[2] === 'refs' && parts[3] === 'heads') {
+      const owner = parts[0];
+      const repo = parts[1];
+      const refAndPath = parts.slice(4);
+      url.pathname = `/${owner}/${repo}/${refAndPath.join('/')}`;
+      return url.toString();
+    }
+  }
+  return urlStr;
+}

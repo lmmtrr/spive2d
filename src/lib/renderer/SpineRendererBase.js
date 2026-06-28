@@ -710,10 +710,16 @@ export class SpineRendererBase extends BaseRenderer {
   async _resizeAtlasPages(atlas, atlasPath, isWebUrl) {
     let atlasText = null;
     try {
-      const isLocalAsset = atlasPath.startsWith('http://asset.localhost') ||
-        atlasPath.startsWith('https://tauri.localhost') ||
-        atlasPath.startsWith('http://tauri.localhost') ||
-        atlasPath.startsWith('tauri://');
+      const isLocalAsset = (() => {
+        try {
+          const url = new URL(atlasPath);
+          return url.protocol === 'tauri:' ||
+            url.hostname === 'tauri.localhost' ||
+            url.hostname === 'asset.localhost';
+        } catch (e) {
+          return atlasPath.startsWith('tauri://');
+        }
+      })();
       const hasTauriInvoke = typeof window !== 'undefined' &&
         ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') ||
           (window.__TAURI__?.core?.invoke !== undefined));

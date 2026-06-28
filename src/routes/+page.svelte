@@ -3,7 +3,7 @@
   import { appState } from '$lib/appState.svelte.js';
   import { getRenderer, setRenderer } from '$lib/rendererStore.svelte.js';
   import { createRenderer } from '$lib/renderer/createRenderer.js';
-  import { getSortableKey, findMaxNumber } from '$lib/utils.js';
+  import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '$lib/utils.js';
   import { getAssetUrl } from '$lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
   import { createTransformAction } from '$lib/inputAction.js';
@@ -97,6 +97,7 @@
 
   async function processPath(paths) {
     if (appState.processing || paths.length === 0) return;
+    paths = paths.map(sanitizeInputUrl);
     const wasInitialized = appState.initialized;
     appState.initialized = false;
     try {
