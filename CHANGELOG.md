@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.35] - 2026-06-28
+
+### Added
+
+- Add experimental adaptive scaling and centering for Spine models
+
+### Fixed
+
+- Adjust blend functions and WebGL texture unpack state dynamically based on alpha mode in Spine rendering
+- Adjust default window dimension to 1280x720
+
 ## [0.1.34] - 2026-06-22
 
 ### Fixed
