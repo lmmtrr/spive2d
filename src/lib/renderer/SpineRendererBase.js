@@ -182,7 +182,7 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     this._hideMaskMosaicAttachments();
-    this._computeFitBoundsAsync();
+    this._scheduleFitBounds();
   }
 
   _getFitBounds(skel) {
@@ -268,6 +268,7 @@ export class SpineRendererBase extends BaseRenderer {
     const sz  = new this._spine.Vector2();
     const perAnim = [];
  
+    let lastYield = performance.now();
     for (const anim of data.animations) {
       if (token !== this._fitToken) return null;
       const a = { name: anim.name, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
@@ -284,7 +285,10 @@ export class SpineRendererBase extends BaseRenderer {
         a.maxX = Math.max(a.maxX, off.x + sz.x); a.maxY = Math.max(a.maxY, off.y + sz.y);
       }
       perAnim.push(a);
-      await this._idle(); // one animation per slice
+      if (performance.now() - lastYield > 10) {
+        await this._idle();
+        lastYield = performance.now();
+      }
     }
     return this._reduceAnimBounds(perAnim);
   }
