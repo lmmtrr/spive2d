@@ -296,7 +296,6 @@
     setRenderer(renderer);
     const rendererCanvas = renderer.getCanvas();
     requestAnimationFrame(() => {
-      console.log('[svelte reveal] hasReveal=', typeof renderer._revealCanvas === 'function');
       if (typeof renderer._revealCanvas !== 'function') rendererCanvas.style.opacity = '1';
     });
     const categories = renderer.getPropertyCategories();

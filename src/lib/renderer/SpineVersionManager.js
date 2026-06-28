@@ -48,14 +48,21 @@ export class SpineVersionManager {
       baseName = scene.files[0];
     }
     const rawUrl = `${dirName}${baseName}${scene.mainExt}`;
-    const isRemote = /^https?:\/\//.test(rawUrl);
+    const isTauriAsset = rawUrl.startsWith('http://asset.localhost') || 
+                         rawUrl.startsWith('https://tauri.localhost') ||
+                         rawUrl.startsWith('http://tauri.localhost') ||
+                         rawUrl.startsWith('tauri://');
+    const isRemote = /^https?:\/\//.test(rawUrl) && !isTauriAsset;
+    const hasTauriInvoke = typeof window !== 'undefined' && 
+                          ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') || 
+                           (window.__TAURI__?.core?.invoke !== undefined));
     try {
       let data;
-      if (isRemote) {
+      if (isRemote && hasTauriInvoke) {
         const fetched = await invoke('fetch_url_bytes', { url: rawUrl });
         data = new Uint8Array(fetched);
       } else {
-        const url = convertFileSrc(rawUrl);
+        const url = isTauriAsset ? rawUrl : convertFileSrc(rawUrl);
         const response = await fetch(url);
         if (!response.ok) {
           showNotification(`HTTP ${response.status}`, 'error');

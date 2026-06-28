@@ -295,8 +295,8 @@ class WorkerSpineRenderer extends SpineRendererBase {
     this._currentDuration = this.getAnimationDuration();
   }
 
-  setAnimation(value) {
-    super.setAnimation(value);
+  async setAnimation(value) {
+    await super.setAnimation(value);
     this._currentDuration = this.getAnimationDuration();
   }
 
