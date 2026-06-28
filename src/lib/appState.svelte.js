@@ -3,8 +3,8 @@ import { loadSetting } from './settings.js';
 let initialized = $state(false);
 let processing = $state(false);
 let viewport = $state({
-  width: typeof window !== 'undefined' ? window.innerWidth : 800,
-  height: typeof window !== 'undefined' ? window.innerHeight : 600,
+  width: typeof window !== 'undefined' ? window.innerWidth : 1280,
+  height: typeof window !== 'undefined' ? window.innerHeight : 720,
 });
 let transform = $state({
   scale: 1,
