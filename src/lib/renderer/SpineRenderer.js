@@ -71,6 +71,7 @@ export class SpineRenderer extends SpineRendererBase {
     const delta = now - this.#lastFrameTime;
     this.#lastFrameTime = now;
     this.render(delta, { dpr: window.devicePixelRatio || 1 });
+    if (this._fitRevealReady) this._revealCanvas();
     if (this.#firstRender) {
       this.#firstRender = false;
       this.#triggerFirstRender();

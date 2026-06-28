@@ -29,6 +29,10 @@ export class BaseRenderer {
     return { width: 0, height: 0 };
   }
 
+  getMainOriginalSize() {
+    return this.getOriginalSize();
+  }
+
   applyTransform(scale, moveX, moveY, rotate) {
     this._scale = scale;
     this._moveX = moveX;

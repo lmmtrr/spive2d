@@ -35,6 +35,8 @@ export class SpineRendererBase extends BaseRenderer {
     super(isExport);
     this._canvas = canvas;
     this._spine = spineLib;
+    this._bgOrEffectCache = new Map();
+    this._probeSkeletons = new Map();
   }
 
   async initCtx(alphaMode = 'pma') {
@@ -138,6 +140,8 @@ export class SpineRendererBase extends BaseRenderer {
     this._skeletons = {};
     this._animationStates = [];
     this._attachmentsCache = {};
+    this._bgOrEffectCache = new Map();
+    this._probeSkeletons = new Map();
     this._activeSkins = null;
     this._parameterItems = null;
     this._parameterItemsMap = null;
@@ -182,6 +186,421 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     this._hideMaskMosaicAttachments();
+    this._scheduleFitBounds();
+  }
+
+  _isBackgroundOrEffect(name, attachment, slot) {
+    if (!name) return false;
+    const cacheKey = `${slot?.data?.name || ''}##${name}`;
+    if (this._bgOrEffectCache && this._bgOrEffectCache.has(cacheKey)) {
+      return this._bgOrEffectCache.get(cacheKey);
+    }
+    const lower = name.toLowerCase();
+    const slotName = slot?.data?.name?.toLowerCase() || '';
+    const bgEffectRegex = /(?:^|[_/.-])(backgrounds?|bgs?|effects?|effs?|fxs?|efxs?)(?:[_/.-]|$|[0-9])/i;
+    if (bgEffectRegex.test(lower) || bgEffectRegex.test(slotName)) {
+      if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, true);
+      return true;
+    }
+    const coreRegex = /(chara|character|body|head|face|hair|arm|leg|skirt|cloth|pelvis|neck|hand|foot|torso|spine|chest|hip|bust|skin|sleeve|glove|shoe|socks|weapon|sword|shield|spear|bow|staff|scythe|dress|coat|jacket|cape|wing|tail|horn|ear|eye|mouth|nose)/i;
+    if (coreRegex.test(lower) || coreRegex.test(slotName)) {
+      if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, false);
+      return false;
+    }
+    let w = 0, h = 0;
+    if (attachment && slot && slot.skeleton && slot.skeleton.data) {
+      if (!this._probeSkeletons) {
+        this._probeSkeletons = new Map();
+      }
+      let probe = this._probeSkeletons.get(slot.skeleton.data);
+      if (!probe) {
+        probe = new this._spine.Skeleton(slot.skeleton.data);
+        probe.setToSetupPose();
+        probe.updateWorldTransform(2);
+        this._probeSkeletons.set(slot.skeleton.data, probe);
+      }
+      const probeSlot = probe.slots[slot.data.index];
+      if (probeSlot) {
+        const oldAttachment = probeSlot.attachment;
+        probeSlot.attachment = attachment;
+        const wb = this._getSlotWorldBounds(probeSlot);
+        probeSlot.attachment = oldAttachment;
+        if (wb) {
+          w = wb.w;
+          h = wb.h;
+        }
+      }
+    }
+    const result = (w > 1000 || h > 1000 || (w > 500 && h > 500));
+    if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, result);
+    return result;
+  }
+
+  _getSlotWorldBounds(slot) {
+    const attachment = slot.attachment;
+    if (!attachment) return null;
+    let vertices;
+    if (attachment.computeWorldVertices) {
+      if (typeof attachment.worldVerticesLength === 'number') {
+        vertices = new Float32Array(attachment.worldVerticesLength);
+        attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, vertices, 0, 2);
+      } else if (slot.bone) {
+        vertices = new Float32Array(8);
+        const skeleton = slot.skeleton || (typeof slot.getSkeleton === 'function' ? slot.getSkeleton() : null) || slot.bone.skeleton;
+        const version = skeleton?.data?.version || '';
+        const verNum = parseFloat(version) || 0;
+        if (verNum >= 4.1) {
+          attachment.computeWorldVertices(slot, vertices, 0, 2);
+        } else {
+          attachment.computeWorldVertices(slot.bone, vertices, 0, 2);
+        }
+      }
+    }
+    if (vertices) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      let hasNan = false;
+      for (let i = 0; i < vertices.length; i += 2) {
+        const x = vertices[i];
+        const y = vertices[i + 1];
+        if (isNaN(x) || isNaN(y)) {
+          hasNan = true;
+          break;
+        }
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      if (!hasNan) {
+        return { w: maxX - minX, h: maxY - minY, minX, maxX, minY, maxY };
+      }
+    }
+    const bone = slot.bone;
+    if (bone) {
+      let scaleX = Math.abs(bone.scaleX || 1);
+      let scaleY = Math.abs(bone.scaleY || 1);
+      let curr = bone.parent;
+      while (curr) {
+        scaleX *= Math.abs(curr.scaleX || 1);
+        scaleY *= Math.abs(curr.scaleY || 1);
+        curr = curr.parent;
+      }
+      const w = (attachment.width || 0) * scaleX;
+      const h = (attachment.height || 0) * scaleY;
+      const x = bone.worldX || 0;
+      const y = bone.worldY || 0;
+      return { w, h, minX: x - w / 2, maxX: x + w / 2, minY: y - h / 2, maxY: y + h / 2 };
+    }
+  }
+
+  _getCoreBounds(skeleton) {
+    const coreRegex = /(body|chara|character|head|face|hair|arm|leg|skirt|cloth|pelvis|neck|hand|foot|torso|spine|chest|hip|bust|skin|sleeve|glove|shoe|socks|weapon|sword|shield|spear|bow|staff|scythe|dress|coat|jacket|cape|wing|tail|horn|ear|eye|mouth|nose)/i;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const slot of skeleton.slots) {
+      const slotName = slot.data.name;
+      const attachmentName = slot.attachment?.name || '';
+      if (slot.attachment && (coreRegex.test(slotName) || coreRegex.test(attachmentName))) {
+        if (this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot)) {
+          continue;
+        }
+        const wb = this._getSlotWorldBounds(slot);
+        if (wb) {
+          minX = Math.min(minX, wb.minX);
+          minY = Math.min(minY, wb.minY);
+          maxX = Math.max(maxX, wb.maxX);
+          maxY = Math.max(maxY, wb.maxY);
+        }
+      }
+    }
+    if (minX !== Infinity) {
+      return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+    }
+    return null;
+  }
+
+  _getFitBounds(skel, maxRatio = 1.15) {
+    let bounds = skel.bounds;
+    if (skel.fitBounds && skel.bounds) {
+      const fitW = skel.fitBounds.size.x;
+      const fitH = skel.fitBounds.size.y;
+      const setupW = skel.bounds.size.x;
+      const setupH = skel.bounds.size.y;
+      const fitCenterX = skel.fitBounds.offset.x + fitW * 0.5;
+      const setupCenterX = skel.bounds.offset.x + setupW * 0.5;
+      if (setupW > 400 && setupH > 400) {
+        const isTooSmall = fitW < 0.75 * setupW || fitH < 0.75 * setupH;
+        if (isTooSmall) {
+          const setupSkewed = Math.abs(setupCenterX) > setupW * 0.2;
+          const centerDiverged = Math.abs(fitCenterX - setupCenterX) > setupW * 0.2;
+          bounds = (setupSkewed || centerDiverged) ? skel.fitBounds : skel.bounds;
+        } else {
+          const isBloated = (fitW > 1.15 * setupW && fitW < 2.0 * setupW) ||
+            (fitH > 1.15 * setupH && fitH < 2.0 * setupH);
+          if (isBloated) {
+            bounds = skel.bounds;
+          } else {
+            bounds = skel.fitBounds;
+          }
+        }
+      } else {
+        bounds = skel.fitBounds;
+      }
+    } else {
+      bounds = (skel.fitBounds) ? skel.fitBounds : skel.bounds;
+    }
+
+    let result = bounds;
+    if (bounds && bounds.size && bounds.offset) {
+      const w = bounds.size.x;
+      const h = bounds.size.y;
+      if (w > 0 && h > 0) {
+        const left = bounds.offset.x;
+        const right = bounds.offset.x + w;
+        const centerX = bounds.offset.x + bounds.size.x * 0.5;
+        const originNearCenter = Math.abs(centerX) <= w * 0.12;
+        const maxExtent = originNearCenter
+          ? Math.max(Math.abs(left), Math.abs(right))
+          : (w * 0.5);
+        const symWidth = 2 * maxExtent;
+        const centerY = bounds.offset.y + bounds.size.y * 0.5;
+        const fitCenterX = originNearCenter ? 0 : centerX;
+        if (symWidth > maxRatio * h) {
+          const clampedW = maxRatio * h;
+          result = {
+            offset: {
+              x: fitCenterX - clampedW * 0.5,
+              y: centerY - h * 0.5
+            },
+            size: {
+              x: clampedW,
+              y: h
+            }
+          };
+        } else {
+          result = {
+            offset: {
+              x: fitCenterX - symWidth * 0.5,
+              y: centerY - h * 0.5
+            },
+            size: {
+              x: symWidth,
+              y: h
+            }
+          };
+        }
+      }
+    }
+    return result;
+  }
+
+  _getPrimarySkeleton() {
+    const entries = Object.entries(this._skeletons || {});
+    if (entries.length === 0) return null;
+    let best = null;
+    let bestScore = -Infinity;
+    for (const [key, entry] of entries) {
+      if (!entry?.skeleton) continue;
+      const core = this._getCoreBounds(entry.skeleton);
+      const fit = entry.fitBounds || entry.bounds;
+      const anim = entry._ab?.normalUnion;
+      const coreArea = (core?.w > 0 && core?.h > 0) ? (core.w * core.h) : 0;
+      const fitArea = (fit?.size?.x > 0 && fit?.size?.y > 0) ? (fit.size.x * fit.size.y) : 0;
+      const animArea = (anim?.w > 0 && anim?.h > 0) ? (anim.w * anim.h) : 0;
+      const name = String(entry.name || '').toLowerCase();
+      const bgLike = /(?:^|[_/.-])(bg|backgrounds?|back|shadow|floor|ground)(?:[_/.-]|$)/.test(name);
+      const nameWeight = bgLike ? 0.35 : 1.0;
+      const score = Math.max(coreArea, animArea * 0.9, fitArea * 0.6) * nameWeight;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { key, entry };
+      }
+    }
+    if (best) return best;
+    const [key, entry] = entries[0];
+    return { key, entry };
+  }
+
+  _idle() {
+    return new Promise((res) => {
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => res(), { timeout: 100 });
+      else setTimeout(res, 0);
+    });
+  }
+
+  _cancelFit() {
+    this._fitToken = (this._fitToken || 0) + 1;
+  }
+
+  _revealCanvas() {
+    if (this._canvas) this._canvas.style.opacity = '1';
+  }
+
+  _scheduleFitBounds() {
+    if (this.isExport) return;
+    this._cancelFit();
+    this._fitRevealReady = false;
+    if (this._revealTimer) clearTimeout(this._revealTimer);
+    this._revealTimer = setTimeout(() => { this._fitRevealReady = true; this._revealCanvas(); }, 1200);
+    this._computeFitBoundsAsync(this._fitToken);
+  }
+
+  async _computeFitBoundsAsync(token) {
+    let primaryDone = false;
+    for (const key of Object.keys(this._skeletons)) {
+      if (token !== this._fitToken || !this._ctx) return;
+      const e = this._skeletons[key];
+      if (!e) continue;
+      const ab = await this._sampleAnimBounds(e, key, token);
+      if (token !== this._fitToken || !this._ctx) return;
+      if (ab) {
+        e._ab = ab;
+        const nb = ab.normalUnion;
+        if (nb && nb.w > 0 && nb.h > 0 && !ab.weakAnchor) {
+          e.fitBounds = { offset: { x: nb.offX, y: nb.offY }, size: { x: nb.w, y: nb.h } };
+        }
+      }
+      if (!primaryDone) {
+        primaryDone = true;
+        this._fitRevealReady = true;
+        if (this._paused) { this.render(0, { dpr: window.devicePixelRatio || 1 }); this._revealCanvas(); }
+      }
+    }
+  }
+
+  async _sampleAnimBounds(entry, key, token, samplesPerSec = 12) {
+    const data = entry.skeleton.data;
+    const probe = new this._spine.Skeleton(data);
+    if (data.skins.length > 1) {
+      const combined = new this._spine.Skin('_fit');
+      for (const s of data.skins) combined.addSkin(s);
+      probe.setSkin(combined);
+    } else {
+      probe.setSkin(entry.skeleton.skin || data.defaultSkin);
+    }
+    const off = new this._spine.Vector2();
+    const sz = new this._spine.Vector2();
+    const perAnim = [];
+    let lastYield = performance.now();
+    for (const anim of data.animations) {
+      if (token !== this._fitToken) return null;
+      const a = { name: anim.name, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      const n = Math.min(48, Math.max(2, Math.ceil((anim.duration || 0) * samplesPerSec)));
+      for (let i = 0; i <= n; i++) {
+        const t = anim.duration ? (anim.duration * i) / n : 0;
+        probe.setToSetupPose();
+        anim.apply(probe, 0, t, true, null, 1.0, 0, 0);
+        probe.updateWorldTransform(2);
+        this._syncHiddenAttachments(probe, key);
+        const coreBox = this._getCoreBounds(probe);
+        const hasReliableCoreBox = !!(coreBox && coreBox.w >= 220 && coreBox.h >= 220);
+        const margin = coreBox ? Math.max(400, coreBox.h * 0.6) : 0;
+        for (const slot of probe.slots) {
+          if (slot.attachment) {
+            const isBgOrEff = this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot);
+            if (isBgOrEff) {
+              slot.attachment = null;
+              continue;
+            }
+            const wb = this._getSlotWorldBounds(slot);
+            if (wb) {
+              const isOutlier = hasReliableCoreBox && (
+                wb.maxX < coreBox.minX - margin || wb.minX > coreBox.maxX + margin ||
+                wb.maxY < coreBox.minY - margin || wb.minY > coreBox.maxY + margin
+              );
+              if (wb.w > 1800 || wb.h > 1800 || isOutlier) {
+                slot.attachment = null;
+              }
+            }
+          }
+        }
+        probe.getBounds(off, sz, []);
+        if (sz.x === -Infinity) continue;
+        a.minX = Math.min(a.minX, off.x); a.minY = Math.min(a.minY, off.y);
+        a.maxX = Math.max(a.maxX, off.x + sz.x); a.maxY = Math.max(a.maxY, off.y + sz.y);
+      }
+      perAnim.push(a);
+      if (performance.now() - lastYield > 10) {
+        await this._idle();
+        lastYield = performance.now();
+      }
+    }
+    return this._reduceAnimBounds(perAnim);
+  }
+
+  _reduceAnimBounds(perAnim) {
+    const toBox = (b) => ({ offX: b.minX, offY: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY });
+    const union = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (const a of perAnim) {
+      if (!isFinite(a.minX)) continue;
+      union.minX = Math.min(union.minX, a.minX); union.minY = Math.min(union.minY, a.minY);
+      union.maxX = Math.max(union.maxX, a.maxX); union.maxY = Math.max(union.maxY, a.maxY);
+    }
+    const valid = perAnim.filter(b => isFinite(b.minX));
+    const wOf = b => b.maxX - b.minX, hOf = b => b.maxY - b.minY, aOf = b => wOf(b) * hOf(b);
+    let candidates = valid.filter(b => wOf(b) >= 150 && hOf(b) >= 150);
+    if (candidates.length === 0) candidates = valid;
+    let aw = 0, ah = 0;
+    let best = null;
+    if (candidates.length > 0) {
+      const sortedCandidates = [...candidates].sort((x, y) => aOf(x) - aOf(y));
+      best = sortedCandidates[0];
+      aw = wOf(best);
+      ah = hOf(best);
+    }
+    const K = 1.3;
+    const isEffect = (b) => aw > 0 && (wOf(b) > K * aw || hOf(b) > K * ah);
+    const effectAnims = valid.filter(isEffect).map(b => b.name);
+    const kept = valid.filter(b => !isEffect(b));
+    const normals = kept.length ? kept : valid;
+    const nu = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (const b of normals) {
+      nu.minX = Math.min(nu.minX, b.minX);
+      nu.minY = Math.min(nu.minY, b.minY);
+      nu.maxX = Math.max(nu.maxX, b.maxX);
+      nu.maxY = Math.max(nu.maxY, b.maxY);
+    }
+    return {
+      union: toBox(union),
+      normalUnion: normals.length ? toBox(nu) : toBox(union),
+      perAnim: perAnim.map(toBox),
+      effectAnims,
+      anchorBox: { w: aw, h: ah },
+      weakAnchor: valid.length > 0 && effectAnims.length > valid.length * 0.6,
+    };
+  }
+
+  _projectToPixel(x, y) {
+    const m = this._mvp.values;
+    const cx = m[0] * x + m[4] * y + m[12];
+    const cy = m[1] * x + m[5] * y + m[13];
+    const cw = m[3] * x + m[7] * y + m[15] || 1;
+    const ndcX = cx / cw, ndcY = cy / cw;
+    return {
+      px: (ndcX * 0.5 + 0.5) * this._canvas.width,
+      py: (1 - (ndcY * 0.5 + 0.5)) * this._canvas.height,
+    };
+  }
+
+  _evalFit(box, margin = 0.05) {
+    const W = this._canvas.width, H = this._canvas.height;
+    const corners = [
+      this._projectToPixel(box.offX, box.offY),
+      this._projectToPixel(box.offX + box.w, box.offY),
+      this._projectToPixel(box.offX, box.offY + box.h),
+      this._projectToPixel(box.offX + box.w, box.offY + box.h),
+    ];
+    const xs = corners.map(c => c.px), ys = corners.map(c => c.py);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const boxW = maxX - minX, boxH = maxY - minY;
+    const safeW = W * (1 - 2 * margin), safeH = H * (1 - 2 * margin);
+    const pad = 1;
+    return {
+      rectPx: { x: minX, y: minY, w: boxW, h: boxH },
+      clipped: minX < -pad || minY < -pad || maxX > W + pad || maxY > H + pad,
+      fill: +Math.max(boxW / safeW, boxH / safeH).toFixed(3),
+      centerErr: +(Math.hypot((minX + maxX) / 2 - W / 2, (minY + maxY) / 2 - H / 2) / Math.hypot(W, H)).toFixed(4),
+    };
   }
 
   _hideMaskMosaicAttachments() {
@@ -280,11 +699,18 @@ export class SpineRendererBase extends BaseRenderer {
   async _resizeAtlasPages(atlas, atlasPath, isWebUrl) {
     let atlasText = null;
     try {
-      if (isWebUrl) {
+      const isLocalAsset = atlasPath.startsWith('http://asset.localhost') ||
+        atlasPath.startsWith('https://tauri.localhost') ||
+        atlasPath.startsWith('http://tauri.localhost') ||
+        atlasPath.startsWith('tauri://');
+      const hasTauriInvoke = typeof window !== 'undefined' &&
+        ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') ||
+          (window.__TAURI__?.core?.invoke !== undefined));
+      if (isWebUrl && !isLocalAsset && hasTauriInvoke) {
         const fetched = await invoke('fetch_url_bytes', { url: atlasPath });
         atlasText = new TextDecoder().decode(new Uint8Array(fetched));
       } else {
-        const url = convertFileSrc(atlasPath);
+        const url = isLocalAsset ? atlasPath : convertFileSrc(atlasPath);
         const res = await fetch(url);
         if (res.ok) atlasText = await res.text();
       }
@@ -330,6 +756,28 @@ export class SpineRendererBase extends BaseRenderer {
     }
     skeleton.setToSetupPose();
     skeleton.updateWorldTransform(2);
+    const setupCoreBox = this._getCoreBounds(skeleton);
+    const hasReliableSetupCoreBox = !!(setupCoreBox && setupCoreBox.w >= 220 && setupCoreBox.h >= 220);
+    const setupMargin = setupCoreBox ? Math.max(400, setupCoreBox.h * 0.6) : 0;
+    for (const slot of skeleton.slots) {
+      if (slot.attachment) {
+        const isBgOrEff = this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot);
+        const wb = this._getSlotWorldBounds(slot);
+        if (isBgOrEff) {
+          slot.attachment = null;
+          continue;
+        }
+        if (wb) {
+          const isOutlier = hasReliableSetupCoreBox && (
+            wb.maxX < setupCoreBox.minX - setupMargin || wb.minX > setupCoreBox.maxX + setupMargin ||
+            wb.maxY < setupCoreBox.minY - setupMargin || wb.minY > setupCoreBox.maxY + setupMargin
+          );
+          if (wb.w > 1800 || wb.h > 1800 || isOutlier) {
+            slot.attachment = null;
+          }
+        }
+      }
+    }
     const offset = new this._spine.Vector2(), size = new this._spine.Vector2();
     skeleton.getBounds(offset, size, []);
     if (size.x === -Infinity || size.y === -Infinity) {
@@ -337,6 +785,28 @@ export class SpineRendererBase extends BaseRenderer {
       for (const anim of animations) {
         anim.apply(skeleton, 0, 0, false, null, 1.0, 0, 0);
         skeleton.updateWorldTransform(2);
+        const fallbackCoreBox = this._getCoreBounds(skeleton);
+        const hasReliableFallbackCoreBox = !!(fallbackCoreBox && fallbackCoreBox.w >= 220 && fallbackCoreBox.h >= 220);
+        const fallbackMargin = fallbackCoreBox ? Math.max(400, fallbackCoreBox.h * 0.6) : 0;
+        for (const slot of skeleton.slots) {
+          if (slot.attachment) {
+            const isBgOrEff = this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot);
+            if (isBgOrEff) {
+              slot.attachment = null;
+              continue;
+            }
+            const wb = this._getSlotWorldBounds(slot);
+            if (wb) {
+              const isOutlier = hasReliableFallbackCoreBox && (
+                wb.maxX < fallbackCoreBox.minX - fallbackMargin || wb.minX > fallbackCoreBox.maxX + fallbackMargin ||
+                wb.maxY < fallbackCoreBox.minY - fallbackMargin || wb.minY > fallbackCoreBox.maxY + fallbackMargin
+              );
+              if (wb.w > 1800 || wb.h > 1800 || isOutlier) {
+                slot.attachment = null;
+              }
+            }
+          }
+        }
         skeleton.getBounds(offset, size, []);
         if (size.x !== -Infinity) break;
       }
@@ -377,22 +847,30 @@ export class SpineRendererBase extends BaseRenderer {
 
   updateMVP(options = {}) {
     if (!this._ctx) return;
-    const firstSkel = this._skeletons['0'] || Object.values(this._skeletons)[0];
-    if (!firstSkel) return;
+    const primary = this._getPrimarySkeleton();
+    if (!primary?.entry) {
+      const keys = Object.keys(this._skeletons || {});
+      if (keys.length > 0) {
+        console.warn(`[SpineRendererBase] updateMVP failed: no primary skeleton. keys=`, keys);
+      }
+      return;
+    }
+    const isExportOrCapture = this.isExport || options.isExport || options.screenBaseScale !== undefined || options.ignoreTransform !== undefined;
+    const fitBounds = this._getFitBounds(primary.entry, isExportOrCapture ? 2.5 : 1.15);
     let screenBaseScale = options.screenBaseScale;
     if (!screenBaseScale && !this.isExport) {
-      const bounds = firstSkel.bounds;
       screenBaseScale = Math.max(
-        bounds.size.x / (window.innerWidth),
-        bounds.size.y / (window.innerHeight)
+        fitBounds.size.x / (window.innerWidth),
+        fitBounds.size.y / (window.innerHeight)
       );
     }
-    calculateSpineMVP(this._spine, this._mvp, this._canvas.width, this._canvas.height, firstSkel.bounds, {
+    const applyMvp = (b) => calculateSpineMVP(this._spine, this._mvp, this._canvas.width, this._canvas.height, b, {
       scale: this._scale,
       x: this._moveX,
       y: this._moveY,
       rotation: this._rotate
     }, { ...options, screenBaseScale });
+    applyMvp(fitBounds);
     this._ctx.gl.viewport(0, 0, this._canvas.width, this._canvas.height);
   }
 
@@ -430,14 +908,31 @@ export class SpineRendererBase extends BaseRenderer {
     }
     this._skeletons = {};
     this._animationStates = [];
+    if (this._bgOrEffectCache) this._bgOrEffectCache.clear();
+    if (this._probeSkeletons) this._probeSkeletons.clear();
   }
 
   getOriginalSize() {
-    const skel = this._skeletons['0'] || Object.values(this._skeletons)[0];
+    const primary = this._getPrimarySkeleton();
+    const skel = primary?.entry;
     if (!skel) return { width: 0, height: 0 };
+    const fitBounds = this._getFitBounds(skel, 2.5);
+    if (!fitBounds || !fitBounds.size) return { width: 0, height: 0 };
     return {
-      width: Math.round(skel.skeleton.data.width || skel.bounds.size.x),
-      height: Math.round(skel.skeleton.data.height || skel.bounds.size.y)
+      width: Math.round(fitBounds.size.x),
+      height: Math.round(fitBounds.size.y)
+    };
+  }
+
+  getMainOriginalSize() {
+    const primary = this._getPrimarySkeleton();
+    const skel = primary?.entry;
+    if (!skel) return { width: 0, height: 0 };
+    const fitBounds = this._getFitBounds(skel, 1.15);
+    if (!fitBounds || !fitBounds.size) return { width: 0, height: 0 };
+    return {
+      width: Math.round(fitBounds.size.x),
+      height: Math.round(fitBounds.size.y)
     };
   }
 
@@ -459,12 +954,16 @@ export class SpineRendererBase extends BaseRenderer {
     }
     let screenBaseScale = options.screenBaseScale;
     if (!screenBaseScale && typeof window !== 'undefined') {
-      const firstSkel = this._skeletons['0'] || Object.values(this._skeletons)[0];
+      const primary = this._getPrimarySkeleton();
+      const firstSkel = primary?.entry;
       if (firstSkel) {
-        screenBaseScale = Math.max(
-          firstSkel.bounds.size.x / window.innerWidth,
-          firstSkel.bounds.size.y / window.innerHeight
-        );
+        const fitBounds = this._getFitBounds(firstSkel, 2.5);
+        if (fitBounds && fitBounds.size) {
+          screenBaseScale = Math.max(
+            fitBounds.size.x / window.innerWidth,
+            fitBounds.size.y / window.innerHeight
+          );
+        }
       }
     }
     const renderOptions = { ...options, dpr: options.dpr || 1, screenBaseScale };
@@ -796,7 +1295,6 @@ export class SpineRendererBase extends BaseRenderer {
       this._getParameterItems();
     }
     if (!this._parameterItemsMap) return;
-
     const skelIdInt = parseInt(skeletonId);
     for (let [index, value] of this.parameterOverrides) {
       const idx = Number(index);
@@ -969,6 +1467,17 @@ export class SpineRendererBase extends BaseRenderer {
     const state = super.getSyncState();
     state.activeSkins = this._activeSkins ? Array.from(this._activeSkins) : null;
     state.attachmentsCache = this._attachmentsCache;
+    state.skeletonBounds = {};
+    for (const key in this._skeletons) {
+      const entry = this._skeletons[key];
+      if (entry) {
+        state.skeletonBounds[key] = {
+          bounds: entry.bounds,
+          fitBounds: entry.fitBounds,
+          _ab: entry._ab
+        };
+      }
+    }
     return state;
   }
 
@@ -981,6 +1490,19 @@ export class SpineRendererBase extends BaseRenderer {
     if (state.attachmentsCache) {
       this._attachmentsCache = state.attachmentsCache;
       this._syncAllHiddenAttachments();
+    }
+    if (state.skeletonBounds) {
+      for (const key in state.skeletonBounds) {
+        const entry = this._skeletons[key];
+        if (entry) {
+          const boundsInfo = state.skeletonBounds[key];
+          entry.bounds = boundsInfo.bounds;
+          entry.fitBounds = boundsInfo.fitBounds;
+          entry._ab = boundsInfo._ab;
+        } else {
+          console.warn(`[SpineRendererBase] Sync bounds for key=${key} but skeleton not loaded in skeletons:`, Object.keys(this._skeletons));
+        }
+      }
     }
   }
 }

@@ -14,6 +14,8 @@
   let windowHeight = $state(window.innerHeight);
   let originalWidth = $state(0);
   let originalHeight = $state(0);
+  let mainOriginalWidth = $state(0);
+  let mainOriginalHeight = $state(0);
   let locale = $state(getLocale());
   let urlInput = $state('');
   let dialogEl;
@@ -87,6 +89,9 @@
       const size = renderer.getOriginalSize();
       originalWidth = size.width;
       originalHeight = size.height;
+      const mainSize = renderer.getMainOriginalSize ? renderer.getMainOriginalSize() : size;
+      mainOriginalWidth = mainSize.width;
+      mainOriginalHeight = mainSize.height;
     }
   }
 
@@ -406,7 +411,7 @@
     } else {
       const vw = windowWidth;
       const vh = windowHeight;
-      const bs = Math.min(vw / originalWidth, vh / originalHeight);
+      const bs = Math.min(vw / mainOriginalWidth, vh / mainOriginalHeight);
       const us = appState.transform.scale;
       const S = bs * us;
       const mx = appState.transform.moveX;
