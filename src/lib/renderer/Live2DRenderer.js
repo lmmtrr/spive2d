@@ -93,7 +93,7 @@ export class Live2DRenderer extends BaseRenderer {
     url += (url.includes('?') ? '&' : '?') + 't=' + Date.now();
     const { live2d: { Live2DModel } } = PIXI;
     try {
-      const model = await Live2DModel.from(url, { autoInteract: false, idleMotionGroup: 'None' });
+      const model = await Live2DModel.from(url, { autoInteract: false });
       if (this.#disposed) {
         model.destroy();
         return;
@@ -130,9 +130,6 @@ export class Live2DRenderer extends BaseRenderer {
       model.position.set(w * 0.5, h * 0.5);
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.addChild(model);
-      }
-      if (model.internalModel && model.internalModel.breath) {
-        model.internalModel.breath = null;
       }
       const animations = await this.#filterAnimations();
       if (this.#disposed || !this.#model) return;
