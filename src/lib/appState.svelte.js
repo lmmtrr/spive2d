@@ -40,7 +40,7 @@ let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
 let enableIdleAndBreathing = $state(loadSetting('spive2d_enable_idle_and_breathing', 'true') === 'true');
 let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'true') === 'true');
-const SCALE_MAX = 8;
+const SCALE_MAX = 16;
 const SCALE_MIN = 0.5;
 export const appState = {
   get initialized() { return initialized; },

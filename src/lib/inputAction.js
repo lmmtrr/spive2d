@@ -60,7 +60,13 @@ export function createTransformAction() {
         appState.SCALE_MAX,
         Math.max(appState.SCALE_MIN, transform.scale - Math.sign(e.deltaY) * scaleStep)
       );
-      appState.transform = { ...transform, scale: newScale };
+      const ratio = newScale / transform.scale;
+      appState.transform = {
+        ...transform,
+        scale: newScale,
+        moveX: transform.moveX * ratio,
+        moveY: transform.moveY * ratio,
+      };
     }
 
     function handleContextMenu(e) {
