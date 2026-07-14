@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.37] - 2026-07-14
+
+### Added
+
+- Support texture filtering (nearest, linear, bicubic, and lanczos) in renderers and exporters
+- Add Live2D mouse tracking, idle/breathing toggles, and resetting models to setup pose
+
+### Fixed
+
+- Enable antialiasing for Live2D preview renderer
+
 ## [0.1.36] - 2026-06-28
 
 ### Added
