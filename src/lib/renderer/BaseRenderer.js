@@ -103,6 +103,9 @@ export class BaseRenderer {
   setSpeed(speed) {
   }
 
+  setTextureFilter(filter) {
+  }
+
   getSyncState() {
     return JSON.parse(JSON.stringify({
       scale: this._scale,

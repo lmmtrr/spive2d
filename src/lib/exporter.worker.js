@@ -86,6 +86,7 @@ class WorkerLive2DRenderer {
     this.contentHeight = 0;
     this.ignoreTransform = false;
     this._lastSeekTime = 0;
+    this._textureFilter = null;
   }
 
   applySyncState(state) {
@@ -171,6 +172,9 @@ class WorkerLive2DRenderer {
       this.model.internalModel.breath = null;
     }
     this.hideMaskMosaicDrawables();
+    if (this._textureFilter) {
+      this.setTextureFilter(this._textureFilter);
+    }
   }
 
   async setAnimation(value) {
@@ -264,6 +268,23 @@ class WorkerLive2DRenderer {
 
   render() {
     this.app.render();
+  }
+
+  setTextureFilter(filter) {
+    this._textureFilter = filter;
+    if (!this.model) return;
+    const mode = filter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
+    const updateTextureScaleMode = (object) => {
+      if (!object) return;
+      if (object.texture && object.texture.baseTexture) {
+        object.texture.baseTexture.scaleMode = mode;
+        object.texture.baseTexture.update();
+      }
+      if (object.children) {
+        object.children.forEach(updateTextureScaleMode);
+      }
+    };
+    updateTextureScaleMode(this.model);
   }
 
   dispose() {
@@ -374,6 +395,9 @@ self.onmessage = async (e) => {
       if (p.rendererType === 'live2d') {
         renderer = new WorkerLive2DRenderer(renderCanvas);
         if (!renderer.renderer) throw new Error('Failed to initialize Live2D renderer.');
+        if (p.textureFilter) {
+          renderer.setTextureFilter(p.textureFilter);
+        }
         await renderer.load(p.modelUrl, p.alphaMode);
         if (p.transform) {
           renderer.marginX = p.marginX || 0;
@@ -397,6 +421,9 @@ self.onmessage = async (e) => {
         renderer.applyOverrides();
       } else {
         renderer = new WorkerSpineRenderer(renderCanvas, self.spineLib);
+        if (p.textureFilter) {
+          renderer.setTextureFilter(p.textureFilter);
+        }
         await renderer.load(p.selectedDir, p.fileNames, p.isFileJson, p.alphaMode);
         if (!renderer._ctx) throw new Error('Failed to initialize Spine renderer context.');
         renderer.marginX = p.marginX || 0;

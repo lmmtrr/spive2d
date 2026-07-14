@@ -18,6 +18,7 @@ export class LayeredSpriteRenderer extends BaseRenderer {
     this.isLoaded = false;
     this.width = typeof window !== 'undefined' ? window.innerWidth : 1280;
     this.height = typeof window !== 'undefined' ? window.innerHeight : 720;
+    this._textureFilter = 'linear';
   }
 
   getCanvas() {
@@ -110,6 +111,18 @@ export class LayeredSpriteRenderer extends BaseRenderer {
     this.render();
   }
 
+  setTextureFilter(filter) {
+    this._textureFilter = filter;
+    if (this.canvas) {
+      if (filter === 'nearest') {
+        this.canvas.style.imageRendering = 'pixelated';
+      } else {
+        this.canvas.style.imageRendering = 'auto';
+      }
+    }
+    this.render();
+  }
+
   applyTransform(scale, moveX, moveY, rotate) {
     super.applyTransform(scale, moveX, moveY, rotate);
     this.render();
@@ -170,6 +183,11 @@ export class LayeredSpriteRenderer extends BaseRenderer {
     const dpr = this.isExport ? 1 : (window.devicePixelRatio || 1);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.save();
+    const isNearest = this._textureFilter === 'nearest';
+    this.ctx.imageSmoothingEnabled = !isNearest;
+    if (!isNearest) {
+      this.ctx.imageSmoothingQuality = this._textureFilter === 'lanczos' ? 'high' : (this._textureFilter === 'bicubic' ? 'medium' : 'low');
+    }
     this.ctx.scale(dpr, dpr);
     this.ctx.translate(this.width * 0.5 + this._moveX, this.height * 0.5 + this._moveY);
     this.ctx.rotate((this._rotate * Math.PI) / 180);
@@ -233,6 +251,11 @@ export class LayeredSpriteRenderer extends BaseRenderer {
     capCanvas.height = height;
     const capCtx = capCanvas.getContext('2d');
     capCtx.save();
+    const isNearest = this._textureFilter === 'nearest';
+    capCtx.imageSmoothingEnabled = !isNearest;
+    if (!isNearest) {
+      capCtx.imageSmoothingQuality = this._textureFilter === 'lanczos' ? 'high' : (this._textureFilter === 'bicubic' ? 'medium' : 'low');
+    }
     const marginX = options.marginX || 0;
     const marginY = options.marginY || 0;
     const bw = bodySpriteRect ? bodySpriteRect.w : bodyImg.naturalWidth;

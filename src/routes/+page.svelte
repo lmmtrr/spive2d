@@ -282,6 +282,9 @@
     if (renderer.setAlphaMode) {
       renderer.setAlphaMode(appState.alphaMode);
     }    
+    if (renderer.setTextureFilter) {
+      renderer.setTextureFilter(appState.textureFilter);
+    }
     try {
       await renderer.load(selectedDir, fileNames);
     } catch (e) {

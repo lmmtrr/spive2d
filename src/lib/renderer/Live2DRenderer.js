@@ -98,6 +98,8 @@ export class Live2DRenderer extends BaseRenderer {
     url += (url.includes('?') ? '&' : '?') + 't=' + Date.now();
     const { live2d: { Live2DModel } } = PIXI;
     try {
+      const scaleMode = appState.textureFilter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
+      PIXI.settings.SCALE_MODE = scaleMode;
       const model = await Live2DModel.from(url, {
         autoInteract: false,
         ...(appState.enableIdleAndBreathing ? {} : { idleMotionGroup: 'None' })
@@ -111,6 +113,7 @@ export class Live2DRenderer extends BaseRenderer {
         return;
       }
       this.#model = model;
+      this.setTextureFilter(appState.textureFilter);
       this.#originalBreath = model.internalModel?.breath || null;
       this.#originalIdleGroup = model.internalModel?.motionManager?.groups?.idle || 'Idle';
       if (!appState.enableIdleAndBreathing) {
@@ -656,6 +659,30 @@ export class Live2DRenderer extends BaseRenderer {
     if (this.#app) {
       this.#app.render();
     }
+  }
+
+  setTextureFilter(filter) {
+    if (this.#canvas) {
+      if (filter === 'nearest') {
+        this.#canvas.style.imageRendering = 'pixelated';
+      } else {
+        this.#canvas.style.imageRendering = 'auto';
+      }
+    }
+    if (!this.#model) return;
+    const mode = filter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
+    const updateTextureScaleMode = (object) => {
+      if (!object) return;
+      if (object.texture && object.texture.baseTexture) {
+        object.texture.baseTexture.scaleMode = mode;
+        object.texture.baseTexture.update();
+      }
+      if (object.children) {
+        object.children.forEach(updateTextureScaleMode);
+      }
+    };
+    updateTextureScaleMode(this.#model);
+    this.render();
   }
 
   #applyOverrides() {

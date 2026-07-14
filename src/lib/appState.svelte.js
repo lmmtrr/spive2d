@@ -36,6 +36,7 @@ let exportScale = $state(100);
 let exportMarginX = $state(0);
 let exportMarginY = $state(0);
 let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
+let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
 let enableIdleAndBreathing = $state(loadSetting('spive2d_enable_idle_and_breathing', 'true') === 'true');
 let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'true') === 'true');
@@ -68,6 +69,8 @@ export const appState = {
   set exportMarginY(v) { exportMarginY = v; },
   get alphaMode() { return alphaMode; },
   set alphaMode(v) { alphaMode = v; },
+  get textureFilter() { return textureFilter; },
+  set textureFilter(v) { textureFilter = v; },
   get mergeSequential() { return mergeSequential; },
   set mergeSequential(v) { mergeSequential = v; },
   get enableIdleAndBreathing() { return enableIdleAndBreathing; },

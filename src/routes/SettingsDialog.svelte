@@ -105,6 +105,16 @@
     setLocale(locale);
   }
 
+  function handleTextureFilterChange(e) {
+    const val = e.target.value;
+    appState.textureFilter = val;
+    saveSetting('spive2d_texture_filter', val);
+    const renderer = getRenderer();
+    if (renderer && typeof renderer.setTextureFilter === 'function') {
+      renderer.setTextureFilter(val);
+    }
+  }
+
   async function handleOpenDirectory() {
     const path = await openDirectory();
     if (path) onPathSelected([path]);
@@ -587,6 +597,15 @@
           <option value="en">English</option>
           <option value="ja">日本語</option>
           <option value="zh">中文</option>
+        </select>
+      </div>
+      <div class="input-row">
+        <label for="textureFilterSelector">{t('textureFilter')}</label>
+        <select id="textureFilterSelector" value={appState.textureFilter} onchange={handleTextureFilterChange}>
+          <option value="nearest">{t('textureFilterNearest')}</option>
+          <option value="linear">{t('textureFilterLinear')}</option>
+          <option value="bicubic">{t('textureFilterBicubic')}</option>
+          <option value="lanczos">{t('textureFilterLanczos')}</option>
         </select>
       </div>
       <hr>

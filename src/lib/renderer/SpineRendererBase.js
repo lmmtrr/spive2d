@@ -37,6 +37,8 @@ export class SpineRendererBase extends BaseRenderer {
     this._spine = spineLib;
     this._bgOrEffectCache = new Map();
     this._probeSkeletons = new Map();
+    this._textureFilter = 'linear';
+    this._loadedAtlases = [];
   }
 
   async initCtx(alphaMode = 'pma') {
@@ -115,6 +117,35 @@ export class SpineRendererBase extends BaseRenderer {
     this._paused = paused;
   }
 
+  setTextureFilter(filter) {
+    this._textureFilter = filter;
+    if (this._canvas && this._canvas.style) {
+      if (filter === 'nearest') {
+        this._canvas.style.imageRendering = 'pixelated';
+      } else {
+        this._canvas.style.imageRendering = 'auto';
+      }
+    }
+    if (!this._spine) return;
+    const filterType = filter === 'nearest'
+      ? this._spine.TextureFilter.Nearest
+      : this._spine.TextureFilter.Linear;
+    for (const atlas of this._loadedAtlases) {
+      if (!atlas || !atlas.pages) continue;
+      for (const page of atlas.pages) {
+        page.minFilter = filterType;
+        page.magFilter = filterType;
+        if (page.texture?.setFilters) {
+          page.texture.setFilters(filterType, filterType);
+        }
+      }
+    }
+    if (this._paused) {
+      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+      this.render(0, { dpr });
+    }
+  }
+
   getCurrentTime() {
     for (const key of this._getSortedSkeletonKeys()) {
       const entry = this._skeletons[key]?.state.tracks[0];
@@ -156,6 +187,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._activeSkins = null;
     this._parameterItems = null;
     this._parameterItemsMap = null;
+    this._loadedAtlases = [];
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
     setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl);
     const mainExt = scene.mainExt;
@@ -683,15 +715,17 @@ export class SpineRendererBase extends BaseRenderer {
     const atlas = this._assetManager.get(atlasPath);
     if (!atlas) return null;
     if (atlas.regions) setupAtlas(atlas);
+    this._loadedAtlases.push(atlas);
     const isWebUrl = this._dirName.startsWith('http://') || this._dirName.startsWith('https://');
     await this._resizeAtlasPages(atlas, atlasPath, isWebUrl);
+    const filterType = this._textureFilter === 'nearest'
+      ? this._spine.TextureFilter.Nearest
+      : this._spine.TextureFilter.Linear;
     for (const page of atlas.pages) {
-      if (page.minFilter >= 9984 && page.minFilter <= 9987) {
-        page.minFilter = this._spine.TextureFilter.Linear;
-        page.magFilter = this._spine.TextureFilter.Linear;
-      }
+      page.minFilter = filterType;
+      page.magFilter = filterType;
       if (page.texture?.setFilters) {
-        page.texture.setFilters(this._spine.TextureFilter.Linear, this._spine.TextureFilter.Linear);
+        page.texture.setFilters(filterType, filterType);
       }
     }
     const { skeleton, state, initialSkinNames } = initializeSkeleton(this._spine, atlas, this._assetManager.get(makePath(fileName, sceneInfo.mainExt)), this._isFileJson);
