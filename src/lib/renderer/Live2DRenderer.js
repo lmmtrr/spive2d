@@ -21,6 +21,7 @@ class PixiAppManager {
         view: cvs,
         preserveDrawingBuffer: true,
         transparent: true,
+        antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
       });
