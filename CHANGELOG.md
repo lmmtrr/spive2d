@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.38] - 2026-07-14
+
+### Added
+
+- Scale move translation with zoom ratio and increase maximum scale to 16
+
 ## [0.1.37] - 2026-07-14
 
 ### Added
