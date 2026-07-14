@@ -2,6 +2,7 @@ import { BaseRenderer } from './BaseRenderer.js';
 import { createSorter } from '../utils.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { showNotification } from '../notificationStore.svelte.js';
+import { appState } from '../appState.svelte.js';
 
 const sortByText = createSorter(item => item.name);
 const sortById = createSorter(item => item.id);
@@ -59,6 +60,10 @@ export class Live2DRenderer extends BaseRenderer {
   #lastTime = 0;
   #initialPartOpacities = new Map();
   #initialParameterValues = new Map();
+  #originalBreath = null;
+  #originalIdleGroup = 'Idle';
+  #pointerMoveHandler = null;
+  #pointerLeaveHandler = null;
 
   constructor(isExport = false) {
     super(isExport);
@@ -93,7 +98,10 @@ export class Live2DRenderer extends BaseRenderer {
     url += (url.includes('?') ? '&' : '?') + 't=' + Date.now();
     const { live2d: { Live2DModel } } = PIXI;
     try {
-      const model = await Live2DModel.from(url, { autoInteract: false });
+      const model = await Live2DModel.from(url, {
+        autoInteract: false,
+        ...(appState.enableIdleAndBreathing ? {} : { idleMotionGroup: 'None' })
+      });
       if (this.#disposed) {
         model.destroy();
         return;
@@ -103,6 +111,13 @@ export class Live2DRenderer extends BaseRenderer {
         return;
       }
       this.#model = model;
+      this.#originalBreath = model.internalModel?.breath || null;
+      this.#originalIdleGroup = model.internalModel?.motionManager?.groups?.idle || 'Idle';
+      if (!appState.enableIdleAndBreathing) {
+        if (model.internalModel) {
+          model.internalModel.breath = null;
+        }
+      }
       this.#initialPartOpacities.clear();
       this.#initialParameterValues.clear();
       this.#hiddenDrawables.clear();
@@ -144,6 +159,19 @@ export class Live2DRenderer extends BaseRenderer {
       let accumulatedMS = 0;
       this.#updateFn = () => {
         if (this.#disposed || !this.#model || this.#paused) return;
+        if (this.#model.internalModel) {
+          this.#model.internalModel.breath = appState.enableIdleAndBreathing ? this.#originalBreath : null;
+        }
+        if (this.#model.internalModel && this.#model.internalModel.motionManager && this.#model.internalModel.motionManager.groups) {
+          this.#model.internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
+        }
+        if (!appState.enableMouseTracking) {
+          if (this.#model.internalModel && this.#model.internalModel.focusController) {
+            if (this.#model.internalModel.focusController.targetX !== 0 || this.#model.internalModel.focusController.targetY !== 0) {
+              this.#model.internalModel.focusController.focus(0, 0);
+            }
+          }
+        }
         const now = performance.now();
         const elapsedMS = now - this.#lastTime;
         this.#lastTime = now;
@@ -160,6 +188,21 @@ export class Live2DRenderer extends BaseRenderer {
         }
       };
       this.#app.ticker.add(this.#updateFn);
+      if (!this.#isExport) {
+        this.#pointerMoveHandler = (e) => {
+          if (appState.enableMouseTracking && this.#model) {
+            this.#model.focus(e.clientX, e.clientY);
+          }
+        };
+        this.#pointerLeaveHandler = () => {
+          if (this.#model?.internalModel?.focusController) {
+            this.#model.internalModel.focusController.focus(0, 0);
+          }
+        };
+        window.addEventListener('pointermove', this.#pointerMoveHandler);
+        window.addEventListener('pointerleave', this.#pointerLeaveHandler);
+        document.addEventListener('mouseleave', this.#pointerLeaveHandler);
+      }
       model._spive2dSpeed = this.#speed;
       this.#hideMaskMosaicDrawables();
       this.#setupDrawableOpacitiesProxy();
@@ -172,6 +215,15 @@ export class Live2DRenderer extends BaseRenderer {
   dispose() {
     if (this.#disposed) return;
     this.#disposed = true;
+    if (this.#pointerMoveHandler) {
+      window.removeEventListener('pointermove', this.#pointerMoveHandler);
+      this.#pointerMoveHandler = null;
+    }
+    if (this.#pointerLeaveHandler) {
+      window.removeEventListener('pointerleave', this.#pointerLeaveHandler);
+      document.removeEventListener('mouseleave', this.#pointerLeaveHandler);
+      this.#pointerLeaveHandler = null;
+    }
     if (this.#updateFn && this.#app) {
       this.#app.ticker.remove(this.#updateFn);
       this.#updateFn = null;
@@ -310,6 +362,32 @@ export class Live2DRenderer extends BaseRenderer {
 
   async setAnimation(value) {
     if (this.#disposed || !this.#model) return;
+    if (value === '') {
+      this.#currentMotion = { group: null, index: null };
+      if (this.#model.internalModel && this.#model.internalModel.motionManager) {
+        this.#model.internalModel.motionManager.stopAllMotions();
+      }
+      const coreModel = this.#model.internalModel?.coreModel;
+      if (coreModel) {
+        if (coreModel._parameterIds) {
+          coreModel._parameterIds.forEach((id, idx) => {
+            const initialVal = this.#initialParameterValues.get(idx);
+            if (initialVal !== undefined) {
+              coreModel._parameterValues[idx] = initialVal;
+            }
+          });
+        }
+        if (coreModel._partIds) {
+          coreModel._partIds.forEach((name) => {
+            const initialVal = this.#initialPartOpacities.get(name);
+            if (initialVal !== undefined) {
+              coreModel.setPartOpacityById(name, initialVal);
+            }
+          });
+        }
+      }
+      return;
+    }
     const [group, index] = value.split(',');
     this.#currentMotion = { group, index: Number(index) };
     try {

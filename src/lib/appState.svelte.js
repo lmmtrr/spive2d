@@ -37,6 +37,8 @@ let exportMarginX = $state(0);
 let exportMarginY = $state(0);
 let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
+let enableIdleAndBreathing = $state(loadSetting('spive2d_enable_idle_and_breathing', 'true') === 'true');
+let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'true') === 'true');
 const SCALE_MAX = 8;
 const SCALE_MIN = 0.5;
 export const appState = {
@@ -68,6 +70,10 @@ export const appState = {
   set alphaMode(v) { alphaMode = v; },
   get mergeSequential() { return mergeSequential; },
   set mergeSequential(v) { mergeSequential = v; },
+  get enableIdleAndBreathing() { return enableIdleAndBreathing; },
+  set enableIdleAndBreathing(v) { enableIdleAndBreathing = v; },
+  get enableMouseTracking() { return enableMouseTracking; },
+  set enableMouseTracking(v) { enableMouseTracking = v; },
   SCALE_MAX,
   SCALE_MIN,
   resetTransform() {

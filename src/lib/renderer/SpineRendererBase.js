@@ -1031,6 +1031,16 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   async setAnimation(value) {
+    if (value === '') {
+      for (const key in this._skeletons) {
+        const entry = this._skeletons[key];
+        entry.state.clearTracks();
+        entry.skeleton.setToSetupPose();
+        entry.state.apply(entry.skeleton);
+        entry.skeleton.updateWorldTransform(2);
+      }
+      return;
+    }
     for (const key in this._skeletons) {
       const entry = this._skeletons[key];
       if (entry.skeleton.data.findAnimation(value)) {

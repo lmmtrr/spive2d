@@ -614,11 +614,26 @@
       <hr>
       <div class="input-row" style="margin-top: 5px;">
         <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
-          <input type="checkbox" checked={appState.mergeSequential} onchange={(e) => {
-            appState.mergeSequential = e.target.checked;
-            saveSetting('spive2d_merge_sequential', e.target.checked);
+          <input type="checkbox" bind:checked={appState.mergeSequential} onchange={() => {
+            saveSetting('spive2d_merge_sequential', appState.mergeSequential);
           }} style="width: auto; margin: 0;">
           <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('mergeSequential')}</span>
+        </label>
+      </div>
+      <div class="input-row" style="margin-top: 5px;">
+        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
+          <input type="checkbox" bind:checked={appState.enableIdleAndBreathing} onchange={() => {
+            saveSetting('spive2d_enable_idle_and_breathing', appState.enableIdleAndBreathing);
+          }} style="width: auto; margin: 0;">
+          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableIdleAndBreathing')}</span>
+        </label>
+      </div>
+      <div class="input-row" style="margin-top: 5px;">
+        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
+          <input type="checkbox" bind:checked={appState.enableMouseTracking} onchange={() => {
+            saveSetting('spive2d_enable_mouse_tracking', appState.enableMouseTracking);
+          }} style="width: auto; margin: 0;">
+          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableMouseTracking')}</span>
         </label>
       </div>
       <hr>

@@ -12,6 +12,7 @@
   let expressions = $state(null);
   let propertyCategories = $state([]);
   let selectedAnimation = $state('');
+  let lastSelectedAnimation = $state('');
   let selectedExpression = $state('');
   let propertyScrollEl;
   let checkboxDragging = false;
@@ -27,6 +28,20 @@
     const renderer = getRenderer();
     if (!renderer) return;
     animations = renderer.getAnimations() ?? [];
+    const isValid = animations.some(a => a.value === lastSelectedAnimation);
+    if (!isValid && animations.length > 0) {
+      let idleMatch = animations.find(a => {
+        const val = a.value || '';
+        return val.startsWith('Idle,') || val.startsWith('idle,');
+      });
+      if (!idleMatch) {
+        idleMatch = animations.find(a => {
+          const base = (a.name || '').split('.')[0].toLowerCase();
+          return base.startsWith('idle') || base.startsWith('wait') || base.endsWith('_idle') || base.endsWith('_wait') ;
+        });
+      }
+      lastSelectedAnimation = idleMatch ? idleMatch.value : animations[0].value;
+    }
     expressions = renderer.getExpressions() ?? null;
     if (expressions && renderer.currentFaceKey !== undefined) {
       selectedExpression = renderer.currentFaceKey || '';
@@ -61,13 +76,23 @@
 
   export function setSelectedAnimation(value) {
     selectedAnimation = value;
+    if (value !== '') {
+      lastSelectedAnimation = value;
+    }
   }
 
   export function navigateAnimation(delta) {
     if (animations && animations.length > 1) {
-      const currentIndex = animations.findIndex(a => a.value === selectedAnimation);
+      const baseAnimation = selectedAnimation !== '' ? selectedAnimation : lastSelectedAnimation;
+      let currentIndex = animations.findIndex(a => a.value === baseAnimation);
+      if (currentIndex === -1) {
+        currentIndex = 0;
+      }
       const newIndex = (currentIndex + delta + animations.length) % animations.length;
       selectedAnimation = animations[newIndex].value;
+      if (selectedAnimation !== '') {
+        lastSelectedAnimation = selectedAnimation;
+      }
       onAnimationChange(selectedAnimation);
     } else if (expressions && expressions.length > 1) {
       const currentIndex = expressions.findIndex(e => e.value === selectedExpression);
@@ -88,6 +113,18 @@
     if (!renderer) return;
     renderer.resetOverrides(appState.propertyCategory);
     refreshProperties();
+  }
+
+  function handleResetAnimation() {
+    if (selectedAnimation !== '') {
+      lastSelectedAnimation = selectedAnimation;
+      selectedAnimation = '';
+      onAnimationChange('');
+    } else {
+      const fallbackAnim = lastSelectedAnimation || (animations[0]?.value || '');
+      selectedAnimation = fallbackAnim;
+      onAnimationChange(fallbackAnim);
+    }
   }
 
   async function handleAlphaModeChange(e) {
@@ -252,14 +289,27 @@
     {/if}
   </select>
 
-  <select id="animationSelector" value={selectedAnimation} onchange={(e) => {
-    selectedAnimation = e.currentTarget.value;
-    onAnimationChange(selectedAnimation);
-  }}>
-    {#each animations as anim (anim.value)}
-      <option value={anim.value}>{anim.name}</option>
-    {/each}
-  </select>
+  <div class="animation-header">
+    <select id="animationSelector" 
+            value={selectedAnimation === '' ? lastSelectedAnimation : selectedAnimation} 
+            disabled={selectedAnimation === ''}
+            onchange={(e) => {
+              selectedAnimation = e.currentTarget.value;
+              if (selectedAnimation !== '') {
+                lastSelectedAnimation = selectedAnimation;
+              }
+              onAnimationChange(selectedAnimation);
+            }}>
+      {#each animations as anim (anim.value)}
+        <option value={anim.value}>{anim.name}</option>
+      {/each}
+    </select>
+    <button id="resetAnimationBtn" class:active={selectedAnimation === ''} onclick={handleResetAnimation} title={t('resetAnimation')}>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 11H7v-2h10v2z"/>
+      </svg>
+    </button>
+  </div>
 
   {#if expressions}
     <select id="expressionSelector" value={selectedExpression} onchange={(e) => {
@@ -476,6 +526,55 @@
   .property-header select {
     flex-grow: 1;
     border-top: 0 !important;
+  }
+
+  .animation-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .animation-header select {
+    flex-grow: 1;
+    border-top: 0 !important;
+  }
+
+  .animation-header select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #resetAnimationBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--sidebar-color);
+    border: var(--border-color);
+    border-top: 0 !important;
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    width: 32px;
+    height: 28px;
+    min-width: 32px;
+    transition: background-color 0.2s, color 0.2s;
+    outline: none;
+  }
+
+  #resetAnimationBtn:hover {
+    background-color: #555;
+    color: #fff;
+  }
+
+  #resetAnimationBtn.active {
+    background-color: #555;
+    color: #fff;
+    border-color: #aaa;
+  }
+
+  #resetAnimationBtn svg {
+    width: 16px;
+    height: 16px;
   }
 
   #resetOverridesBtn {

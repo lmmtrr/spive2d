@@ -266,6 +266,7 @@
   async function initModel(previousSkins = []) {
     currentLoadId++;
     const loadId = currentLoadId;
+    const previousAnimation = sidebar?.getSelectedAnimation() ?? '';
     const previousAnimationName = sidebar?.getSelectedAnimationText() || '';
     const { files, selectedDir, selectedScene } = appState.directories;
     if (!files || !selectedDir) return;
@@ -312,7 +313,11 @@
     }
     sidebar?.refreshProperties();
     const animations = renderer.getAnimations();
-    if (animations.length > 0) {
+    const keepSetupPose = appState.initialized && previousAnimation === '';
+    if (keepSetupPose) {
+      sidebar?.setSelectedAnimation('');
+      handleAnimationChange('');
+    } else if (animations.length > 0) {
       let targetAnim = animations[0].value;
       let foundMatch = false;
       if (previousAnimationName) {
@@ -340,6 +345,9 @@
       }
       sidebar?.setSelectedAnimation(targetAnim);
       handleAnimationChange(targetAnim);
+    } else {
+      sidebar?.setSelectedAnimation('');
+      handleAnimationChange('');
     }
   }
 
