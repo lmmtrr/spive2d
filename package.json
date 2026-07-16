@@ -17,6 +17,7 @@
       "@tauri-apps/plugin-dialog": "^2.7.1",
       "@tauri-apps/plugin-fs": "^2.5.1",
       "@tauri-apps/plugin-opener": "^2.5.4",
+      "@tauri-apps/plugin-window-state": "^2.0.0",
       "mediabunny": "^1.50.8"
    },
    "devDependencies": {

@@ -16,8 +16,8 @@ export class LayeredSpriteRenderer extends BaseRenderer {
     this.metaDir = "";
     this.currentFaceKey = null;
     this.isLoaded = false;
-    this.width = typeof window !== 'undefined' ? window.innerWidth : 1280;
-    this.height = typeof window !== 'undefined' ? window.innerHeight : 720;
+    this.width = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    this.height = typeof window !== 'undefined' ? window.innerHeight : 800;
     this._textureFilter = 'linear';
   }
 

@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Spive2D",
-        "width": 1280,
-        "height": 720
+        "width": 1200,
+        "height": 800,
+        "visible": false
       }
     ],
     "security": {

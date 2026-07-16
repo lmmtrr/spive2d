@@ -12,6 +12,7 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "opener:default",
+    "window-state:default",
     "opener:allow-open-path",
     {
       "identifier": "opener:allow-open-path",
