@@ -26,6 +26,7 @@
   "backgroundColor": "背景色:",
   "openImage": "背景画像を開く",
   "removeBackground": "背景を削除",
+  "skipUnity": "Unityファイルを読み込まない",
   "mergeSequential": "[Spine] 連番ファイルを重ねて読み込む",
   "enableIdleAndBreathing": "[Live2D] 自動アイドリング・呼吸モーションを有効にする",
   "enableMouseTracking": "[Live2D] マウス追従を有効にする",

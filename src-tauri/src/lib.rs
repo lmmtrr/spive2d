@@ -595,22 +595,25 @@ fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::p
 async fn handle_dropped_path(
     path: String,
     merge_sequential: bool,
+    skip_unity: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
     let path_obj = Path::new(&path);
     if path_obj.is_dir() {
         let mut unity_bundles = Vec::new();
-        let all_files = find_all_files(&path_obj);
-        for file_path in &all_files {
-            if is_definitely_not_unity_bundle(file_path) {
-                continue;
-            }
-            if let Ok(mut f) = fs::File::open(file_path) {
-                let mut header = [0u8; 8];
-                if let Ok(n) = f.read(&mut header) {
-                    if unityfs::is_unity_bundle(&header[..n]) {
-                        unity_bundles.push(file_path.clone());
+        if !skip_unity {
+            let all_files = find_all_files(&path_obj);
+            for file_path in &all_files {
+                if is_definitely_not_unity_bundle(file_path) {
+                    continue;
+                }
+                if let Ok(mut f) = fs::File::open(file_path) {
+                    let mut header = [0u8; 8];
+                    if let Ok(n) = f.read(&mut header) {
+                        if unityfs::is_unity_bundle(&header[..n]) {
+                            unity_bundles.push(file_path.clone());
+                        }
                     }
                 }
             }
@@ -658,7 +661,9 @@ async fn handle_dropped_path(
             get_subdir_files(path, merge_sequential, app_handle)
         }
     } else if path_obj.is_file() {
-        let is_unity = if let Ok(mut f) = fs::File::open(&path_obj) {
+        let is_unity = if skip_unity {
+            false
+        } else if let Ok(mut f) = fs::File::open(&path_obj) {
             let mut header = [0u8; 8];
             if let Ok(n) = f.read(&mut header) {
                 unityfs::is_unity_bundle(&header[..n])
@@ -744,12 +749,13 @@ async fn handle_dropped_path(
 fn handle_unity_bytes(
     bytes: Vec<u8>,
     merge_sequential: bool,
+    skip_unity: bool,
     app_handle: AppHandle,
 ) -> Result<Option<HashMap<String, Vec<SceneData>>>, String> {
     app_handle.emit("progress", true).unwrap();
     let header_len = std::cmp::min(bytes.len(), 8);
     let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
-    if is_unity {
+    if is_unity && !skip_unity {
         let spive_temp_root = std::env::temp_dir().join("spive2d");
         let _ = std::fs::create_dir_all(&spive_temp_root);
         let mut temp_file = tempfile::Builder::new()
@@ -797,6 +803,7 @@ fn handle_unity_bytes(
 async fn handle_urls(
     urls: Vec<String>,
     merge_sequential: bool,
+    skip_unity: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
@@ -836,6 +843,9 @@ async fn handle_urls(
         let header_len = std::cmp::min(bytes.len(), 8);
         let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
         if is_unity {
+            if skip_unity {
+                continue;
+            }
             let url_without_query = url.split('?').next().unwrap_or(&url);
             let filename = url_without_query.rsplit('/').next().unwrap_or(url_without_query);
             let group_key = get_model_group_key(Path::new(filename));
@@ -889,11 +899,12 @@ async fn handle_urls(
 async fn handle_dropped_paths(
     paths: Vec<String>,
     merge_sequential: bool,
+    skip_unity: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
     if paths.len() == 1 {
-        let result = handle_dropped_path(paths[0].clone(), merge_sequential, app_handle.clone()).await;
+        let result = handle_dropped_path(paths[0].clone(), merge_sequential, skip_unity, app_handle.clone()).await;
         let _ = app_handle.emit("progress", false);
         return result;
     }
@@ -915,16 +926,18 @@ async fn handle_dropped_paths(
         }
         if path_obj.is_dir() {
             let mut unity_bundles = Vec::new();
-            let all_files = find_all_files(&path_obj);
-            for file_path in &all_files {
-                if is_definitely_not_unity_bundle(file_path) {
-                    continue;
-                }
-                if let Ok(mut f) = fs::File::open(file_path) {
-                    let mut header = [0u8; 8];
-                    if let Ok(n) = f.read(&mut header) {
-                        if unityfs::is_unity_bundle(&header[..n]) {
-                            unity_bundles.push(file_path.clone());
+            if !skip_unity {
+                let all_files = find_all_files(&path_obj);
+                for file_path in &all_files {
+                    if is_definitely_not_unity_bundle(file_path) {
+                        continue;
+                    }
+                    if let Ok(mut f) = fs::File::open(file_path) {
+                        let mut header = [0u8; 8];
+                        if let Ok(n) = f.read(&mut header) {
+                            if unityfs::is_unity_bundle(&header[..n]) {
+                                unity_bundles.push(file_path.clone());
+                            }
                         }
                     }
                 }
@@ -940,6 +953,7 @@ async fn handle_dropped_paths(
                     }
                 }
             } else {
+                let all_files = find_all_files(&path_obj);
                 for file_path in all_files {
                     if let Ok(rel_path) = file_path.strip_prefix(&path_obj) {
                         let dest_path = temp_dir.path().join(rel_path);
@@ -953,7 +967,9 @@ async fn handle_dropped_paths(
                 }
             }
         } else if path_obj.is_file() {
-            let is_unity = if let Ok(mut f) = fs::File::open(&path_obj) {
+            let is_unity = if skip_unity {
+                false
+            } else if let Ok(mut f) = fs::File::open(&path_obj) {
                 let mut header = [0u8; 8];
                 if let Ok(n) = f.read(&mut header) {
                     unityfs::is_unity_bundle(&header[..n])

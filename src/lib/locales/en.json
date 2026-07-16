@@ -26,6 +26,7 @@
   "backgroundColor": "Background Color:",
   "openImage": "Open Image for Background",
   "removeBackground": "Remove Background",
+  "skipUnity": "Do not load Unity files",
   "mergeSequential": "[Spine] Merge sequential files into one model",
   "enableIdleAndBreathing": "[Live2D] Enable automatic idle & breathing motions",
   "enableMouseTracking": "[Live2D] Enable mouse tracking",

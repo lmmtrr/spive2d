@@ -633,6 +633,14 @@
       <hr>
       <div class="input-row" style="margin-top: 5px;">
         <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
+          <input type="checkbox" bind:checked={appState.skipUnity} onchange={() => {
+            saveSetting('spive2d_skip_unity', appState.skipUnity);
+          }} style="width: auto; margin: 0;">
+          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('skipUnity')}</span>
+        </label>
+      </div>
+      <div class="input-row" style="margin-top: 5px;">
+        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
           <input type="checkbox" bind:checked={appState.mergeSequential} onchange={() => {
             saveSetting('spive2d_merge_sequential', appState.mergeSequential);
           }} style="width: auto; margin: 0;">

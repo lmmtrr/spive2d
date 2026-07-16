@@ -130,6 +130,9 @@
           }
           const header = String.fromCharCode(...bytes.slice(0, 8));
           isUnity = header.startsWith("UnityFS") || header.startsWith("UnityWeb") || header.startsWith("UnityRaw");
+          if (isUnity && appState.skipUnity) {
+            throw new Error('Unsupported file type');
+          }
           let hasArchive = false;
           for (const p of paths) {
             try {
@@ -143,7 +146,7 @@
           }
           shouldInvokeBackend = isUnity || hasArchive;
           if (shouldInvokeBackend) {
-            unityRes = await invoke('handle_urls', { urls: paths, mergeSequential: appState.mergeSequential });
+            unityRes = await invoke('handle_urls', { urls: paths, mergeSequential: appState.mergeSequential, skipUnity: appState.skipUnity });
           }
         } catch (e) {
           console.error(e);
@@ -214,7 +217,7 @@
           }
         }
       } else {
-        dirFiles = await invoke('handle_dropped_paths', { paths, mergeSequential: appState.mergeSequential });
+        dirFiles = await invoke('handle_dropped_paths', { paths, mergeSequential: appState.mergeSequential, skipUnity: appState.skipUnity });
       }
       const dirs = Object.keys(dirFiles);
       dirs.sort((a, b) => {

@@ -26,6 +26,7 @@
   "backgroundColor": "背景颜色:",
   "openImage": "打开背景图片",
   "removeBackground": "删除背景",
+  "skipUnity": "不读取 Unity 文件",
   "mergeSequential": "[Spine] 将连番文件合并为一个模型",
   "enableIdleAndBreathing": "[Live2D] 启用自动空闲与呼吸动作",
   "enableMouseTracking": "[Live2D] 启用鼠标追随",
