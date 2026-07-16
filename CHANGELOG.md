@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.39] - 2026-07-16
+
+### Added
+
+- Add option to skip loading Unity files
+- Persist window state on close and update default dimensions to 1200x800
+
 ## [0.1.38] - 2026-07-14
 
 ### Added
