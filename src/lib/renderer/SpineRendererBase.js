@@ -35,8 +35,8 @@ export class SpineRendererBase extends BaseRenderer {
     super(isExport);
     this._canvas = canvas;
     this._spine = spineLib;
-    this._bgOrEffectCache = new Map();
-    this._probeSkeletons = new Map();
+    this._evidenceCache = new Map();
+    this._skelProfiles = new Map();
     this._primaryCache = null;
     this._textureFilter = 'linear';
     this._loadedAtlases = [];
@@ -183,8 +183,8 @@ export class SpineRendererBase extends BaseRenderer {
     this._skeletons = {};
     this._animationStates = [];
     this._attachmentsCache = {};
-    this._bgOrEffectCache = new Map();
-    this._probeSkeletons = new Map();
+    this._evidenceCache = new Map();
+    this._skelProfiles = new Map();
     this._activeSkins = null;
     this._primaryCache = null;
     this._parameterItems = null;
@@ -243,53 +243,184 @@ export class SpineRendererBase extends BaseRenderer {
       null;
   }
 
-  _isBackgroundOrEffect(name, attachment, slot) {
-    if (!name) return false;
+  _boneDepth(bone) {
+    let d = 0;
+    let b = bone;
+    while (b?.parent) { d++; b = b.parent; }
+    return d;
+  }
+
+  _isGlowBlend(slot) {
+    const modes = this._spine?.BlendMode;
+    const bm = slot?.data?.blendMode;
+    if (!modes || bm === undefined || bm === null) return false;
+    return bm === modes.Additive || bm === modes.Screen;
+  }
+
+  _getSkeletonProfile(skelData) {
+    if (!skelData) return null;
+    if (!this._skelProfiles) this._skelProfiles = new Map();
+    const cached = this._skelProfiles.get(skelData);
+    if (cached) return cached;
+    const profile = this._buildSkeletonProfile(skelData);
+    this._skelProfiles.set(skelData, profile);
+    return profile;
+  }
+
+  _buildSkeletonProfile(skelData) {
+    const probe = new this._spine.Skeleton(skelData);
+    if (skelData.skins.length > 1) {
+      const combined = new this._spine.Skin('_profile');
+      for (const skin of skelData.skins) combined.addSkin(skin);
+      probe.setSkin(combined);
+    } else {
+      probe.setSkin(skelData.defaultSkin);
+    }
+    const slots = probe.slots.map((slot) => ({
+      depth: this._boneDepth(slot.bone),
+      glow: this._isGlowBlend(slot),
+      atts: new Map(),
+      seen: 0,
+      animSet: new Set(),
+    }));
+    const record = (pass, animIndex) => {
+      for (const slot of probe.slots) {
+        const attachment = slot.attachment;
+        if (!attachment?.name) continue;
+        const info = slots[slot.data.index];
+        const wb = this._getSlotWorldBounds(slot);
+        if (!wb) continue;
+        let att = info.atts.get(attachment.name);
+        if (!att) {
+          att = {
+            srcW: attachment.width || 0,
+            srcH: attachment.height || 0,
+            weighted: !!attachment.bones,
+            setupW: 0, setupH: 0, maxW: 0, maxH: 0,
+          };
+          info.atts.set(attachment.name, att);
+        }
+        if (pass === 'setup') { att.setupW = wb.w; att.setupH = wb.h; }
+        if (wb.w * wb.h > att.maxW * att.maxH) { att.maxW = wb.w; att.maxH = wb.h; }
+        if (pass === 'anim') { info.seen++; info.animSet.add(animIndex); }
+      }
+    };
+    probe.setToSetupPose();
+    probe.updateWorldTransform(2);
+    record('setup', -1);
+    const setupExtent = this._unionSlotBounds(probe);
+    let frames = 0;
+    skelData.animations.forEach((anim, animIndex) => {
+      const n = Math.min(24, Math.max(2, Math.ceil((anim.duration || 0) * 8)));
+      for (let i = 0; i <= n; i++) {
+        const t = anim.duration ? (anim.duration * i) / n : 0;
+        probe.setToSetupPose();
+        anim.apply(probe, 0, t, true, null, 1.0, 0, 0);
+        probe.updateWorldTransform(2);
+        frames++;
+        record('anim', animIndex);
+      }
+    });
+    let unitW = skelData.width > 0 ? skelData.width : 0;
+    let unitH = skelData.height > 0 ? skelData.height : 0;
+    if (!(unitW > 0) || !(unitH > 0)) {
+      unitW = setupExtent?.w || 0;
+      unitH = setupExtent?.h || 0;
+    }
+    if (!(unitW > 0) || !(unitH > 0)) { unitW = 1024; unitH = 1024; }
+    const profile = { unitW, unitH, frames, animCount: skelData.animations.length, slots };
+    profile.structural = new Map();
+    profile.consensus = new Map();
+    slots.forEach((info, slotIndex) => {
+      info.atts.forEach((att, attName) => {
+        const score = this._structuralScore(profile, info, att);
+        profile.structural.set(`${slotIndex}##${attName}`, score);
+        const prev = profile.consensus.get(attName);
+        if (prev === undefined || score > prev) profile.consensus.set(attName, score);
+      });
+    });
+    return profile;
+  }
+
+  _structuralScore(profile, info, att) {
+    const refW = att.setupW || att.maxW;
+    const refH = att.setupH || att.maxH;
+    const stretch = (att.srcW > 0 && att.srcH > 0) ? Math.max(refW / att.srcW, refH / att.srcH) : 0;
+    const setupArea = att.setupW * att.setupH;
+    const growth = setupArea > 0 ? (att.maxW * att.maxH) / setupArea : 0;
+    const persistence = profile.frames > 0 ? info.seen / profile.frames : 0;
+    const partial = profile.animCount >= 2 && info.animSet.size < profile.animCount;
+    let score = 0;
+    if (info.glow) score += 1.0;
+    if (stretch >= 2.5) score += 1.0;
+    if (stretch >= 8) score += 0.8;
+    if (growth >= 6) score += 0.8;
+    if (att.maxW > 1.3 * profile.unitW || att.maxH > 1.3 * profile.unitH) score += 0.8;
+    if (att.maxW > 2.5 * profile.unitW || att.maxH > 2.5 * profile.unitH) score += 0.8;
+    if (partial) score += 0.6;
+    if (partial && !setupArea) score += 0.4;
+    if (att.weighted) score -= 1.2;
+    if (info.depth >= 5) score -= 0.6;
+    if (persistence >= 0.9) score -= 0.4;
+    return score;
+  }
+
+  _unionSlotBounds(skeleton) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const slot of skeleton.slots) {
+      if (!slot.attachment) continue;
+      const wb = this._getSlotWorldBounds(slot);
+      if (!wb) continue;
+      minX = Math.min(minX, wb.minX); minY = Math.min(minY, wb.minY);
+      maxX = Math.max(maxX, wb.maxX); maxY = Math.max(maxY, wb.maxY);
+    }
+    if (minX === Infinity) return null;
+    return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+  }
+
+  _slotEvidence(name, attachment, slot) {
     const skelData = this._getSlotSkeleton(slot)?.data;
     const skelKey = skelData?.hash || skelData?.name || '';
     const cacheKey = `${skelKey}##${slot?.data?.name || ''}##${name}`;
-    if (this._bgOrEffectCache && this._bgOrEffectCache.has(cacheKey)) {
-      return this._bgOrEffectCache.get(cacheKey);
-    }
-    const lower = name.toLowerCase();
+    if (!this._evidenceCache) this._evidenceCache = new Map();
+    const cached = this._evidenceCache.get(cacheKey);
+    if (cached) return cached;
+    const lower = String(name).toLowerCase();
     const slotName = slot?.data?.name?.toLowerCase() || '';
     const bgEffectRegex = /(?:^|[_/.-])(backgrounds?|bgs?|effects?|effs?|efs?|fxs?|efxs?)(?:[_/.-]|$|[0-9])/i;
-    if (bgEffectRegex.test(lower) || bgEffectRegex.test(slotName)) {
-      if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, true);
-      return true;
-    }
     const coreRegex = /(chara|character|body|head|face|hair|arm|leg|skirt|cloth|pelvis|neck|hand|foot|torso|spine|chest|hip|bust|skin|sleeve|glove|shoe|socks|weapon|sword|shield|spear|bow|staff|scythe|dress|coat|jacket|cape|wing|tail|horn|ear|eye|mouth|nose)/i;
-    if (coreRegex.test(lower) || coreRegex.test(slotName)) {
-      if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, false);
-      return false;
+    const nameBg = bgEffectRegex.test(lower) || bgEffectRegex.test(slotName);
+    const nameCore = !nameBg && (coreRegex.test(lower) || coreRegex.test(slotName));
+    const profile = this._getSkeletonProfile(skelData);
+    const own = profile?.structural?.get(`${slot?.data?.index}##${name}`);
+    const shared = profile?.consensus?.get(name);
+    let score = 0;
+    if (own !== undefined || shared !== undefined) {
+      score = Math.max(own ?? -Infinity, shared ?? -Infinity);
     }
-    let w = 0, h = 0;
-    if (attachment && slot && skelData) {
-      if (!this._probeSkeletons) {
-        this._probeSkeletons = new Map();
-      }
-      let probe = this._probeSkeletons.get(skelData);
-      if (!probe) {
-        probe = new this._spine.Skeleton(skelData);
-        probe.setToSetupPose();
-        probe.updateWorldTransform(2);
-        this._probeSkeletons.set(skelData, probe);
-      }
-      const probeSlot = probe.slots[slot.data.index];
-      if (probeSlot) {
-        const oldAttachment = probeSlot.attachment;
-        probeSlot.attachment = attachment;
-        const wb = this._getSlotWorldBounds(probeSlot);
-        probeSlot.attachment = oldAttachment;
-        if (wb) {
-          w = wb.w;
-          h = wb.h;
-        }
-      }
-    }
-    const result = (w > 1000 || h > 1000 || (w > 500 && h > 500));
-    if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, result);
-    return result;
+    if (nameCore) score -= 0.9;
+    let isEffect = score >= 1.1;
+    let isCore = score <= -0.5;
+    if (nameBg) { isEffect = true; isCore = false; }
+    const evidence = { score, isEffect, isCore };
+    this._evidenceCache.set(cacheKey, evidence);
+    return evidence;
+  }
+
+  _isBackgroundOrEffect(name, attachment, slot) {
+    if (!name) return false;
+    return this._slotEvidence(name, attachment, slot).isEffect;
+  }
+
+  _isCoreSlot(slot) {
+    const name = slot?.attachment?.name;
+    if (!name) return false;
+    return this._slotEvidence(name, slot.attachment, slot).isCore;
+  }
+
+  _getUnit(skeleton) {
+    const profile = this._getSkeletonProfile(skeleton?.data);
+    return { w: profile?.unitW || 1024, h: profile?.unitH || 1024 };
   }
 
   _getSlotWorldBounds(slot) {
@@ -350,15 +481,9 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   _getCoreBounds(skeleton) {
-    const coreRegex = /(body|chara|character|head|face|hair|arm|leg|skirt|cloth|pelvis|neck|hand|foot|torso|spine|chest|hip|bust|skin|sleeve|glove|shoe|socks|weapon|sword|shield|spear|bow|staff|scythe|dress|coat|jacket|cape|wing|tail|horn|ear|eye|mouth|nose)/i;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const slot of skeleton.slots) {
-      const slotName = slot.data.name;
-      const attachmentName = slot.attachment?.name || '';
-      if (slot.attachment && (coreRegex.test(slotName) || coreRegex.test(attachmentName))) {
-        if (this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot)) {
-          continue;
-        }
+      if (slot.attachment && this._isCoreSlot(slot)) {
         const wb = this._getSlotWorldBounds(slot);
         if (wb) {
           minX = Math.min(minX, wb.minX);
@@ -375,36 +500,15 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   _getFitBounds(skel, maxRatio = 1.15) {
-    let bounds = skel.bounds;
-    if (skel.fitBounds && skel.bounds) {
-      const fitW = skel.fitBounds.size.x;
-      const fitH = skel.fitBounds.size.y;
-      const setupW = skel.bounds.size.x;
-      const setupH = skel.bounds.size.y;
-      const fitCenterX = skel.fitBounds.offset.x + fitW * 0.5;
-      const setupCenterX = skel.bounds.offset.x + setupW * 0.5;
-      if (setupW > 400 && setupH > 400) {
-        const isTooSmall = fitW < 0.75 * setupW || fitH < 0.75 * setupH;
-        if (isTooSmall) {
-          const setupSkewed = Math.abs(setupCenterX) > setupW * 0.2;
-          const centerDiverged = Math.abs(fitCenterX - setupCenterX) > setupW * 0.2;
-          bounds = (setupSkewed || centerDiverged) ? skel.fitBounds : skel.bounds;
-        } else {
-          const isBloated = (fitW > 1.15 * setupW && fitW < 2.0 * setupW) ||
-            (fitH > 1.15 * setupH && fitH < 2.0 * setupH);
-          if (isBloated) {
-            bounds = skel.bounds;
-          } else {
-            bounds = skel.fitBounds;
-          }
-        }
-      } else {
-        bounds = skel.fitBounds;
-      }
-    } else {
-      bounds = (skel.fitBounds) ? skel.fitBounds : skel.bounds;
+    let bounds = skel.fitBounds || skel.bounds;
+    if (skel.fitBounds && skel.bounds && !skel.bounds.isDefault) {
+      const fitArea = skel.fitBounds.size.x * skel.fitBounds.size.y;
+      const setupArea = skel.bounds.size.x * skel.bounds.size.y;
+      const implausible = !(fitArea > 0) ||
+        (setupArea > 0 && (fitArea < 0.1 * setupArea || fitArea > 8 * setupArea));
+      if (implausible) bounds = skel.bounds;
     }
-
+    const subject = (bounds === skel.fitBounds) ? skel.subjectBounds : null;
     let result = bounds;
     if (bounds && bounds.size && bounds.offset) {
       const w = bounds.size.x;
@@ -412,13 +516,16 @@ export class SpineRendererBase extends BaseRenderer {
       if (w > 0 && h > 0) {
         const left = bounds.offset.x;
         const right = bounds.offset.x + w;
-        const centerX = bounds.offset.x + bounds.size.x * 0.5;
-        const originNearCenter = Math.abs(centerX) <= w * 0.12;
+        const boxCenterX = bounds.offset.x + bounds.size.x * 0.5;
+        const centerX = subject ? subject.offset.x + subject.size.x * 0.5 : boxCenterX;
+        const originNearCenter = Math.abs(centerX) <= w * 0.04;
         const maxExtent = originNearCenter
           ? Math.max(Math.abs(left), Math.abs(right))
           : (w * 0.5);
         const symWidth = 2 * maxExtent;
-        const centerY = bounds.offset.y + bounds.size.y * 0.5;
+        const centerY = subject
+          ? subject.offset.y + subject.size.y * 0.5
+          : bounds.offset.y + bounds.size.y * 0.5;
         const fitCenterX = originNearCenter ? 0 : centerX;
         if (symWidth > maxRatio * h) {
           const clampedW = maxRatio * h;
@@ -523,6 +630,10 @@ export class SpineRendererBase extends BaseRenderer {
         const nb = ab.normalUnion;
         if (nb && nb.w > 0 && nb.h > 0 && !ab.weakAnchor) {
           e.fitBounds = { offset: { x: nb.offX, y: nb.offY }, size: { x: nb.w, y: nb.h } };
+          const cb = ab.coreUnion;
+          e.subjectBounds = (cb && cb.w > 0 && cb.h > 0)
+            ? { offset: { x: cb.offX, y: cb.offY }, size: { x: cb.w, y: cb.h } }
+            : null;
         }
         this._invalidatePrimary();
       }
@@ -544,13 +655,14 @@ export class SpineRendererBase extends BaseRenderer {
     } else {
       probe.setSkin(entry.skeleton.skin || data.defaultSkin);
     }
-    const off = new this._spine.Vector2();
-    const sz = new this._spine.Vector2();
+    const unit = this._getUnit(entry.skeleton);
     const perAnim = [];
     let lastYield = performance.now();
     for (const anim of data.animations) {
       if (token !== this._fitToken) return null;
-      const a = { name: anim.name, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      const frames = { minX: [], minY: [], maxX: [], maxY: [] };
+      const coreFrames = { minX: [], minY: [], maxX: [], maxY: [] };
+      const a = { name: anim.name, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity, frames, coreFrames };
       const n = Math.min(48, Math.max(2, Math.ceil((anim.duration || 0) * samplesPerSec)));
       for (let i = 0; i <= n; i++) {
         const t = anim.duration ? (anim.duration * i) / n : 0;
@@ -559,31 +671,43 @@ export class SpineRendererBase extends BaseRenderer {
         probe.updateWorldTransform(2);
         this._syncHiddenAttachments(probe, key);
         const coreBox = this._getCoreBounds(probe);
-        const hasReliableCoreBox = !!(coreBox && coreBox.w >= 220 && coreBox.h >= 220);
-        const margin = coreBox ? Math.max(400, coreBox.h * 0.6) : 0;
+        const hasReliableCoreBox = !!(coreBox && coreBox.w >= 0.12 * unit.w && coreBox.h >= 0.12 * unit.h);
+        const margin = coreBox ? Math.max(0.22 * unit.h, coreBox.h * 0.6) : 0;
+        let fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
+        let cMinX = Infinity, cMinY = Infinity, cMaxX = -Infinity, cMaxY = -Infinity;
         for (const slot of probe.slots) {
-          if (slot.attachment) {
-            const isBgOrEff = this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot);
-            if (isBgOrEff) {
-              slot.attachment = null;
-              continue;
-            }
-            const wb = this._getSlotWorldBounds(slot);
-            if (wb) {
-              const isOutlier = hasReliableCoreBox && (
-                wb.maxX < coreBox.minX - margin || wb.minX > coreBox.maxX + margin ||
-                wb.maxY < coreBox.minY - margin || wb.minY > coreBox.maxY + margin
-              );
-              if (wb.w > 1800 || wb.h > 1800 || isOutlier) {
-                slot.attachment = null;
-              }
-            }
+          if (!slot.attachment) continue;
+          if (this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot)) continue;
+          const wb = this._getSlotWorldBounds(slot);
+          if (!wb) continue;
+          const isCore = this._isCoreSlot(slot);
+          const isOutlier = hasReliableCoreBox && (
+            wb.maxX < coreBox.minX - margin || wb.minX > coreBox.maxX + margin ||
+            wb.maxY < coreBox.minY - margin || wb.minY > coreBox.maxY + margin
+          );
+          const isOversize = !isCore && (wb.w > 1.3 * unit.w || wb.h > 1.3 * unit.h);
+          if (isOversize || isOutlier) continue;
+          if (wb.minX < fMinX) fMinX = wb.minX;
+          if (wb.minY < fMinY) fMinY = wb.minY;
+          if (wb.maxX > fMaxX) fMaxX = wb.maxX;
+          if (wb.maxY > fMaxY) fMaxY = wb.maxY;
+          if (isCore) {
+            if (wb.minX < cMinX) cMinX = wb.minX;
+            if (wb.minY < cMinY) cMinY = wb.minY;
+            if (wb.maxX > cMaxX) cMaxX = wb.maxX;
+            if (wb.maxY > cMaxY) cMaxY = wb.maxY;
           }
         }
-        probe.getBounds(off, sz, []);
-        if (sz.x === -Infinity) continue;
-        a.minX = Math.min(a.minX, off.x); a.minY = Math.min(a.minY, off.y);
-        a.maxX = Math.max(a.maxX, off.x + sz.x); a.maxY = Math.max(a.maxY, off.y + sz.y);
+        if (fMinX === Infinity) continue;
+        frames.minX.push(fMinX); frames.minY.push(fMinY);
+        frames.maxX.push(fMaxX); frames.maxY.push(fMaxY);
+        if (cMinX !== Infinity) {
+          coreFrames.minX.push(cMinX); coreFrames.minY.push(cMinY);
+          coreFrames.maxX.push(cMaxX); coreFrames.maxY.push(cMaxY);
+        }
+
+        a.minX = Math.min(a.minX, fMinX); a.minY = Math.min(a.minY, fMinY);
+        a.maxX = Math.max(a.maxX, fMaxX); a.maxY = Math.max(a.maxY, fMaxY);
       }
       perAnim.push(a);
       if (performance.now() - lastYield > 10) {
@@ -591,10 +715,10 @@ export class SpineRendererBase extends BaseRenderer {
         lastYield = performance.now();
       }
     }
-    return this._reduceAnimBounds(perAnim);
+    return this._reduceAnimBounds(perAnim, unit);
   }
 
-  _reduceAnimBounds(perAnim) {
+  _reduceAnimBounds(perAnim, unit = { w: 1875, h: 1875 }) {
     const toBox = (b) => ({ offX: b.minX, offY: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY });
     const union = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
     for (const a of perAnim) {
@@ -602,37 +726,102 @@ export class SpineRendererBase extends BaseRenderer {
       union.minX = Math.min(union.minX, a.minX); union.minY = Math.min(union.minY, a.minY);
       union.maxX = Math.max(union.maxX, a.maxX); union.maxY = Math.max(union.maxY, a.maxY);
     }
-    const valid = perAnim.filter(b => isFinite(b.minX));
-    const wOf = b => b.maxX - b.minX, hOf = b => b.maxY - b.minY, aOf = b => wOf(b) * hOf(b);
-    let candidates = valid.filter(b => wOf(b) >= 150 && hOf(b) >= 150);
-    if (candidates.length === 0) candidates = valid;
-    let aw = 0, ah = 0;
-    let best = null;
-    if (candidates.length > 0) {
-      const sortedCandidates = [...candidates].sort((x, y) => aOf(x) - aOf(y));
-      best = sortedCandidates[0];
-      aw = wOf(best);
-      ah = hOf(best);
+    const at = (values, q) => {
+      const sorted = [...values].sort((x, y) => x - y);
+      return sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * q)))];
+    };
+    const TRIM = 0.15;
+    const trimmed = (f, name) => {
+      if (!f?.minX?.length) return null;
+      const box = {
+        name,
+        minX: at(f.minX, TRIM), maxX: at(f.maxX, 1 - TRIM),
+        minY: at(f.minY, TRIM), maxY: at(f.maxY, 1 - TRIM),
+      };
+      box.w = box.maxX - box.minX;
+      box.h = box.maxY - box.minY;
+      return (box.w > 0 && box.h > 0) ? box : null;
+    };
+    const typicalBox = (f, name) => {
+      const n = f?.minX?.length || 0;
+      if (!n) return null;
+      const w = [], h = [], cx = [], cy = [];
+      for (let i = 0; i < n; i++) {
+        w.push(f.maxX[i] - f.minX[i]);
+        h.push(f.maxY[i] - f.minY[i]);
+        cx.push((f.minX[i] + f.maxX[i]) * 0.5);
+        cy.push((f.minY[i] + f.maxY[i]) * 0.5);
+      }
+      const bw = at(w, 0.5), bh = at(h, 0.5);
+      if (!(bw > 0) || !(bh > 0)) return null;
+      const bx = at(cx, 0.5), by = at(cy, 0.5);
+      return { name, minX: bx - bw / 2, maxX: bx + bw / 2, minY: by - bh / 2, maxY: by + bh / 2, w: bw, h: bh };
+    };
+    const steady = [];
+    const coreByName = new Map();
+    for (const a of perAnim) {
+      const box = trimmed(a.frames, a.name);
+      if (box) steady.push(box);
+      const coreBox = typicalBox(a.coreFrames, a.name);
+      if (coreBox) coreByName.set(a.name, coreBox);
     }
-    const K = 1.3;
-    const isEffect = (b) => aw > 0 && (wOf(b) > K * aw || hOf(b) > K * ah);
-    const effectAnims = valid.filter(isEffect).map(b => b.name);
-    const kept = valid.filter(b => !isEffect(b));
-    const normals = kept.length ? kept : valid;
+    const plainPerAnim = perAnim.map(toBox);
+    if (steady.length === 0) {
+      return { union: toBox(union), normalUnion: toBox(union), perAnim: plainPerAnim, weakAnchor: !isFinite(union.minX) };
+    }
+    const centreX = (b) => (b.minX + b.maxX) * 0.5;
+    const centreY = (b) => (b.minY + b.maxY) * 0.5;
+    const medX = at(steady.map(centreX), 0.5);
+    const medY = at(steady.map(centreY), 0.5);
+    const medW = at(steady.map(b => b.w), 0.5);
+    const medH = at(steady.map(b => b.h), 0.5);
+    const DRIFT = 0.25;
+    let placed = steady.filter(b =>
+      Math.abs(centreX(b) - medX) <= DRIFT * medW &&
+      Math.abs(centreY(b) - medY) <= DRIFT * medH);
+    if (placed.length === 0) placed = steady;
+
+    let candidates = placed.filter(b => b.w >= 0.08 * unit.w && b.h >= 0.08 * unit.h);
+    if (candidates.length === 0) candidates = placed;
+    const anchor = candidates.reduce((best, b) => (b.w * b.h < best.w * best.h ? b : best));
+    const SIBLING = 1.3;
+    const kept = placed.filter(b => b.w <= SIBLING * anchor.w && b.h <= SIBLING * anchor.h);
+    const use = kept.length ? kept : [anchor];
     const nu = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-    for (const b of normals) {
-      nu.minX = Math.min(nu.minX, b.minX);
-      nu.minY = Math.min(nu.minY, b.minY);
-      nu.maxX = Math.max(nu.maxX, b.maxX);
-      nu.maxY = Math.max(nu.maxY, b.maxY);
+    for (const b of use) {
+      nu.minX = Math.min(nu.minX, b.minX); nu.minY = Math.min(nu.minY, b.minY);
+      nu.maxX = Math.max(nu.maxX, b.maxX); nu.maxY = Math.max(nu.maxY, b.maxY);
+    }
+    const cu = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (const b of use) {
+      const core = coreByName.get(b.name);
+      if (!core) continue;
+      cu.minX = Math.min(cu.minX, core.minX); cu.minY = Math.min(cu.minY, core.minY);
+      cu.maxX = Math.max(cu.maxX, core.maxX); cu.maxY = Math.max(cu.maxY, core.maxY);
+    }
+    const coreUnion = isFinite(cu.minX) ? toBox(cu) : null;
+    let framed = nu;
+    const keptArea = (nu.maxX - nu.minX) * (nu.maxY - nu.minY);
+    const coreArea = coreUnion ? coreUnion.w * coreUnion.h : 0;
+    if (coreArea > 0 && coreArea >= 0.1 * keptArea) {
+      const MARGIN = 1.1;
+      const axis = (keptLo, keptHi, coreLo, coreHi) => {
+        const size = Math.min(keptHi - keptLo, (coreHi - coreLo) * MARGIN);
+        const center = (coreLo + coreHi) * 0.5;
+        return { lo: center - size * 0.5, hi: center + size * 0.5 };
+      };
+      const x = axis(nu.minX, nu.maxX, cu.minX, cu.maxX);
+      const y = axis(nu.minY, nu.maxY, cu.minY, cu.maxY);
+      framed = { minX: x.lo, maxX: x.hi, minY: y.lo, maxY: y.hi };
     }
     return {
       union: toBox(union),
-      normalUnion: normals.length ? toBox(nu) : toBox(union),
-      perAnim: perAnim.map(toBox),
-      effectAnims,
-      anchorBox: { w: aw, h: ah },
-      weakAnchor: valid.length > 0 && effectAnims.length > valid.length * 0.6,
+      normalUnion: toBox(framed),
+      keptUnion: toBox(nu),
+      coreUnion,
+      perAnim: plainPerAnim,
+      framedAnims: use.map(b => b.name),
+      weakAnchor: false,
     };
   }
 
@@ -833,12 +1022,14 @@ export class SpineRendererBase extends BaseRenderer {
     }
     skeleton.setToSetupPose();
     skeleton.updateWorldTransform(2);
+    const unit = this._getUnit(skeleton);
     const setupCoreBox = this._getCoreBounds(skeleton);
-    const hasReliableSetupCoreBox = !!(setupCoreBox && setupCoreBox.w >= 220 && setupCoreBox.h >= 220);
-    const setupMargin = setupCoreBox ? Math.max(400, setupCoreBox.h * 0.6) : 0;
+    const hasReliableSetupCoreBox = !!(setupCoreBox && setupCoreBox.w >= 0.12 * unit.w && setupCoreBox.h >= 0.12 * unit.h);
+    const setupMargin = setupCoreBox ? Math.max(0.22 * unit.h, setupCoreBox.h * 0.6) : 0;
     for (const slot of skeleton.slots) {
       if (slot.attachment) {
         const isBgOrEff = this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot);
+        const isCore = this._isCoreSlot(slot);
         const wb = this._getSlotWorldBounds(slot);
         if (isBgOrEff) {
           slot.attachment = null;
@@ -849,7 +1040,8 @@ export class SpineRendererBase extends BaseRenderer {
             wb.maxX < setupCoreBox.minX - setupMargin || wb.minX > setupCoreBox.maxX + setupMargin ||
             wb.maxY < setupCoreBox.minY - setupMargin || wb.minY > setupCoreBox.maxY + setupMargin
           );
-          if (wb.w > 1800 || wb.h > 1800 || isOutlier) {
+          const isOversize = !isCore && (wb.w > 1.3 * unit.w || wb.h > 1.3 * unit.h);
+          if (isOversize || isOutlier) {
             slot.attachment = null;
           }
         }
@@ -863,8 +1055,8 @@ export class SpineRendererBase extends BaseRenderer {
         anim.apply(skeleton, 0, 0, false, null, 1.0, 0, 0);
         skeleton.updateWorldTransform(2);
         const fallbackCoreBox = this._getCoreBounds(skeleton);
-        const hasReliableFallbackCoreBox = !!(fallbackCoreBox && fallbackCoreBox.w >= 220 && fallbackCoreBox.h >= 220);
-        const fallbackMargin = fallbackCoreBox ? Math.max(400, fallbackCoreBox.h * 0.6) : 0;
+        const hasReliableFallbackCoreBox = !!(fallbackCoreBox && fallbackCoreBox.w >= 0.12 * unit.w && fallbackCoreBox.h >= 0.12 * unit.h);
+        const fallbackMargin = fallbackCoreBox ? Math.max(0.22 * unit.h, fallbackCoreBox.h * 0.6) : 0;
         for (const slot of skeleton.slots) {
           if (slot.attachment) {
             const isBgOrEff = this._isBackgroundOrEffect(slot.attachment.name, slot.attachment, slot);
@@ -878,7 +1070,8 @@ export class SpineRendererBase extends BaseRenderer {
                 wb.maxX < fallbackCoreBox.minX - fallbackMargin || wb.minX > fallbackCoreBox.maxX + fallbackMargin ||
                 wb.maxY < fallbackCoreBox.minY - fallbackMargin || wb.minY > fallbackCoreBox.maxY + fallbackMargin
               );
-              if (wb.w > 1800 || wb.h > 1800 || isOutlier) {
+              const isOversize = !this._isCoreSlot(slot) && (wb.w > 1.3 * unit.w || wb.h > 1.3 * unit.h);
+              if (isOversize || isOutlier) {
                 slot.attachment = null;
               }
             }
@@ -988,8 +1181,8 @@ export class SpineRendererBase extends BaseRenderer {
     this._skeletons = {};
     this._animationStates = [];
     this._primaryCache = null;
-    if (this._bgOrEffectCache) this._bgOrEffectCache.clear();
-    if (this._probeSkeletons) this._probeSkeletons.clear();
+    if (this._evidenceCache) this._evidenceCache.clear();
+    if (this._skelProfiles) this._skelProfiles.clear();
   }
 
   getOriginalSize() {
@@ -1564,6 +1757,7 @@ export class SpineRendererBase extends BaseRenderer {
         state.skeletonBounds[key] = {
           bounds: entry.bounds,
           fitBounds: entry.fitBounds,
+          subjectBounds: entry.subjectBounds,
           _ab: entry._ab
         };
       }
@@ -1588,6 +1782,7 @@ export class SpineRendererBase extends BaseRenderer {
           const boundsInfo = state.skeletonBounds[key];
           entry.bounds = boundsInfo.bounds;
           entry.fitBounds = boundsInfo.fitBounds;
+          entry.subjectBounds = boundsInfo.subjectBounds;
           entry._ab = boundsInfo._ab;
           this._invalidatePrimary();
         } else {
