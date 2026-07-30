@@ -6,6 +6,7 @@ import { appState } from '../appState.svelte.js';
 
 const sortByText = createSorter(item => item.name);
 const sortById = createSorter(item => item.id);
+const MAX_DELTA_MS = 100;
 
 class PixiAppManager {
   static #sharedApp = null;
@@ -65,6 +66,8 @@ export class Live2DRenderer extends BaseRenderer {
   #originalIdleGroup = 'Idle';
   #pointerMoveHandler = null;
   #pointerLeaveHandler = null;
+  #beforeModelUpdateHandler = null;
+  #lastFrameParameters = null;
 
   constructor(isExport = false) {
     super(isExport);
@@ -79,13 +82,19 @@ export class Live2DRenderer extends BaseRenderer {
 
   async load(dirName, scene) {
     if (this.#disposed) return;
+    if (this.#updateFn && this.#app) {
+      this.#app.ticker.remove(this.#updateFn);
+      this.#updateFn = null;
+    }
     if (this.#model) {
+      this.#detachBeforeModelUpdate();
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.removeChild(this.#model);
       }
       this.#model.destroy();
       this.#model = null;
     }
+    this.#lastFrameParameters = null;
     if (!this.#isExport && this.#canvas) {
       this.#canvas.style.display = 'block';
     }
@@ -160,36 +169,28 @@ export class Live2DRenderer extends BaseRenderer {
       const originalUpdate = PIXI.live2d.Live2DModel.prototype.update;
       this.#model.autoUpdate = false;
       this.#lastTime = performance.now();
-      let accumulatedMS = 0;
+      this.#beforeModelUpdateHandler = () => {
+        this.#applyOverrides();
+        this.#saveParameterSnapshot();
+      };
+      this.#model.internalModel.on('beforeModelUpdate', this.#beforeModelUpdateHandler);
       this.#updateFn = () => {
         if (this.#disposed || !this.#model || this.#paused) return;
-        if (this.#model.internalModel) {
-          this.#model.internalModel.breath = appState.enableIdleAndBreathing ? this.#originalBreath : null;
+        const internalModel = this.#model.internalModel;
+        if (!internalModel) return;
+        internalModel.breath = appState.enableIdleAndBreathing ? this.#originalBreath : null;
+        if (internalModel.motionManager && internalModel.motionManager.groups) {
+          internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
         }
-        if (this.#model.internalModel && this.#model.internalModel.motionManager && this.#model.internalModel.motionManager.groups) {
-          this.#model.internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
-        }
-        if (!appState.enableMouseTracking) {
-          if (this.#model.internalModel && this.#model.internalModel.focusController) {
-            if (this.#model.internalModel.focusController.targetX !== 0 || this.#model.internalModel.focusController.targetY !== 0) {
-              this.#model.internalModel.focusController.focus(0, 0);
-            }
+        if (!appState.enableMouseTracking && internalModel.focusController) {
+          if (internalModel.focusController.targetX !== 0 || internalModel.focusController.targetY !== 0) {
+            internalModel.focusController.focus(0, 0);
           }
         }
         const now = performance.now();
-        const elapsedMS = now - this.#lastTime;
+        const elapsedMS = Math.min(now - this.#lastTime, MAX_DELTA_MS);
         this.#lastTime = now;
-        accumulatedMS += elapsedMS * this.#speed;
-        if (accumulatedMS >= 10) {
-          originalUpdate.call(this.#model, accumulatedMS);
-          accumulatedMS = 0;
-        } else {
-          originalUpdate.call(this.#model, 0);
-        }
-        this.#applyOverrides();
-        if (this.#model.internalModel && this.#model.internalModel.coreModel) {
-          this.#model.internalModel.coreModel.update();
-        }
+        originalUpdate.call(this.#model, elapsedMS * this.#speed);
       };
       this.#app.ticker.add(this.#updateFn);
       if (!this.#isExport) {
@@ -233,12 +234,14 @@ export class Live2DRenderer extends BaseRenderer {
       this.#updateFn = null;
     }
     if (this.#model) {
+      this.#detachBeforeModelUpdate();
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.removeChild(this.#model);
       }
       this.#model.destroy();
       this.#model = null;
     }
+    this.#lastFrameParameters = null;
     this.#opacities = null;
     if (this.#renderTexture) {
       this.#renderTexture.destroy(true);
@@ -389,6 +392,7 @@ export class Live2DRenderer extends BaseRenderer {
             }
           });
         }
+        this.#saveParameterSnapshot();
       }
       return;
     }
@@ -514,6 +518,7 @@ export class Live2DRenderer extends BaseRenderer {
               : coreModel._parameterValues[index]);
           coreModel._parameterValues[index] = defVal;
         });
+        this.#saveParameterSnapshot();
       }
     } else if (category === 'parts') {
       if (coreModel && coreModel._partIds) {
@@ -574,6 +579,7 @@ export class Live2DRenderer extends BaseRenderer {
         entry._startTimeSeconds = savedStateTime - targetTime;
         mm.update(internalModel.coreModel, savedStateTime);
         this.#applyOverrides();
+        this.#saveParameterSnapshot();
         entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
         internalModel.coreModel.update();
         this.#model.deltaTime = 0;
@@ -654,6 +660,7 @@ export class Live2DRenderer extends BaseRenderer {
 
   render() {
     if (this.#model) {
+      this.#restoreParameterSnapshot();
       this.#applyOverrides();
       this.#model.internalModel.coreModel.update();
     }
@@ -684,6 +691,30 @@ export class Live2DRenderer extends BaseRenderer {
     };
     updateTextureScaleMode(this.#model);
     this.render();
+  }
+
+  #detachBeforeModelUpdate() {
+    if (this.#beforeModelUpdateHandler && this.#model?.internalModel?.off) {
+      this.#model.internalModel.off('beforeModelUpdate', this.#beforeModelUpdateHandler);
+    }
+    this.#beforeModelUpdateHandler = null;
+  }
+
+  #saveParameterSnapshot() {
+    const values = this.#model?.internalModel?.coreModel?._parameterValues;
+    if (!values || typeof values.length !== 'number') return;
+    if (!this.#lastFrameParameters || this.#lastFrameParameters.length !== values.length) {
+      this.#lastFrameParameters = new Float32Array(values.length);
+    }
+    this.#lastFrameParameters.set(values);
+  }
+
+  #restoreParameterSnapshot() {
+    if (!this.#lastFrameParameters) return;
+    const values = this.#model?.internalModel?.coreModel?._parameterValues;
+    if (!values || typeof values.set !== 'function') return;
+    if (values.length !== this.#lastFrameParameters.length) return;
+    values.set(this.#lastFrameParameters);
   }
 
   #applyOverrides() {
