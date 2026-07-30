@@ -37,6 +37,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._spine = spineLib;
     this._bgOrEffectCache = new Map();
     this._probeSkeletons = new Map();
+    this._primaryCache = null;
     this._textureFilter = 'linear';
     this._loadedAtlases = [];
   }
@@ -185,6 +186,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._bgOrEffectCache = new Map();
     this._probeSkeletons = new Map();
     this._activeSkins = null;
+    this._primaryCache = null;
     this._parameterItems = null;
     this._parameterItemsMap = null;
     this._loadedAtlases = [];
@@ -228,19 +230,30 @@ export class SpineRendererBase extends BaseRenderer {
         if (skelN) this._skeletons[String(i + 1)] = skelN;
       }
     }
+    this._invalidatePrimary();
     this._hideMaskMosaicAttachments();
     this._scheduleFitBounds();
   }
 
+  _getSlotSkeleton(slot) {
+    if (!slot) return null;
+    return slot.skeleton ||
+      (typeof slot.getSkeleton === 'function' ? slot.getSkeleton() : null) ||
+      slot.bone?.skeleton ||
+      null;
+  }
+
   _isBackgroundOrEffect(name, attachment, slot) {
     if (!name) return false;
-    const cacheKey = `${slot?.data?.name || ''}##${name}`;
+    const skelData = this._getSlotSkeleton(slot)?.data;
+    const skelKey = skelData?.hash || skelData?.name || '';
+    const cacheKey = `${skelKey}##${slot?.data?.name || ''}##${name}`;
     if (this._bgOrEffectCache && this._bgOrEffectCache.has(cacheKey)) {
       return this._bgOrEffectCache.get(cacheKey);
     }
     const lower = name.toLowerCase();
     const slotName = slot?.data?.name?.toLowerCase() || '';
-    const bgEffectRegex = /(?:^|[_/.-])(backgrounds?|bgs?|effects?|effs?|fxs?|efxs?)(?:[_/.-]|$|[0-9])/i;
+    const bgEffectRegex = /(?:^|[_/.-])(backgrounds?|bgs?|effects?|effs?|efs?|fxs?|efxs?)(?:[_/.-]|$|[0-9])/i;
     if (bgEffectRegex.test(lower) || bgEffectRegex.test(slotName)) {
       if (this._bgOrEffectCache) this._bgOrEffectCache.set(cacheKey, true);
       return true;
@@ -251,16 +264,16 @@ export class SpineRendererBase extends BaseRenderer {
       return false;
     }
     let w = 0, h = 0;
-    if (attachment && slot && slot.skeleton && slot.skeleton.data) {
+    if (attachment && slot && skelData) {
       if (!this._probeSkeletons) {
         this._probeSkeletons = new Map();
       }
-      let probe = this._probeSkeletons.get(slot.skeleton.data);
+      let probe = this._probeSkeletons.get(skelData);
       if (!probe) {
-        probe = new this._spine.Skeleton(slot.skeleton.data);
+        probe = new this._spine.Skeleton(skelData);
         probe.setToSetupPose();
         probe.updateWorldTransform(2);
-        this._probeSkeletons.set(slot.skeleton.data, probe);
+        this._probeSkeletons.set(skelData, probe);
       }
       const probeSlot = probe.slots[slot.data.index];
       if (probeSlot) {
@@ -289,7 +302,7 @@ export class SpineRendererBase extends BaseRenderer {
         attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, vertices, 0, 2);
       } else if (slot.bone) {
         vertices = new Float32Array(8);
-        const skeleton = slot.skeleton || (typeof slot.getSkeleton === 'function' ? slot.getSkeleton() : null) || slot.bone.skeleton;
+        const skeleton = this._getSlotSkeleton(slot);
         const version = skeleton?.data?.version || '';
         const verNum = parseFloat(version) || 0;
         if (verNum >= 4.1) {
@@ -439,12 +452,15 @@ export class SpineRendererBase extends BaseRenderer {
   _getPrimarySkeleton() {
     const entries = Object.entries(this._skeletons || {});
     if (entries.length === 0) return null;
+    if (this._primaryCache && this._skeletons[this._primaryCache.key] === this._primaryCache.entry) {
+      return this._primaryCache;
+    }
     let best = null;
     let bestScore = -Infinity;
     for (const [key, entry] of entries) {
       if (!entry?.skeleton) continue;
-      const core = this._getCoreBounds(entry.skeleton);
-      const fit = entry.fitBounds || entry.bounds;
+      const core = entry.bounds?.core;
+      const fit = entry.fitBounds || (entry.bounds?.isDefault ? null : entry.bounds);
       const anim = entry._ab?.normalUnion;
       const coreArea = (core?.w > 0 && core?.h > 0) ? (core.w * core.h) : 0;
       const fitArea = (fit?.size?.x > 0 && fit?.size?.y > 0) ? (fit.size.x * fit.size.y) : 0;
@@ -458,9 +474,16 @@ export class SpineRendererBase extends BaseRenderer {
         best = { key, entry };
       }
     }
-    if (best) return best;
-    const [key, entry] = entries[0];
-    return { key, entry };
+    if (!best) {
+      const [key, entry] = entries[0];
+      best = { key, entry };
+    }
+    this._primaryCache = best;
+    return best;
+  }
+
+  _invalidatePrimary() {
+    this._primaryCache = null;
   }
 
   _idle() {
@@ -501,6 +524,7 @@ export class SpineRendererBase extends BaseRenderer {
         if (nb && nb.w > 0 && nb.h > 0 && !ab.weakAnchor) {
           e.fitBounds = { offset: { x: nb.offX, y: nb.offY }, size: { x: nb.w, y: nb.h } };
         }
+        this._invalidatePrimary();
       }
       if (!primaryDone) {
         primaryDone = true;
@@ -864,13 +888,15 @@ export class SpineRendererBase extends BaseRenderer {
         if (size.x !== -Infinity) break;
       }
     }
+    let isDefault = false;
     if (size.x === -Infinity) {
       size.x = 2048; size.y = 2048; offset.x = -1024; offset.y = -1024;
+      isDefault = true;
     }
     skeleton.setSkin(originalSkin);
     skeleton.setToSetupPose();
     skeleton.updateWorldTransform(2);
-    return { offset, size };
+    return { offset, size, core: setupCoreBox, isDefault };
   }
 
   render(delta = 0, options = {}) {
@@ -961,6 +987,7 @@ export class SpineRendererBase extends BaseRenderer {
     }
     this._skeletons = {};
     this._animationStates = [];
+    this._primaryCache = null;
     if (this._bgOrEffectCache) this._bgOrEffectCache.clear();
     if (this._probeSkeletons) this._probeSkeletons.clear();
   }
@@ -1562,6 +1589,7 @@ export class SpineRendererBase extends BaseRenderer {
           entry.bounds = boundsInfo.bounds;
           entry.fitBounds = boundsInfo.fitBounds;
           entry._ab = boundsInfo._ab;
+          this._invalidatePrimary();
         } else {
           console.warn(`[SpineRendererBase] Sync bounds for key=${key} but skeleton not loaded in skeletons:`, Object.keys(this._skeletons));
         }
