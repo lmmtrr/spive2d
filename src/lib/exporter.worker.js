@@ -1,6 +1,7 @@
 import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
 import { SpineRendererBase } from './renderer/SpineRendererBase.js';
+import { getLive2DFrameBox, fitLive2DBox } from './renderer/Live2DCommon.js';
 
 let currentTasks = new Map();
 let libsLoaded = false;
@@ -162,12 +163,11 @@ class WorkerLive2DRenderer {
     this.model.autoUpdate = false;
     this.app.stage.addChild(this.model);
     const { width, height } = this.app.view;
-    const modelWidth = this.model.internalModel.originalWidth;
-    const modelHeight = this.model.internalModel.originalHeight;
-    const s = Math.min(width / modelWidth, height / modelHeight);
-    this.model.scale.set(s);
     this.model.anchor.set(0.5, 0.5);
-    this.model.position.set(width * 0.5, height * 0.5);
+    this.frameBox = getLive2DFrameBox(this.model.internalModel);
+    const { baseScale, dx, dy } = fitLive2DBox(this.model.internalModel, this.frameBox, width, height);
+    this.model.scale.set(baseScale);
+    this.model.position.set(width * 0.5 - dx * baseScale, height * 0.5 - dy * baseScale);
     if (this.model.internalModel && this.model.internalModel.breath) {
       this.model.internalModel.breath = null;
     }
@@ -233,17 +233,22 @@ class WorkerLive2DRenderer {
   setTransform(scale, x, y, rotation, originalWidth, originalHeight, screenBaseScale, ignoreTransform, contentWidth, contentHeight) {
     if (!this.model) return;
     const { width: canvasWidth, height: canvasHeight } = this.app.view;
-    const baseScale = (contentWidth && contentHeight)
-      ? Math.min(contentWidth / originalWidth, contentHeight / originalHeight)
-      : Math.min((canvasWidth - 2 * this.marginX) / originalWidth, (canvasHeight - 2 * this.marginY) / originalHeight);
+    const box = this.frameBox || (this.frameBox = getLive2DFrameBox(this.model.internalModel));
+    const { baseScale, dx, dy } = (contentWidth && contentHeight)
+      ? fitLive2DBox(this.model.internalModel, box, contentWidth, contentHeight)
+      : fitLive2DBox(this.model.internalModel, box, canvasWidth, canvasHeight, this.marginX, this.marginY);
     if (ignoreTransform) {
       this.model.scale.set(baseScale);
-      this.model.position.set(canvasWidth * 0.5, canvasHeight * 0.5);
+      this.model.position.set(canvasWidth * 0.5 - dx * baseScale, canvasHeight * 0.5 - dy * baseScale);
       this.model.rotation = 0;
     } else {
       const scaleFactor = screenBaseScale ? (baseScale / screenBaseScale) : 1;
-      this.model.scale.set(baseScale * (scale || 1));
-      this.model.position.set(canvasWidth * 0.5 + (x || 0) * scaleFactor, canvasHeight * 0.5 + (y || 0) * scaleFactor);
+      const s = baseScale * (scale || 1);
+      this.model.scale.set(s);
+      this.model.position.set(
+        canvasWidth * 0.5 - dx * s + (x || 0) * scaleFactor,
+        canvasHeight * 0.5 - dy * s + (y || 0) * scaleFactor
+      );
       this.model.rotation = (rotation || 0) * Math.PI / 180;
     }
   }

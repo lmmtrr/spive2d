@@ -1,4 +1,5 @@
 import { BaseRenderer } from './BaseRenderer.js';
+import { getLive2DFrameBox, fitLive2DBox } from './Live2DCommon.js';
 import { createSorter } from '../utils.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { showNotification } from '../notificationStore.svelte.js';
@@ -48,6 +49,7 @@ class PixiAppManager {
 export class Live2DRenderer extends BaseRenderer {
   #canvas;
   #app;
+  #contentBox = null;
   #model = null;
   #hiddenDrawables = new Set();
   #opacities = null;
@@ -149,13 +151,11 @@ export class Live2DRenderer extends BaseRenderer {
         }
       }
       const { innerWidth: w, innerHeight: h } = window;
-      const s = Math.min(
-        w / model.internalModel.originalWidth,
-        h / model.internalModel.originalHeight
-      );
-      model.scale.set(s);
       model.anchor.set(0.5, 0.5);
-      model.position.set(w * 0.5, h * 0.5);
+      this.#contentBox = null;
+      const { baseScale, dx, dy } = this.#fit(w, h);
+      model.scale.set(baseScale);
+      model.position.set(w * 0.5 - dx * baseScale, h * 0.5 - dy * baseScale);
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.addChild(model);
       }
@@ -242,6 +242,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.#model = null;
     }
     this.#lastFrameParameters = null;
+    this.#contentBox = null;
     this.#opacities = null;
     if (this.#renderTexture) {
       this.#renderTexture.destroy(true);
@@ -256,36 +257,56 @@ export class Live2DRenderer extends BaseRenderer {
     this.#app.renderer.resize(width, height);
   }
 
+  #getContentBox() {
+    if (this.#contentBox) return this.#contentBox;
+    const internalModel = this.#model?.internalModel;
+    if (!internalModel) return null;
+    const box = getLive2DFrameBox(internalModel);
+    if (!box) {
+      return { x: 0, y: 0, width: internalModel.originalWidth, height: internalModel.originalHeight };
+    }
+    this.#contentBox = box;
+    return this.#contentBox;
+  }
+
+  #fit(viewWidth, viewHeight, marginX = 0, marginY = 0) {
+    return fitLive2DBox(this.#model?.internalModel, this.#getContentBox(), viewWidth, viewHeight, marginX, marginY);
+  }
+
   getOriginalSize() {
     if (!this.#model) return { width: 0, height: 0 };
-    return {
-      width: Math.round(this.#model.internalModel.originalWidth),
-      height: Math.round(this.#model.internalModel.originalHeight),
-    };
+    const { originalWidth, originalHeight } = this.#model.internalModel;
+    const box = this.#getContentBox();
+    if (!box || !(box.width > 0) || !(box.height > 0)) {
+      return { width: Math.round(originalWidth), height: Math.round(originalHeight) };
+    }
+    const fit = Math.min(originalWidth / box.width, originalHeight / box.height);
+    return { width: Math.round(box.width * fit), height: Math.round(box.height * fit) };
+  }
+
+  getFrameSize() {
+    const box = this.#getContentBox();
+    if (!box) return this.getOriginalSize();
+    return { width: Math.round(box.width), height: Math.round(box.height) };
   }
 
   applyTransform(scale, moveX, moveY, rotate) {
     super.applyTransform(scale, moveX, moveY, rotate);
     if (!this.#model) return;
     const { innerWidth: w, innerHeight: h } = window;
-    const baseScale = Math.min(
-      w / this.#model.internalModel.originalWidth,
-      h / this.#model.internalModel.originalHeight
-    );
-    this.#model.scale.set(baseScale * scale);
-    this.#model.position.set(w * 0.5 + moveX, h * 0.5 + moveY);
+    const { baseScale, dx, dy } = this.#fit(w, h);
+    const s = baseScale * scale;
+    this.#model.scale.set(s);
+    this.#model.position.set(w * 0.5 - dx * s + moveX, h * 0.5 - dy * s + moveY);
     this.#model.rotation = (rotate * Math.PI) / 180;
   }
 
   resetTransform(width = window.innerWidth, height = window.innerHeight) {
     super.resetTransform();
     if (!this.#model) return;
-    const s = Math.min(
-      width / this.#model.internalModel.originalWidth,
-      height / this.#model.internalModel.originalHeight
-    );
-    this.#model.scale.set(s);
-    this.#model.position.set(width * 0.5, height * 0.5);
+    const { baseScale, dx, dy } = this.#fit(width, height);
+    this.#model.scale.set(baseScale);
+    this.#model.position.set(width * 0.5 - dx * baseScale, height * 0.5 - dy * baseScale);
     this.#model.rotation = 0;
   }
 
@@ -299,26 +320,24 @@ export class Live2DRenderer extends BaseRenderer {
     const marginX = options.marginX || 0;
     const marginY = options.marginY || 0;
     if (options.ignoreTransform) {
-      const s = Math.min(
-        (width - 2 * marginX) / this.#model.internalModel.originalWidth,
-        (height - 2 * marginY) / this.#model.internalModel.originalHeight
-      );
-      this.#model.scale.set(s);
-      this.#model.position.set(width * 0.5, height * 0.5);
+      const { baseScale, dx, dy } = this.#fit(width, height, marginX, marginY);
+      this.#model.scale.set(baseScale);
+      this.#model.position.set(width * 0.5 - dx * baseScale, height * 0.5 - dy * baseScale);
       this.#model.rotation = 0;
     } else {
       const userScale = this._scale || 1;
       const userMoveX = this._moveX || 0;
       const userMoveY = this._moveY || 0;
       const userRotate = this._rotate || 0;
-      const baseScale = Math.min(
-        (width - 2 * marginX) / this.#model.internalModel.originalWidth,
-        (height - 2 * marginY) / this.#model.internalModel.originalHeight
-      );
-      const screenBaseScale = Math.min(window.innerWidth / this.#model.internalModel.originalWidth, window.innerHeight / this.#model.internalModel.originalHeight);
+      const { baseScale, dx, dy } = this.#fit(width, height, marginX, marginY);
+      const screenBaseScale = this.#fit(window.innerWidth, window.innerHeight).baseScale;
       const scaleFactor = baseScale / screenBaseScale;
-      this.#model.scale.set(baseScale * userScale);
-      this.#model.position.set(width * 0.5 + userMoveX * scaleFactor, height * 0.5 + userMoveY * scaleFactor);
+      const s = baseScale * userScale;
+      this.#model.scale.set(s);
+      this.#model.position.set(
+        width * 0.5 - dx * s + userMoveX * scaleFactor,
+        height * 0.5 - dy * s + userMoveY * scaleFactor
+      );
       this.#model.rotation = (userRotate * Math.PI) / 180;
     }
     if (!this.#renderTexture ||
