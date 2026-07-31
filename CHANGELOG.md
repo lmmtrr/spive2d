@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.40] - 2026-07-31
+
+### Fixed
+
+- Improve Live2D mouse tracking accuracy, fixed-timestep update loop, and parameter snapshot handling
+- Enhance Spine and Live2D skeleton bounds calculation and viewport fitting logic
+
 ## [0.1.39] - 2026-07-16
 
 ### Added
