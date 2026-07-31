@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   publish-tauri:
@@ -68,10 +69,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: "${{ github.ref_name }}"
           releaseBody: ""
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
           uploadPlainBinary: ${{ matrix.platform == 'ubuntu-latest' }}
@@ -92,6 +93,20 @@ jobs:
         run: |
           gh release view "$env:TAG_NAME" >$null 2>&1
           if ($LASTEXITCODE -ne 0) {
-              gh release create "$env:TAG_NAME" --generate-notes
+              gh release create "$env:TAG_NAME" --draft --generate-notes
           }
           gh release upload "$env:TAG_NAME" spive2d-windows.zip --clobber
+
+  publish-release:
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release edit "$TAG_NAME" --draft=false
+
