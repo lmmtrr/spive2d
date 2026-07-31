@@ -8,6 +8,8 @@ import { appState } from '../appState.svelte.js';
 const sortByText = createSorter(item => item.name);
 const sortById = createSorter(item => item.id);
 const MAX_DELTA_MS = 100;
+const FIXED_STEP_MS = 1000 / 60;
+const MAX_STEPS_PER_FRAME = 20;
 
 class PixiAppManager {
   static #sharedApp = null;
@@ -70,6 +72,8 @@ export class Live2DRenderer extends BaseRenderer {
   #pointerLeaveHandler = null;
   #beforeModelUpdateHandler = null;
   #lastFrameParameters = null;
+  #baseParameters = null;
+  #accumulatedMS = 0;
 
   constructor(isExport = false) {
     super(isExport);
@@ -97,6 +101,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.#model = null;
     }
     this.#lastFrameParameters = null;
+    this.#baseParameters = null;
     if (!this.#isExport && this.#canvas) {
       this.#canvas.style.display = 'block';
     }
@@ -166,18 +171,21 @@ export class Live2DRenderer extends BaseRenderer {
         await this.setAnimation(animations[0].value);
       }
       if (this.#disposed || !this.#model) return;
-      const originalUpdate = PIXI.live2d.Live2DModel.prototype.update;
       this.#model.autoUpdate = false;
+      this.#model.deltaTime = 0;
       this.#lastTime = performance.now();
+      this.#accumulatedMS = 0;
       this.#beforeModelUpdateHandler = () => {
         this.#applyOverrides();
         this.#saveParameterSnapshot();
       };
       this.#model.internalModel.on('beforeModelUpdate', this.#beforeModelUpdateHandler);
       this.#updateFn = () => {
-        if (this.#disposed || !this.#model || this.#paused) return;
+        if (this.#disposed || !this.#model) return;
         const internalModel = this.#model.internalModel;
         if (!internalModel) return;
+        this.#model.deltaTime = 0;
+        if (this.#paused) return;
         internalModel.breath = appState.enableIdleAndBreathing ? this.#originalBreath : null;
         if (internalModel.motionManager && internalModel.motionManager.groups) {
           internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
@@ -190,7 +198,15 @@ export class Live2DRenderer extends BaseRenderer {
         const now = performance.now();
         const elapsedMS = Math.min(now - this.#lastTime, MAX_DELTA_MS);
         this.#lastTime = now;
-        originalUpdate.call(this.#model, elapsedMS * this.#speed);
+        this.#accumulatedMS += elapsedMS * this.#speed;
+        const stepMS = this.#stepSizeMS();
+        let steps = 0;
+        while (this.#accumulatedMS >= stepMS && steps < MAX_STEPS_PER_FRAME) {
+          this.#stepModel(stepMS);
+          this.#accumulatedMS -= stepMS;
+          steps++;
+        }
+        if (steps === MAX_STEPS_PER_FRAME) this.#accumulatedMS = 0;
       };
       this.#app.ticker.add(this.#updateFn);
       if (!this.#isExport) {
@@ -242,6 +258,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.#model = null;
     }
     this.#lastFrameParameters = null;
+    this.#baseParameters = null;
     this.#contentBox = null;
     this.#opacities = null;
     if (this.#renderTexture) {
@@ -595,12 +612,15 @@ export class Live2DRenderer extends BaseRenderer {
           }
         }
         const savedStateTime = entry._stateTimeSeconds;
+        const coreModel = internalModel.coreModel;
         entry._startTimeSeconds = savedStateTime - targetTime;
-        mm.update(internalModel.coreModel, savedStateTime);
+        mm.update(coreModel, savedStateTime);
+        coreModel.saveParameters?.();
         this.#applyOverrides();
         this.#saveParameterSnapshot();
         entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
-        internalModel.coreModel.update();
+        coreModel.update();
+        coreModel.loadParameters?.();
         this.#model.deltaTime = 0;
         this.render();
         if (this.#app && !this.#model.autoUpdate) {
@@ -679,9 +699,11 @@ export class Live2DRenderer extends BaseRenderer {
 
   render() {
     if (this.#model) {
-      this.#restoreParameterSnapshot();
+      const coreModel = this.#model.internalModel.coreModel;
+      const base = this.#swapInParameterSnapshot(coreModel);
       this.#applyOverrides();
-      this.#model.internalModel.coreModel.update();
+      coreModel.update();
+      if (base) coreModel._parameterValues.set(base);
     }
     if (this.#app) {
       this.#app.render();
@@ -712,6 +734,18 @@ export class Live2DRenderer extends BaseRenderer {
     this.render();
   }
 
+  #stepSizeMS() {
+    return FIXED_STEP_MS * Math.min(1, this.#speed > 0 ? this.#speed : 1);
+  }
+
+  #stepModel(stepMS) {
+    const model = this.#model;
+    if (!model || !model.internalModel) return;
+    model.elapsedTime += stepMS;
+    model.deltaTime = 0;
+    model.internalModel.update(stepMS, model.elapsedTime);
+  }
+
   #detachBeforeModelUpdate() {
     if (this.#beforeModelUpdateHandler && this.#model?.internalModel?.off) {
       this.#model.internalModel.off('beforeModelUpdate', this.#beforeModelUpdateHandler);
@@ -728,12 +762,18 @@ export class Live2DRenderer extends BaseRenderer {
     this.#lastFrameParameters.set(values);
   }
 
-  #restoreParameterSnapshot() {
-    if (!this.#lastFrameParameters) return;
-    const values = this.#model?.internalModel?.coreModel?._parameterValues;
-    if (!values || typeof values.set !== 'function') return;
-    if (values.length !== this.#lastFrameParameters.length) return;
-    values.set(this.#lastFrameParameters);
+  #swapInParameterSnapshot(coreModel) {
+    const snapshot = this.#lastFrameParameters;
+    if (!snapshot) return null;
+    const values = coreModel?._parameterValues;
+    if (!values || typeof values.set !== 'function') return null;
+    if (values.length !== snapshot.length) return null;
+    if (!this.#baseParameters || this.#baseParameters.length !== values.length) {
+      this.#baseParameters = new Float32Array(values.length);
+    }
+    this.#baseParameters.set(values);
+    values.set(snapshot);
+    return this.#baseParameters;
   }
 
   #applyOverrides() {
