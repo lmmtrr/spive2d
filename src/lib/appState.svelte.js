@@ -42,7 +42,7 @@ let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') ==
 let enableIdleAndBreathing = $state(loadSetting('spive2d_enable_idle_and_breathing', 'false') === 'true');
 let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'false') === 'true');
 const SCALE_MAX = 16;
-const SCALE_MIN = 0.5;
+const SCALE_MIN = 0.125;
 export const appState = {
   get initialized() { return initialized; },
   set initialized(v) { initialized = v; },
