@@ -74,6 +74,7 @@ export class Live2DRenderer extends BaseRenderer {
   #lastFrameParameters = null;
   #baseParameters = null;
   #accumulatedMS = 0;
+  #focusPoint = new PIXI.Point();
 
   constructor(isExport = false) {
     super(isExport);
@@ -212,7 +213,7 @@ export class Live2DRenderer extends BaseRenderer {
       if (!this.#isExport) {
         this.#pointerMoveHandler = (e) => {
           if (appState.enableMouseTracking && this.#model) {
-            this.#model.focus(e.clientX, e.clientY);
+            this.#focusAt(e.clientX, e.clientY);
           }
         };
         this.#pointerLeaveHandler = () => {
@@ -732,6 +733,19 @@ export class Live2DRenderer extends BaseRenderer {
     };
     updateTextureScaleMode(this.#model);
     this.render();
+  }
+
+  #focusAt(clientX, clientY) {
+    const internalModel = this.#model?.internalModel;
+    if (!internalModel?.focusController) return;
+    const { originalWidth, originalHeight } = internalModel;
+    if (!(originalWidth > 0) || !(originalHeight > 0)) return;
+    this.#focusPoint.x = clientX;
+    this.#focusPoint.y = clientY;
+    this.#model.toModelPosition(this.#focusPoint, this.#focusPoint, true);
+    const x = (this.#focusPoint.x / originalWidth) * 2 - 1;
+    const y = (this.#focusPoint.y / originalHeight) * 2 - 1;
+    internalModel.focusController.focus(x, -y);
   }
 
   #stepSizeMS() {
