@@ -150,7 +150,7 @@ export async function exportImage(sceneText, animationName) {
 }
 
 async function prepareExportContext(taskId, baseFilename, WorkerClass) {
-  const modelInfo = resolveModelInfo();
+  const modelInfo = await resolveModelInfo();
   if (!modelInfo) {
     exportQueue.updateStatus(taskId, 'error');
     return null;

@@ -1,6 +1,7 @@
 import { appState } from './appState.svelte.js';
 import { getRenderer } from './rendererStore.svelte.js';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { resolveLive2DModelUrl } from './renderer/Live2DCommon.js';
 
 export function getFinalExportSize(renderer) {
   let baseWidth, baseHeight;
@@ -28,7 +29,7 @@ export function getFinalExportSize(renderer) {
   };
 }
 
-export function resolveModelInfo() {
+export async function resolveModelInfo() {
   const { files, selectedDir, selectedScene } = appState.directories;
   if (!files || !selectedDir || !files[selectedDir]) {
     return null;
@@ -37,12 +38,7 @@ export function resolveModelInfo() {
   const isLive2D = scene.mainExt.includes('.moc') || scene.mainExt.includes('.model3.json') || scene.mainExt.includes('.model.json');
   let modelUrl = '';
   if (isLive2D) {
-    let ext_fixed = '.model3.json';
-    if (scene.mainExt.includes('.moc3')) ext_fixed = '.model3.json';
-    else if (scene.mainExt.includes('.moc')) ext_fixed = '.json';
-    const rawUrl = `${selectedDir}${scene.name}${ext_fixed}`;
-    modelUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) ? rawUrl : convertFileSrc(rawUrl);
-    modelUrl += (modelUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+    modelUrl = await resolveLive2DModelUrl(selectedDir, scene);
   }
   return {
     fileNames: scene,

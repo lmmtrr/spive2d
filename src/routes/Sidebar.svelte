@@ -43,9 +43,9 @@
       lastSelectedAnimation = idleMatch ? idleMatch.value : animations[0].value;
     }
     expressions = renderer.getExpressions() ?? null;
-    if (expressions && renderer.currentFaceKey !== undefined) {
+    if (renderer.currentFaceKey !== undefined) {
       selectedExpression = renderer.currentFaceKey || '';
-    } else {
+    } else if (!expressions || !expressions.some(e => e.value === selectedExpression)) {
       selectedExpression = '';
     }
     propertyCategories = renderer.getPropertyCategories() ?? [];
@@ -72,6 +72,10 @@
     if (!expressions) return '';
     const expr = expressions.find(e => e.value === selectedExpression);
     return expr ? expr.name : (expressions.length > 0 ? selectedExpression : '');
+  }
+
+  export function setSelectedExpression(value) {
+    selectedExpression = value;
   }
 
   export function setSelectedAnimation(value) {

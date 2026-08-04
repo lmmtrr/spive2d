@@ -35,6 +35,8 @@ struct SceneData {
     files: Vec<String>,
     #[serde(rename = "isMerged")]
     is_merged: bool,
+    #[serde(rename = "motionFiles", skip_serializing_if = "Vec::is_empty")]
+    motion_files: Vec<String>,
 }
 
 fn create_command(program: &str) -> std::process::Command {
@@ -1362,6 +1364,180 @@ fn auto_generate_model3_json(
     Ok(())
 }
 
+fn auto_generate_model_v2_json(
+    dir: &Path,
+    moc_file_name: &str,
+    moc_stem: &str,
+    dir_files: &[String],
+) -> Result<(), String> {
+    let mut textures = Vec::new();
+    let mut physics = None;
+    let mut pose = None;
+    let mut expressions = Vec::new();
+    let mut motions = HashMap::new();
+    let textures_dir = dir.join("textures");
+    let motions_dir = dir.join("motions");
+    for filename in dir_files {
+        let filename_lower = filename.to_lowercase();
+        if is_live2d_texture_name(filename) || (filename_lower.ends_with(".png") && !filename_lower.contains("preview")) {
+            let src_path = dir.join(filename);
+            let dest_path = textures_dir.join(filename);
+            if src_path.exists() {
+                let _ = fs::create_dir_all(&textures_dir);
+                if let Err(e) = fs::rename(&src_path, &dest_path) {
+                    if fs::copy(&src_path, &dest_path).is_ok() {
+                        let _ = fs::remove_file(&src_path);
+                    } else {
+                        eprintln!("Failed to move texture file: {}", e);
+                    }
+                }
+            }
+            if dest_path.exists() || src_path.exists() {
+                textures.push(format!("textures/{}", filename));
+            }
+        } else if filename_lower.ends_with(".physics.json") || filename_lower == "physics.json" {
+            physics = Some(filename.clone());
+        } else if filename_lower.ends_with(".pose.json") || filename_lower == "pose.json" {
+            pose = Some(filename.clone());
+        } else if filename_lower.ends_with(".exp.json") {
+            expressions.push(serde_json::json!({
+                "name": filename.strip_suffix(".exp.json").unwrap_or(filename).to_string(),
+                "file": filename.clone()
+            }));
+        } else if filename_lower.ends_with(".mtn") {
+            let src_path = dir.join(filename);
+            let dest_path = motions_dir.join(filename);
+            if src_path.exists() {
+                let _ = fs::create_dir_all(&motions_dir);
+                if let Err(e) = fs::rename(&src_path, &dest_path) {
+                    if fs::copy(&src_path, &dest_path).is_ok() {
+                        let _ = fs::remove_file(&src_path);
+                    } else {
+                        eprintln!("Failed to move motion file: {}", e);
+                    }
+                }
+            }
+            if dest_path.exists() || src_path.exists() {
+                let group = motions.entry("idle".to_string()).or_insert_with(Vec::new);
+                group.push(serde_json::json!({
+                    "file": format!("motions/{}", filename)
+                }));
+            }
+        }
+    }
+    if textures.is_empty() && textures_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&textures_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let p = entry.path();
+                if p.is_file() {
+                    if let Some(fname) = p.file_name().and_then(|f| f.to_str()) {
+                        if fname.to_lowercase().ends_with(".png") {
+                            textures.push(format!("textures/{}", fname));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if textures.is_empty() {
+        let all_files = find_all_files(dir);
+        for p in all_files {
+            if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                if ext.eq_ignore_ascii_case("png") {
+                    if let Ok(rel) = p.strip_prefix(dir) {
+                        let rel_str = rel.to_string_lossy().replace('\\', "/");
+                        if !rel_str.to_lowercase().contains("preview") {
+                            textures.push(rel_str);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if textures.is_empty() {
+        return Err(format!(
+            "No textures found for Live2D model: {}",
+            moc_file_name
+        ));
+    }
+    textures.sort();
+    let mut model2_json = serde_json::json!({
+        "version": "Sample 1.0.0",
+        "model": moc_file_name,
+        "textures": textures
+    });
+    if let Some(p) = physics {
+        model2_json["physics"] = serde_json::Value::String(p);
+    }
+    if let Some(p_pose) = pose {
+        model2_json["pose"] = serde_json::Value::String(p_pose);
+    }
+    if !expressions.is_empty() {
+        model2_json["expressions"] = serde_json::Value::Array(expressions);
+    }
+    if !motions.is_empty() {
+        model2_json["motions"] = serde_json::to_value(motions).unwrap_or(serde_json::Value::Null);
+    }
+    let output_path = dir.join(format!("{}.model.json", moc_stem));
+    let file = fs::File::create(output_path).map_err(|e| e.to_string())?;
+    serde_json::to_writer_pretty(file, &model2_json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn v2_model_json_has_motions(path: &Path) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return false;
+    };
+    value
+        .get("motions")
+        .and_then(|m| m.as_object())
+        .map(|groups| {
+            groups
+                .values()
+                .any(|g| g.as_array().is_some_and(|entries| !entries.is_empty()))
+        })
+        .unwrap_or(false)
+}
+
+fn find_relative_files_by_ext(dir: &Path, ext: &str) -> Vec<String> {
+    let mut result: Vec<String> = find_all_files(dir)
+        .into_iter()
+        .filter(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case(ext))
+        })
+        .filter_map(|p| {
+            p.strip_prefix(dir)
+                .ok()
+                .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+        })
+        .collect();
+    result.sort_unstable_by(|a, b| compare_natural(a, b));
+    result
+}
+
+fn is_valid_v2_model_json(path: &Path) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    if let Ok(content) = fs::read_to_string(path) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+            if v.get("model").and_then(|m| m.as_str()).is_some() {
+                if let Some(texs) = v.get("textures").and_then(|t| t.as_array()) {
+                    if !texs.is_empty() {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> Result<Vec<SceneData>, String> {
     let mut file_groups = Vec::new();
     let mut atlas_bases = HashSet::with_capacity(64);
@@ -1421,21 +1597,22 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         } else {
             &relative_path
         };
-        if let Some(moc3_pos) = filename_lower.find(".moc3") {
-            let moc_stem = &filename[..moc3_pos];
+        if filename_lower.ends_with(".moc3") {
+            let moc3_len = 5;
+            let moc_stem = &filename[..filename.len() - moc3_len];
             let model3_json_path = dir_path.join(format!("{}.model3.json", moc_stem));
             if !model3_json_path.exists() {
                 let _ = auto_generate_model3_json(dir_path, &filename, moc_stem, &dir_files);
             }
             let base_name_part =
-                &adjusted_path[..adjusted_path.len() - (filename.len() - moc3_pos)];
-            let extension_part = &filename[moc3_pos..];
+                &adjusted_path[..adjusted_path.len() - moc3_len];
             file_groups.push(SceneData {
                 name: base_name_part.to_string(),
-                main_ext: extension_part.to_string(),
+                main_ext: ".moc3".to_string(),
                 atlas_ext: "".to_string(),
                 files: Vec::new(),
                 is_merged: false,
+                motion_files: Vec::new(),
             });
         }
     }
@@ -1446,16 +1623,39 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         } else {
             &relative_path
         };
-        if let Some(moc_pos) = filename_lower.find(".moc") {
+        if filename_lower.ends_with(".moc") {
+            let moc_len = 4;
+            let moc_stem = &filename[..filename.len() - moc_len];
+            let model_json_path = dir_path.join(format!("{}.model.json", moc_stem));
+            let model_json_path_short = dir_path.join(format!("{}.json", moc_stem));
+            let generic_model_json = dir_path.join("model.json");
+            let has_valid_json = is_valid_v2_model_json(&model_json_path)
+                || is_valid_v2_model_json(&model_json_path_short)
+                || is_valid_v2_model_json(&generic_model_json);
+            if !has_valid_json {
+                let _ = auto_generate_model_v2_json(dir_path, &filename, moc_stem, &dir_files);
+            }
+            let declares_motions = [
+                &model_json_path,
+                &model_json_path_short,
+                &generic_model_json,
+            ]
+            .iter()
+            .any(|p| v2_model_json_has_motions(p));
+            let motion_files = if declares_motions {
+                Vec::new()
+            } else {
+                find_relative_files_by_ext(dir_path, "mtn")
+            };
             let base_name_part =
-                &adjusted_path[..adjusted_path.len() - (filename.len() - moc_pos)];
-            let extension_part = &filename[moc_pos..];
+                &adjusted_path[..adjusted_path.len() - moc_len];
             file_groups.push(SceneData {
                 name: base_name_part.to_string(),
-                main_ext: extension_part.to_string(),
+                main_ext: ".moc".to_string(),
                 atlas_ext: "".to_string(),
                 files: Vec::new(),
                 is_merged: false,
+                motion_files,
             });
         }
     }
@@ -1466,6 +1666,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             atlas_ext: "".to_string(),
             files: Vec::new(),
             is_merged: false,
+            motion_files: Vec::new(),
         });
     }
     for meta_filename in meta_json_files {
@@ -1478,6 +1679,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             atlas_ext: "".to_string(),
             files: Vec::new(),
             is_merged: false,
+            motion_files: Vec::new(),
         });
     }
     let mut potential_extra_atlases = HashSet::new();
@@ -1574,6 +1776,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 atlas_ext: atlas_extension,
                 files: bg_files,
                 is_merged: false,
+                motion_files: Vec::new(),
             });
         }
     }
@@ -1619,6 +1822,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 atlas_ext,
                 files: all_bases,
                 is_merged: true,
+                motion_files: Vec::new(),
             }]);
         }
     }

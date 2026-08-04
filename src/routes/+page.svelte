@@ -317,6 +317,7 @@
         renderer.applySkins(matchingSkins);
       }
     }
+    sidebar?.setSelectedExpression('');
     sidebar?.refreshProperties();
     const animations = renderer.getAnimations();
     const keepSetupPose = appState.initialized && previousAnimation === '';

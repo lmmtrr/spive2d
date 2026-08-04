@@ -1,7 +1,16 @@
 import { BaseRenderer } from './BaseRenderer.js';
-import { getLive2DFrameBox, fitLive2DBox } from './Live2DCommon.js';
+import {
+  getLive2DFrameBox,
+  fitLive2DBox,
+  resolveLive2DModelUrl,
+  canUpdateLive2DCore,
+  getCubism2MotionEntry,
+  pinCubism2MotionEntry,
+  getLive2DMotionDuration,
+  registerLive2DMotionFiles,
+  CUBISM2_TIME_BASE,
+} from './Live2DCommon.js';
 import { createSorter } from '../utils.js';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { showNotification } from '../notificationStore.svelte.js';
 import { appState } from '../appState.svelte.js';
 
@@ -74,6 +83,8 @@ export class Live2DRenderer extends BaseRenderer {
   #lastFrameParameters = null;
   #baseParameters = null;
   #accumulatedMS = 0;
+  #cubism2ElapsedMS = 0;
+  #cubism2TimeSeconds = 0;
   #focusPoint = new PIXI.Point();
 
   constructor(isExport = false) {
@@ -106,14 +117,7 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#isExport && this.#canvas) {
       this.#canvas.style.display = 'block';
     }
-    let ext = '.model3.json';
-    if (scene.mainExt.includes('.moc3')) ext = '.model3.json';
-    else if (scene.mainExt.includes('.moc')) ext = '.json';
-    const rawUrl = `${dirName}${scene.name}${ext}`;
-    let url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
-      ? rawUrl
-      : convertFileSrc(rawUrl);
-    url += (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+    const url = await resolveLive2DModelUrl(dirName, scene);
     const { live2d: { Live2DModel } } = PIXI;
     try {
       const scaleMode = appState.textureFilter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
@@ -131,6 +135,10 @@ export class Live2DRenderer extends BaseRenderer {
         return;
       }
       this.#model = model;
+      registerLive2DMotionFiles(model, scene?.motionFiles);
+      if (typeof window !== 'undefined' && window.Live2D && window.Live2D.setGL && this.#app?.renderer?.gl) {
+        window.Live2D.setGL(this.#app.renderer.gl);
+      }
       this.setTextureFilter(appState.textureFilter);
       this.#originalBreath = model.internalModel?.breath || null;
       this.#originalIdleGroup = model.internalModel?.motionManager?.groups?.idle || 'Idle';
@@ -387,10 +395,7 @@ export class Live2DRenderer extends BaseRenderer {
         try {
           const motion = await this.#model.internalModel.motionManager.loadMotion(groupName, i);
           if (this.#disposed || !this.#model || !this.#model.internalModel) return result;
-          const duration = motion?._loopDurationSeconds ||
-            (motion?._motionData && motion._motionData.duration) ||
-            (motion?.getDuration ? motion.getDuration() : 0);
-          if (duration > 0) {
+          if (getLive2DMotionDuration(motion) > 0) {
             result.push({
               name: (anim.file || anim.File || '').split('/').pop(),
               value: `${groupName},${i}`,
@@ -408,6 +413,9 @@ export class Live2DRenderer extends BaseRenderer {
     if (this.#disposed || !this.#model) return;
     if (value === '') {
       this.#currentMotion = { group: null, index: null };
+      this.#cubism2ElapsedMS = 0;
+      this.#cubism2TimeSeconds = 0;
+      window.UtSystem?.setUserTimeMSec?.(0);
       if (this.#model.internalModel && this.#model.internalModel.motionManager) {
         this.#model.internalModel.motionManager.stopAllMotions();
       }
@@ -435,6 +443,8 @@ export class Live2DRenderer extends BaseRenderer {
     }
     const [group, index] = value.split(',');
     this.#currentMotion = { group, index: Number(index) };
+    this.#cubism2ElapsedMS = 0;
+    this.#cubism2TimeSeconds = 0;
     try {
       await this.#model.motion(group, Number(index), 3);
     } catch (e) {
@@ -575,23 +585,46 @@ export class Live2DRenderer extends BaseRenderer {
 
   getAnimationDuration() {
     if (!this.#model) return 0;
+    const cubism2Entry = getCubism2MotionEntry(this.#model);
+    if (cubism2Entry) return getLive2DMotionDuration(cubism2Entry._$w0);
     const mqm = this.#model.internalModel.motionManager?.queueManager;
     if (mqm?._motions?.length > 0) {
       const entry = mqm._motions[0];
       const motion = entry._motion;
-      if (motion) {
-        return motion._loopDurationSeconds ||
-          (motion._motionData && motion._motionData.duration) ||
-          (motion.getDuration ? motion.getDuration() : 0);
-      }
+      if (motion) return getLive2DMotionDuration(motion);
     }
     return 0;
+  }
+
+  #applyCubism2Time(timeSeconds) {
+    const entry = getCubism2MotionEntry(this.#model);
+    if (!entry) return false;
+    const duration = getLive2DMotionDuration(entry._$w0);
+    if (!(duration > 0)) return false;
+    pinCubism2MotionEntry(entry);
+    const wrapped = ((timeSeconds % duration) + duration) % duration;
+    this.#cubism2TimeSeconds = wrapped;
+    window.UtSystem?.setUserTimeMSec?.(CUBISM2_TIME_BASE + wrapped * 1000);
+    return true;
   }
 
   seekAnimation(progress) {
     if (!this.#model) return;
     const mm = this.#model.internalModel.motionManager;
     const mqm = mm?.queueManager;
+    if (getCubism2MotionEntry(this.#model)) {
+      const duration = this.getAnimationDuration();
+      if (!(duration > 0)) return;
+      this.#cubism2ElapsedMS = progress * duration * 1000;
+      if (!this.#applyCubism2Time(progress * duration)) return;
+      const coreModel = this.#model.internalModel.coreModel;
+      mqm.updateParam(coreModel);
+      this.#applyOverrides();
+      this.#saveParameterSnapshot();
+      this.#model.deltaTime = 0;
+      this.render();
+      return;
+    }
     const entry = mqm?._motions?.[0];
     if (entry?._motion) {
       const motion = entry._motion;
@@ -633,6 +666,7 @@ export class Live2DRenderer extends BaseRenderer {
 
   getCurrentTime() {
     if (!this.#model) return 0;
+    if (getCubism2MotionEntry(this.#model)) return this.#cubism2TimeSeconds;
     const mqm = this.#model.internalModel.motionManager?.queueManager;
     if (mqm?._motions?.length > 0) {
       const entry = mqm._motions[0];
@@ -647,6 +681,8 @@ export class Live2DRenderer extends BaseRenderer {
 
   getFPS() {
     if (!this.#model) return 60;
+    const cubism2Entry = getCubism2MotionEntry(this.#model);
+    if (cubism2Entry) return Math.max(60, cubism2Entry._$w0._$D0 || 60);
     const mqm = this.#model.internalModel.motionManager?.queueManager;
     if (mqm?._motions?.length > 0) {
       const motion = mqm._motions[0]._motion;
@@ -699,11 +735,18 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   render() {
+    if (this.#app) {
+      if (typeof window !== 'undefined' && window.Live2D && window.Live2D.setGL && this.#app.renderer?.gl) {
+        window.Live2D.setGL(this.#app.renderer.gl);
+      }
+    }
     if (this.#model) {
       const coreModel = this.#model.internalModel.coreModel;
       const base = this.#swapInParameterSnapshot(coreModel);
       this.#applyOverrides();
-      coreModel.update();
+      if (canUpdateLive2DCore(coreModel)) {
+        coreModel.update();
+      }
       if (base) coreModel._parameterValues.set(base);
     }
     if (this.#app) {
@@ -757,6 +800,10 @@ export class Live2DRenderer extends BaseRenderer {
     if (!model || !model.internalModel) return;
     model.elapsedTime += stepMS;
     model.deltaTime = 0;
+    if (this.#currentMotion.group !== null) {
+      this.#cubism2ElapsedMS += stepMS;
+      this.#applyCubism2Time(this.#cubism2ElapsedMS / 1000);
+    }
     model.internalModel.update(stepMS, model.elapsedTime);
   }
 

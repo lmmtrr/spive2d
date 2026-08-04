@@ -1,7 +1,16 @@
 import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
 import { SpineRendererBase } from './renderer/SpineRendererBase.js';
-import { getLive2DFrameBox, fitLive2DBox } from './renderer/Live2DCommon.js';
+import {
+  getLive2DFrameBox,
+  fitLive2DBox,
+  canUpdateLive2DCore,
+  getCubism2MotionEntry,
+  pinCubism2MotionEntry,
+  getLive2DMotionDuration,
+  registerLive2DMotionFiles,
+  CUBISM2_TIME_BASE,
+} from './renderer/Live2DCommon.js';
 
 let currentTasks = new Map();
 let libsLoaded = false;
@@ -29,6 +38,9 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
     }
     if (!self.PIXI) throw new Error('PIXI failed to initialize');
     self.setupPIXISettings(self.PIXI);
+    if (self.PIXI.live2d?.config) {
+      self.PIXI.live2d.config.sound = false;
+    }
   } else if (isSpine && version) {
     const url = `${origin}/lib/spine-webgl-${version}.js`;
     const response = await fetch(url);
@@ -75,6 +87,7 @@ class WorkerLive2DRenderer {
       }
     };
     this.model = null;
+    this._cubism2Entry = null;
     this._currentDuration = 0.1;
     this.parameterOverrides = new Map();
     this.partOverrides = new Map();
@@ -129,7 +142,9 @@ class WorkerLive2DRenderer {
     if (self.Live2D && self.Live2D.setGL) {
       self.Live2D.setGL(this.renderer.gl);
     }
-    coreModel.update();
+    if (canUpdateLive2DCore(coreModel)) {
+      coreModel.update();
+    }
     if (this.hiddenDrawables.size > 0 && !this.opacities && coreModel._model?.drawables?.opacities) {
       const wasmOpacities = coreModel._model.drawables.opacities;
       const renderer = this;
@@ -157,13 +172,16 @@ class WorkerLive2DRenderer {
     });
   }
 
-  async load(modelUrl) {
+  async load(modelUrl, motionFiles) {
     const { live2d: { Live2DModel } } = PIXI;
+    this._cubism2Entry = null;
     this.model = await Live2DModel.from(modelUrl, { autoInteract: false, idleMotionGroup: 'None' });
+    registerLive2DMotionFiles(this.model, motionFiles);
     this.model.autoUpdate = false;
     this.app.stage.addChild(this.model);
     const { width, height } = this.app.view;
     this.model.anchor.set(0.5, 0.5);
+    this.app.render();
     this.frameBox = getLive2DFrameBox(this.model.internalModel);
     const { baseScale, dx, dy } = fitLive2DBox(this.model.internalModel, this.frameBox, width, height);
     this.model.scale.set(baseScale);
@@ -190,13 +208,14 @@ class WorkerLive2DRenderer {
       await this.model.motion(group, index, PIXI.live2d.MotionPriority.FORCE);
       const mm = this.model.internalModel.motionManager;
       const mqm = mm?.queueManager;
-      if (mqm?._motions?.length > 0) {
+      this._cubism2Entry = getCubism2MotionEntry(this.model);
+      if (this._cubism2Entry) {
+        this._currentDuration = getLive2DMotionDuration(this._cubism2Entry._$w0) || 0.1;
+      } else if (mqm?._motions?.length > 0) {
         const entry = mqm._motions[0];
         const m = entry._motion;
         if (m) {
-          this._currentDuration = m._loopDurationSeconds ||
-            (m._motionData && m._motionData.duration) ||
-            (m.getDuration ? m.getDuration() : 0.1);
+          this._currentDuration = getLive2DMotionDuration(m) || 0.1;
           m._fadeInSeconds = 0;
           m._fadeOutSeconds = 0;
           if (m._motionData?.curves) {
@@ -212,14 +231,28 @@ class WorkerLive2DRenderer {
     }
   }
 
-  setExpression(name) {
-    if (this.model && name) {
-      this.model.expression(name);
-    }
+  async setExpression(value) {
+    if (!this.model || value === '' || value === undefined || value === null) return;
+    const index = Number(value);
+    await this.model.expression(Number.isNaN(index) ? value : index);
+    const expression = this.model.internalModel.motionManager?.expressionManager?.currentExpression;
+    if (!expression) return;
+    expression.setFadeInTime?.(0);
+    expression.setFadeOutTime?.(0);
+    expression.setFadeIn?.(0);
+    expression.setFadeOut?.(0);
+  }
+
+  applyExpression(now) {
+    const expressionManager = this.model?.internalModel?.motionManager?.expressionManager;
+    expressionManager?.update(this.model.internalModel.coreModel, now);
   }
 
   getFPS() {
     if (!this.model) return 60;
+    if (this._cubism2Entry) {
+      return Math.max(60, this._cubism2Entry._$w0._$D0 || 60);
+    }
     const mqm = this.model.internalModel.motionManager?.queueManager;
     if (mqm?._motions?.length > 0) {
       const motion = mqm._motions[0]._motion;
@@ -257,15 +290,32 @@ class WorkerLive2DRenderer {
     if (this.model) {
       const mm = this.model.internalModel.motionManager;
       const mqm = mm?.queueManager;
+      const coreModel = this.model.internalModel.coreModel;
+      if (this._cubism2Entry) {
+        pinCubism2MotionEntry(this._cubism2Entry);
+        self.UtSystem?.setUserTimeMSec?.(CUBISM2_TIME_BASE + progress * this._currentDuration * 1000);
+        mqm.updateParam(coreModel);
+        coreModel.saveParam?.();
+        this.applyExpression(0);
+        this.applyOverrides();
+        coreModel.loadParam?.();
+        this.model.deltaTime = 0;
+        return;
+      }
       const entry = mqm?._motions?.[0];
       if (entry?._motion) {
         const targetTime = progress * this._currentDuration;
         const savedStateTime = entry._stateTimeSeconds;
         entry._startTimeSeconds = savedStateTime - targetTime;
-        mm.update(this.model.internalModel.coreModel, savedStateTime);
+        mm.update(coreModel, savedStateTime);
+        coreModel.saveParameters?.();
+        this.applyExpression(savedStateTime);
         this.applyOverrides();
         entry._startTimeSeconds = entry._stateTimeSeconds - targetTime;
-        this.model.internalModel.coreModel.update();
+        if (canUpdateLive2DCore(coreModel)) {
+          coreModel.update();
+        }
+        coreModel.loadParameters?.();
         this.model.deltaTime = 0;
       }
     }
@@ -392,6 +442,7 @@ self.onmessage = async (e) => {
     if (type === 'START_VIDEO' || type === 'START_PNG_SEQUENCE') {
       await loadLibraries(p.rendererType, p.spineVersion, p.libraryBaseUrl);
       self.useNonePMA = (p.rendererType === 'spine' && p.alphaMode !== 'unpack');
+      self.wantFlipYBitmap = (p.rendererType === 'live2d');
       const canvas = new OffscreenCanvas(p.width, p.height);
       const renderCanvas = new OffscreenCanvas(p.width, p.height);
       const compositeCtx = canvas.getContext('2d');
@@ -403,7 +454,7 @@ self.onmessage = async (e) => {
         if (p.textureFilter) {
           renderer.setTextureFilter(p.textureFilter);
         }
-        await renderer.load(p.modelUrl, p.alphaMode);
+        await renderer.load(p.modelUrl, p.fileNames?.motionFiles);
         if (p.transform) {
           renderer.marginX = p.marginX || 0;
           renderer.marginY = p.marginY || 0;
@@ -422,7 +473,7 @@ self.onmessage = async (e) => {
         }
         if (p.syncState) renderer.applySyncState(p.syncState);
         if (p.animName) await renderer.setAnimation(p.animName);
-        if (p.exprName) renderer.setExpression(p.exprName);
+        if (p.exprName) await renderer.setExpression(p.exprName);
         renderer.applyOverrides();
       } else {
         renderer = new WorkerSpineRenderer(renderCanvas, self.spineLib);

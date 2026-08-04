@@ -10,6 +10,7 @@ export function setupWorkerEnv(self) {
       this.height = 0;
       this.complete = false;
       this.premultiplyAlpha = self.useNonePMA ? 'none' : 'premultiply';
+      this.decodeFlipY = !!self.wantFlipYBitmap;
     }
     set src(url) {
       this._src = url;
@@ -20,12 +21,19 @@ export function setupWorkerEnv(self) {
           if (!res.ok) throw new Error(`Failed to load image: ${url}`);
           return res.blob();
         })
-        .then(blob => createImageBitmap(blob, { premultiplyAlpha: this.premultiplyAlpha }))
-        .then(bitmap => {
+        .then(blob => Promise.all([
+          createImageBitmap(blob, { premultiplyAlpha: this.premultiplyAlpha }),
+          this.decodeFlipY
+            ? createImageBitmap(blob, { premultiplyAlpha: this.premultiplyAlpha, imageOrientation: 'flipY' })
+              .catch(() => null)
+            : null,
+        ]))
+        .then(([bitmap, flippedBitmap]) => {
           this.width = bitmap.width;
           this.height = bitmap.height;
           this.complete = true;
           this._bitmap = bitmap;
+          this._bitmapFlipY = flippedBitmap;
           if (this.onload) this.onload();
         })
         .catch(err => {
@@ -38,18 +46,28 @@ export function setupWorkerEnv(self) {
   self.Image = self.HTMLImageElement;
   const patchWebGL = (proto) => {
     if (!proto) return;
-    const oldTexImage2D = proto.texImage2D;
-    proto.texImage2D = function (...args) {
-      const last = args[args.length - 1];
-      if (last && last._bitmap) args[args.length - 1] = last._bitmap;
-      return oldTexImage2D.apply(this, args);
+    const wrapUpload = (name) => {
+      const original = proto[name];
+      if (!original) return;
+      proto[name] = function (...args) {
+        const last = args[args.length - 1];
+        if (!last || !last._bitmap) return original.apply(this, args);
+        const FLIP_Y = this.UNPACK_FLIP_Y_WEBGL;
+        if (last._bitmapFlipY && this.getParameter(FLIP_Y)) {
+          args[args.length - 1] = last._bitmapFlipY;
+          this.pixelStorei(FLIP_Y, false);
+          try {
+            return original.apply(this, args);
+          } finally {
+            this.pixelStorei(FLIP_Y, true);
+          }
+        }
+        args[args.length - 1] = last._bitmap;
+        return original.apply(this, args);
+      };
     };
-    const oldTexSubImage2D = proto.texSubImage2D;
-    proto.texSubImage2D = function (...args) {
-      const last = args[args.length - 1];
-      if (last && last._bitmap) args[args.length - 1] = last._bitmap;
-      return oldTexSubImage2D.apply(this, args);
-    };
+    wrapUpload('texImage2D');
+    wrapUpload('texSubImage2D');
   };
   patchWebGL(self.WebGLRenderingContext?.prototype);
   patchWebGL(self.WebGL2RenderingContext?.prototype);
