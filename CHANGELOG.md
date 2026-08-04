@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.41] - 2026-08-04
+
+### Fixed
+
+- Enable loading of Live2D Cubism 2.1 models and motion files
+
 ## [0.1.40] - 2026-07-31
 
 ### Fixed
