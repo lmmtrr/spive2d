@@ -110,24 +110,15 @@
         inputPath.startsWith('/tmp/') || 
         inputPath.startsWith('/private/')
       );
-      if (inputPath.startsWith('http://') || inputPath.startsWith('https://') || (inputPath.startsWith('/') && !isLocalUnixPath)) {
+      if (inputPath.startsWith('https://')) {
         let unityRes = null;
         let isUnity = false;
         let shouldInvokeBackend = false;
         try {
           showSpinner = true;
           let bytes;
-          if (inputPath.startsWith('http://') || inputPath.startsWith('https://')) {
-            const fetched = await invoke('fetch_url_bytes', { url: inputPath });
-            bytes = new Uint8Array(fetched);
-          } else {
-            const fetchRes = await fetch(inputPath);
-            if (!fetchRes.ok) {
-              throw new Error(`HTTP error status: ${fetchRes.status}`);
-            }
-            const buffer = await fetchRes.arrayBuffer();
-            bytes = new Uint8Array(buffer);
-          }
+          const fetched = await invoke('fetch_url_bytes', { url: inputPath });
+          bytes = new Uint8Array(fetched);
           const header = String.fromCharCode(...bytes.slice(0, 8));
           isUnity = header.startsWith("UnityFS") || header.startsWith("UnityWeb") || header.startsWith("UnityRaw");
           if (isUnity && appState.skipUnity) {
