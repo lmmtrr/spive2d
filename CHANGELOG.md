@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.42] - 2026-08-04
+
+### Fixed
+
+- Harden URL validation for query parameters to restrict loading to secure HTTPS URLs
+
 ## [0.1.41] - 2026-08-04
 
 ### Fixed
