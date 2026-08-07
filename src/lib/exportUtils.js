@@ -22,8 +22,8 @@ export function getFinalExportSize(renderer) {
   return {
     contentWidth,
     contentHeight,
-    finalWidth: contentWidth + marginX * 2,
-    finalHeight: contentHeight + marginY * 2,
+    finalWidth: Math.max(1, contentWidth + marginX * 2),
+    finalHeight: Math.max(1, contentHeight + marginY * 2),
     marginX,
     marginY
   };

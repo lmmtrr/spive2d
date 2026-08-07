@@ -198,6 +198,7 @@
 
   function handleResetState() {
     appState.resetTransform();
+    appState.resetExportSettings();
     const renderer = getRenderer();
     if (renderer) renderer.resetTransform();
   }

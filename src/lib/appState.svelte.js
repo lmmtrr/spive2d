@@ -1,4 +1,9 @@
-import { loadSetting } from './settings.js';
+import { loadSetting, saveSetting } from './settings.js';
+
+function loadNumberSetting(key, defaultValue, min, max) {
+  const v = parseFloat(loadSetting(key, ''));
+  return Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : defaultValue;
+}
 
 let initialized = $state(false);
 let processing = $state(false);
@@ -31,10 +36,10 @@ let background = $state({
   imagePath: loadSetting('spive2d_bg_image_path', ''),
 });
 let propertyCategory = $state('parameters');
-let exportBase = $state('window');
-let exportScale = $state(100);
-let exportMarginX = $state(0);
-let exportMarginY = $state(0);
+let exportBase = $state(loadSetting('spive2d_export_base', 'window') === 'original' ? 'original' : 'window');
+let exportScale = $state(loadNumberSetting('spive2d_export_scale', 100, 10, 1000));
+let exportMarginX = $state(loadNumberSetting('spive2d_export_margin_x', 0, -1000, 1000));
+let exportMarginY = $state(loadNumberSetting('spive2d_export_margin_y', 0, -1000, 1000));
 let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
 let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let skipUnity = $state(loadSetting('spive2d_skip_unity', 'false') === 'true');
@@ -61,13 +66,13 @@ export const appState = {
   get propertyCategory() { return propertyCategory; },
   set propertyCategory(v) { propertyCategory = v; },
   get exportBase() { return exportBase; },
-  set exportBase(v) { exportBase = v; },
+  set exportBase(v) { exportBase = v; saveSetting('spive2d_export_base', v); },
   get exportScale() { return exportScale; },
-  set exportScale(v) { exportScale = v; },
+  set exportScale(v) { exportScale = v; if (Number.isFinite(v)) saveSetting('spive2d_export_scale', v); },
   get exportMarginX() { return exportMarginX; },
-  set exportMarginX(v) { exportMarginX = v; },
+  set exportMarginX(v) { exportMarginX = v; if (Number.isFinite(v)) saveSetting('spive2d_export_margin_x', v); },
   get exportMarginY() { return exportMarginY; },
-  set exportMarginY(v) { exportMarginY = v; },
+  set exportMarginY(v) { exportMarginY = v; if (Number.isFinite(v)) saveSetting('spive2d_export_margin_y', v); },
   get alphaMode() { return alphaMode; },
   set alphaMode(v) { alphaMode = v; },
   get textureFilter() { return textureFilter; },
@@ -84,10 +89,16 @@ export const appState = {
   SCALE_MIN,
   resetTransform() {
     transform = { scale: 1, moveX: 0, moveY: 0, rotate: 0 };
+  },
+  resetExportSettings() {
     exportScale = 100;
     exportMarginX = 0;
     exportMarginY = 0;
     exportBase = 'window';
+    saveSetting('spive2d_export_scale', exportScale);
+    saveSetting('spive2d_export_margin_x', exportMarginX);
+    saveSetting('spive2d_export_margin_y', exportMarginY);
+    saveSetting('spive2d_export_base', exportBase);
   },
   resetAnimation() {
     animation = { paused: false, seeking: false, seekProgress: 0, currentTime: 0, duration: 0, speed: 1.0 };
