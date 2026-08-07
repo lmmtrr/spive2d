@@ -8,6 +8,7 @@ import {
   pinCubism2MotionEntry,
   getLive2DMotionDuration,
   registerLive2DMotionFiles,
+  applyLive2DTextureScaleMode,
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
 import { createSorter } from '../utils.js';
@@ -764,17 +765,7 @@ export class Live2DRenderer extends BaseRenderer {
     }
     if (!this.#model) return;
     const mode = filter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
-    const updateTextureScaleMode = (object) => {
-      if (!object) return;
-      if (object.texture && object.texture.baseTexture) {
-        object.texture.baseTexture.scaleMode = mode;
-        object.texture.baseTexture.update();
-      }
-      if (object.children) {
-        object.children.forEach(updateTextureScaleMode);
-      }
-    };
-    updateTextureScaleMode(this.#model);
+    applyLive2DTextureScaleMode(this.#model, this.#app?.renderer, mode);
     this.render();
   }
 

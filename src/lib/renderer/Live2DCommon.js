@@ -9,6 +9,20 @@ export function canUpdateLive2DCore(coreModel) {
 
 export const CUBISM2_TIME_BASE = 1e6;
 
+export function applyLive2DTextureScaleMode(model, renderer, scaleMode) {
+  const textures = model?.textures;
+  if (!Array.isArray(textures)) return;
+  const contextUID = renderer?.CONTEXT_UID;
+  for (const texture of textures) {
+    const baseTexture = texture?.baseTexture;
+    if (!baseTexture || baseTexture.scaleMode === scaleMode) continue;
+    baseTexture.scaleMode = scaleMode;
+    if (contextUID !== undefined && baseTexture._glTextures?.[contextUID]) {
+      renderer.texture.bind(baseTexture, 0);
+    }
+  }
+}
+
 export function getCubism2MotionEntry(model) {
   const motions = model?.internalModel?.motionManager?.queueManager?.motions;
   if (!Array.isArray(motions) || motions.length === 0) return null;
