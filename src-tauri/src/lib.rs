@@ -1331,7 +1331,32 @@ fn auto_generate_model3_json(
             }
         }
     }
-    textures.sort();
+    if textures.is_empty() {
+        for rel in find_relative_files_by_suffix(dir, ".png") {
+            if !rel.to_lowercase().contains("preview") {
+                textures.push(rel);
+            }
+        }
+    }
+    if expressions.is_empty() {
+        for rel in find_relative_files_by_suffix(dir, ".exp3.json") {
+            let file_name = rel.rsplit('/').next().unwrap_or(&rel);
+            let name = file_name
+                .get(..file_name.len() - ".exp3.json".len())
+                .unwrap_or(file_name);
+            expressions.push(serde_json::json!({
+                "Name": name,
+                "File": rel
+            }));
+        }
+    }
+    if motions.is_empty() {
+        for rel in find_relative_files_by_suffix(dir, ".motion3.json") {
+            let group = motions.entry("".to_string()).or_insert_with(Vec::new);
+            group.push(serde_json::json!({ "File": rel }));
+        }
+    }
+    textures.sort_unstable_by(|a, b| compare_natural(a, b));
     let mut file_references = serde_json::json!({
         "Moc": moc_file_name,
         "Textures": textures
@@ -1515,6 +1540,21 @@ fn find_relative_files_by_ext(dir: &Path, ext: &str) -> Vec<String> {
                 .ok()
                 .map(|rel| rel.to_string_lossy().replace('\\', "/"))
         })
+        .collect();
+    result.sort_unstable_by(|a, b| compare_natural(a, b));
+    result
+}
+
+fn find_relative_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
+    let suffix_lower = suffix.to_lowercase();
+    let mut result: Vec<String> = find_all_files(dir)
+        .into_iter()
+        .filter_map(|p| {
+            p.strip_prefix(dir)
+                .ok()
+                .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+        })
+        .filter(|rel| rel.to_lowercase().ends_with(&suffix_lower))
         .collect();
     result.sort_unstable_by(|a, b| compare_natural(a, b));
     result
