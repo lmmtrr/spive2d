@@ -79,11 +79,6 @@ export function setupWorkerEnv(self) {
       return oldDrawImage.apply(this, args);
     };
   }
-  let fallbackCanvas = null;
-  const getFallbackCanvas = () => {
-    if (!fallbackCanvas) fallbackCanvas = new OffscreenCanvas(32, 32);
-    return fallbackCanvas;
-  };
   const mockDoc = {
     createElement: (type) => {
       if (type === 'canvas') return new OffscreenCanvas(1, 1);
@@ -95,7 +90,7 @@ export function setupWorkerEnv(self) {
     removeEventListener: () => { },
     documentElement: { style: {} },
     head: { appendChild: () => { } },
-    body: { appendChild: () => { } },
+    body: { appendChild: () => { }, contains: () => false },
   };
   self.__TAURI__ = {
     core: {
@@ -106,32 +101,18 @@ export function setupWorkerEnv(self) {
   self.setupPIXISettings = (PIXI) => {
     if (!PIXI) return;
     self.window.PIXI = PIXI;
-    if (PIXI.utils) {
-      PIXI.utils.skipHello();
-    }
     if (PIXI.Ticker) {
       PIXI.Ticker.shared.autoStart = false;
       PIXI.Ticker.shared.stop();
     }
-    if (PIXI.settings) {
-      PIXI.settings.FAIL_IF_MAJOR_PERFORMANCE_CAVEAT = false;
-      PIXI.settings.PREFER_WEBGL_2 = true;
-      PIXI.settings.ADAPTER = {
-        createCanvas: () => new OffscreenCanvas(1, 1),
-        getCanvas: () => new OffscreenCanvas(1, 1),
-        getWebGLRenderingContext: (c, attrs) => {
-          const target = c || getFallbackCanvas();
-          return target.getContext('webgl2', attrs);
-        },
-        getWebGLContext: (c, attrs) => {
-          const target = c || getFallbackCanvas();
-          return target.getContext('webgl2', attrs);
-        },
-        getNavigator: () => self.navigator,
-        getBaseUrl: () => self.location.href,
-        getFontFaceSet: () => self.document ? self.document.fonts : null,
-        fetch: (...args) => fetch(...args),
-      };
+    if (PIXI.DOMAdapter && PIXI.WebWorkerAdapter) {
+      PIXI.DOMAdapter.set({
+        ...PIXI.WebWorkerAdapter,
+        createImage: () => new self.HTMLImageElement(),
+      });
+    }
+    if (PIXI.loadTextures?.config) {
+      PIXI.loadTextures.config.preferWorkers = false;
     }
   };
 }

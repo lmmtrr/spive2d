@@ -10,6 +10,12 @@ import {
   getLive2DMotionDuration,
   registerLive2DMotionFiles,
   applyLive2DTextureScaleMode,
+  resolveScaleMode,
+  toIdArray,
+  getMotionEntries,
+  getMotionCurves,
+  patchCoreRenderOrders,
+  patchModelSettingsResolveURL,
   CUBISM2_TIME_BASE,
 } from './renderer/Live2DCommon.js';
 
@@ -25,7 +31,7 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
   setupWorkerEnv(self);
   if (isLive2D) {
     const scripts = [
-      origin + '/lib/pixi.min.js',
+      origin + '/lib/pixi.worker.min.js',
       origin + '/lib/live2dcubismcore.min.js',
       origin + '/lib/live2d.min.js',
       origin + '/lib/index.min.js'
@@ -39,6 +45,10 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
     }
     if (!self.PIXI) throw new Error('PIXI failed to initialize');
     self.setupPIXISettings(self.PIXI);
+    if (self.PIXI.live2d?.Live2DPlugin) {
+      self.PIXI.extensions.add(self.PIXI.live2d.Live2DPlugin);
+    }
+    patchModelSettingsResolveURL(self.PIXI);
     if (self.PIXI.live2d?.config) {
       self.PIXI.live2d.config.sound = false;
     }
@@ -62,31 +72,9 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
 
 class WorkerLive2DRenderer {
   constructor(canvas) {
-    const rendererOptions = {
-      width: canvas.width,
-      height: canvas.height,
-      view: canvas,
-      transparent: true,
-      preserveDrawingBuffer: true,
-      antialias: true,
-      resolution: 1,
-    };
-    this.renderer = new PIXI.Renderer(rendererOptions);
-    if (self.Live2D && self.Live2D.setGL) {
-      self.Live2D.setGL(this.renderer.gl);
-    }
-    this.app = {
-      renderer: this.renderer,
-      stage: new PIXI.Container(),
-      view: canvas,
-      render: () => {
-        this.renderer.render(this.app.stage);
-      },
-      destroy: (removeView) => {
-        this.renderer.destroy(removeView);
-        this.app.stage.destroy({ children: true });
-      }
-    };
+    this.canvas = canvas;
+    this.renderer = null;
+    this.app = null;
     this.model = null;
     this._cubism2Entry = null;
     this._currentDuration = 0.1;
@@ -95,6 +83,10 @@ class WorkerLive2DRenderer {
     this.drawableOverrides = new Map();
     this.hiddenDrawables = new Set();
     this.opacities = null;
+    this.parameterIds = [];
+    this.partIds = [];
+    this.drawableIds = [];
+    this.partIndexByName = new Map();
     this.marginX = 0;
     this.marginY = 0;
     this.contentWidth = 0;
@@ -102,6 +94,37 @@ class WorkerLive2DRenderer {
     this.ignoreTransform = false;
     this._lastSeekTime = 0;
     this._textureFilter = null;
+  }
+
+  async init() {
+    const canvas = this.canvas;
+    this.renderer = await PIXI.autoDetectRenderer({
+      preference: 'webgl',
+      canvas,
+      width: canvas.width,
+      height: canvas.height,
+      backgroundAlpha: 0,
+      preserveDrawingBuffer: true,
+      antialias: true,
+      resolution: 1,
+      hello: false,
+    });
+    if (self.Live2D && self.Live2D.setGL) {
+      self.Live2D.setGL(this.renderer.gl);
+    }
+    const stage = new PIXI.Container();
+    this.app = {
+      renderer: this.renderer,
+      stage,
+      view: canvas,
+      render: () => {
+        this.renderer.render(stage);
+      },
+      destroy: (removeView) => {
+        this.renderer.destroy({ removeView });
+        stage.destroy({ children: true });
+      }
+    };
   }
 
   applySyncState(state) {
@@ -119,16 +142,22 @@ class WorkerLive2DRenderer {
       const coreModel = this.model.internalModel.coreModel;
       if (state.initialPartOpacities) {
         for (const [name, opacity] of state.initialPartOpacities) {
-          coreModel.setPartOpacityById(name, opacity);
+          this.setPartOpacity(coreModel, name, opacity);
         }
       }
       if (state.initialParameterValues) {
         for (const [id, value] of state.initialParameterValues) {
-          const idx = coreModel._parameterIds.indexOf(id);
+          const idx = this.parameterIds.indexOf(id);
           if (idx !== -1) coreModel._parameterValues[idx] = value;
         }
       }
     }
+  }
+
+  setPartOpacity(coreModel, name, opacity) {
+    const index = this.partIndexByName.get(name);
+    if (index === undefined) return;
+    coreModel.setPartOpacityByIndex(index, opacity);
   }
 
   applyOverrides() {
@@ -138,7 +167,7 @@ class WorkerLive2DRenderer {
       coreModel._parameterValues[index] = value;
     }
     for (const [name, opacity] of this.partOverrides) {
-      coreModel.setPartOpacityById(name, opacity);
+      this.setPartOpacity(coreModel, name, opacity);
     }
     if (self.Live2D && self.Live2D.setGL) {
       self.Live2D.setGL(this.renderer.gl);
@@ -164,9 +193,7 @@ class WorkerLive2DRenderer {
   }
 
   hideMaskMosaicDrawables() {
-    const coreModel = this.model?.internalModel?.coreModel;
-    if (!coreModel || !coreModel._drawableIds) return;
-    coreModel._drawableIds.forEach((name, index) => {
+    this.drawableIds.forEach((name, index) => {
       if (name && name.includes('Mosaic')) {
         this.hiddenDrawables.add(index);
       }
@@ -176,9 +203,20 @@ class WorkerLive2DRenderer {
   async load(modelUrl, motionFiles) {
     const { live2d: { Live2DModel } } = PIXI;
     this._cubism2Entry = null;
-    this.model = await Live2DModel.from(modelUrl, { autoInteract: false, idleMotionGroup: 'None' });
+    this.model = await Live2DModel.from(modelUrl, {
+      autoHitTest: false,
+      autoFocus: false,
+      autoUpdate: false,
+      idleMotionGroup: 'None',
+    });
     registerLive2DMotionFiles(this.model, motionFiles);
-    this.model.autoUpdate = false;
+    this.model.automator.autoUpdate = false;
+    const coreModel = this.model.internalModel.coreModel;
+    this.parameterIds = toIdArray(coreModel?._parameterIds);
+    this.partIds = toIdArray(coreModel?._partIds);
+    this.drawableIds = toIdArray(coreModel?._drawableIds);
+    this.partIndexByName = new Map(this.partIds.map((name, index) => [name, index]));
+    patchCoreRenderOrders(coreModel);
     this.app.stage.addChild(this.model);
     const { width, height } = this.app.view;
     this.model.anchor.set(0.5, 0.5);
@@ -212,18 +250,15 @@ class WorkerLive2DRenderer {
       this._cubism2Entry = getCubism2MotionEntry(this.model);
       if (this._cubism2Entry) {
         this._currentDuration = getLive2DMotionDuration(this._cubism2Entry._$w0) || 0.1;
-      } else if (mqm?._motions?.length > 0) {
-        const entry = mqm._motions[0];
-        const m = entry._motion;
+      } else if (getMotionEntries(mqm).length > 0) {
+        const m = getMotionEntries(mqm)[0]._motion;
         if (m) {
           this._currentDuration = getLive2DMotionDuration(m) || 0.1;
           m._fadeInSeconds = 0;
           m._fadeOutSeconds = 0;
-          if (m._motionData?.curves) {
-            for (const curve of m._motionData.curves) {
-              curve.fadeInTime = -1;
-              curve.fadeOutTime = -1;
-            }
+          for (const curve of getMotionCurves(m)) {
+            curve.fadeInTime = -1;
+            curve.fadeOutTime = -1;
           }
         }
       } else {
@@ -254,12 +289,9 @@ class WorkerLive2DRenderer {
     if (this._cubism2Entry) {
       return Math.max(60, this._cubism2Entry._$w0._$D0 || 60);
     }
-    const mqm = this.model.internalModel.motionManager?.queueManager;
-    if (mqm?._motions?.length > 0) {
-      const motion = mqm._motions[0]._motion;
-      if (motion) {
-        return Math.max(60, motion._fps || (motion._motionData && motion._motionData.fps) || 60);
-      }
+    const motion = getMotionEntries(this.model.internalModel.motionManager?.queueManager)[0]?._motion;
+    if (motion) {
+      return Math.max(60, motion._fps || (motion._motionData && motion._motionData.fps) || 60);
     }
     return 60;
   }
@@ -303,7 +335,7 @@ class WorkerLive2DRenderer {
         this.model.deltaTime = 0;
         return;
       }
-      const entry = mqm?._motions?.[0];
+      const entry = getMotionEntries(mqm)[0];
       if (entry?._motion) {
         const targetTime = progress * this._currentDuration;
         const savedStateTime = entry._stateTimeSeconds;
@@ -329,16 +361,15 @@ class WorkerLive2DRenderer {
   setTextureFilter(filter) {
     this._textureFilter = filter;
     if (!this.model) return;
-    const mode = filter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
-    applyLive2DTextureScaleMode(this.model, this.renderer, mode);
+    applyLive2DTextureScaleMode(this.model, resolveScaleMode(filter));
   }
 
   dispose() {
     if (this.model) {
-      this.app.stage.removeChild(this.model);
+      this.app?.stage.removeChild(this.model);
       this.model.destroy();
     }
-    this.app.destroy(true);
+    this.app?.destroy(true);
   }
 }
 
@@ -441,6 +472,7 @@ self.onmessage = async (e) => {
       let renderer;
       if (p.rendererType === 'live2d') {
         renderer = new WorkerLive2DRenderer(renderCanvas);
+        await renderer.init();
         if (!renderer.renderer) throw new Error('Failed to initialize Live2D renderer.');
         if (p.textureFilter) {
           renderer.setTextureFilter(p.textureFilter);

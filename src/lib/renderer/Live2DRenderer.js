@@ -9,6 +9,12 @@ import {
   getLive2DMotionDuration,
   registerLive2DMotionFiles,
   applyLive2DTextureScaleMode,
+  resolveScaleMode,
+  toIdArray,
+  getMotionEntries,
+  getMotionCurves,
+  patchCoreRenderOrders,
+  patchModelSettingsResolveURL,
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
 import { createSorter } from '../utils.js';
@@ -23,33 +29,45 @@ const MAX_STEPS_PER_FRAME = 20;
 
 class PixiAppManager {
   static #sharedApp = null;
+  static #sharedCanvas = null;
+  static #readyPromise = null;
   static #usageCount = 0;
 
   static acquire() {
-    if (!this.#sharedApp) {
+    if (!this.#readyPromise) {
       const cvs = document.createElement('canvas');
       cvs.style.display = 'none';
       cvs.style.verticalAlign = 'top';
       cvs.style.opacity = '0';
-      this.#sharedApp = new PIXI.Application({
-        view: cvs,
+      this.#sharedCanvas = cvs;
+      const app = new PIXI.Application();
+      this.#readyPromise = app.init({
+        canvas: cvs,
+        preference: 'webgl',
         preserveDrawingBuffer: true,
-        transparent: true,
+        backgroundAlpha: 0,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
+        resizeTo: window,
+        hello: false,
+      }).then(() => {
+        this.#sharedApp = app;
+        return app;
       });
-      this.#sharedApp.resizeTo = window;
     }
     this.#usageCount++;
-    return this.#sharedApp;
+    return { canvas: this.#sharedCanvas, ready: this.#readyPromise };
   }
 
   static release() {
     this.#usageCount--;
-    if (this.#usageCount === 0 && this.#sharedApp) {
-      this.#sharedApp.destroy(false, { children: true });
+    if (this.#usageCount === 0 && this.#readyPromise) {
+      const pending = this.#readyPromise;
+      this.#readyPromise = null;
       this.#sharedApp = null;
+      this.#sharedCanvas = null;
+      pending.then(app => app.destroy({ removeView: false }, { children: true })).catch(() => { });
     }
   }
 
@@ -60,7 +78,8 @@ class PixiAppManager {
 
 export class Live2DRenderer extends BaseRenderer {
   #canvas;
-  #app;
+  #app = null;
+  #appReady;
   #contentBox = null;
   #model = null;
   #hiddenDrawables = new Set();
@@ -71,11 +90,16 @@ export class Live2DRenderer extends BaseRenderer {
   #animations = [];
   #disposed = false;
   #renderTexture = null;
+  #captureContainer = null;
   #paused = false;
   #updateFn = null;
   #lastTime = 0;
   #initialPartOpacities = new Map();
   #initialParameterValues = new Map();
+  #parameterIds = [];
+  #partIds = [];
+  #drawableIds = [];
+  #partIndexByName = new Map();
   #originalBreath = null;
   #originalIdleGroup = 'Idle';
   #pointerMoveHandler = null;
@@ -91,8 +115,12 @@ export class Live2DRenderer extends BaseRenderer {
   constructor(isExport = false) {
     super(isExport);
     this.#isExport = isExport;
-    this.#app = PixiAppManager.acquire();
-    this.#canvas = this.#app.view;
+    const { canvas, ready } = PixiAppManager.acquire();
+    this.#canvas = canvas;
+    this.#appReady = ready.then(app => {
+      if (!this.#disposed) this.#app = app;
+      return app;
+    });
   }
 
   getCanvas() {
@@ -100,6 +128,8 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   async load(dirName, scene) {
+    if (this.#disposed) return;
+    await this.#appReady;
     if (this.#disposed) return;
     if (this.#updateFn && this.#app) {
       this.#app.ticker.remove(this.#updateFn);
@@ -119,12 +149,14 @@ export class Live2DRenderer extends BaseRenderer {
       this.#canvas.style.display = 'block';
     }
     const url = await resolveLive2DModelUrl(dirName, scene);
+    patchModelSettingsResolveURL(PIXI);
     const { live2d: { Live2DModel } } = PIXI;
     try {
-      const scaleMode = appState.textureFilter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
-      PIXI.settings.SCALE_MODE = scaleMode;
+      PIXI.TextureSource.defaultOptions.scaleMode = resolveScaleMode(appState.textureFilter);
       const model = await Live2DModel.from(url, {
-        autoInteract: false,
+        autoHitTest: false,
+        autoFocus: false,
+        autoUpdate: false,
         ...(appState.enableIdleAndBreathing ? {} : { idleMotionGroup: 'None' })
       });
       if (this.#disposed) {
@@ -153,17 +185,15 @@ export class Live2DRenderer extends BaseRenderer {
       this.#hiddenDrawables.clear();
       this.#opacities = null;
       const coreModel = model.internalModel?.coreModel;
+      this.#cacheModelIds(coreModel);
       if (coreModel) {
-        if (coreModel._partIds) {
-          coreModel._partIds.forEach((name) => {
-            this.#initialPartOpacities.set(name, coreModel.getPartOpacityById(name));
-          });
-        }
-        if (coreModel._parameterIds) {
-          coreModel._parameterIds.forEach((id, idx) => {
-            this.#initialParameterValues.set(idx, coreModel._parameterValues[idx]);
-          });
-        }
+        patchCoreRenderOrders(coreModel);
+        this.#partIds.forEach((name, index) => {
+          this.#initialPartOpacities.set(name, coreModel.getPartOpacityByIndex(index));
+        });
+        this.#parameterIds.forEach((id, idx) => {
+          this.#initialParameterValues.set(idx, coreModel._parameterValues[idx]);
+        });
       }
       const { innerWidth: w, innerHeight: h } = window;
       model.anchor.set(0.5, 0.5);
@@ -181,7 +211,7 @@ export class Live2DRenderer extends BaseRenderer {
         await this.setAnimation(animations[0].value);
       }
       if (this.#disposed || !this.#model) return;
-      this.#model.autoUpdate = false;
+      this.#model.automator.autoUpdate = false;
       this.#model.deltaTime = 0;
       this.#lastTime = performance.now();
       this.#accumulatedMS = 0;
@@ -275,6 +305,10 @@ export class Live2DRenderer extends BaseRenderer {
       this.#renderTexture.destroy(true);
       this.#renderTexture = null;
     }
+    if (this.#captureContainer) {
+      this.#captureContainer.destroy({ children: false });
+      this.#captureContainer = null;
+    }
     PixiAppManager.release();
     this.#app = null;
   }
@@ -282,6 +316,19 @@ export class Live2DRenderer extends BaseRenderer {
   resize(width, height) {
     if (this.#isExport || !this.#app) return;
     this.#app.renderer.resize(width, height);
+  }
+
+  #cacheModelIds(coreModel) {
+    this.#parameterIds = toIdArray(coreModel?._parameterIds);
+    this.#partIds = toIdArray(coreModel?._partIds);
+    this.#drawableIds = toIdArray(coreModel?._drawableIds);
+    this.#partIndexByName = new Map(this.#partIds.map((name, index) => [name, index]));
+  }
+
+  #setPartOpacity(coreModel, name, opacity) {
+    const index = this.#partIndexByName.get(name);
+    if (index === undefined) return;
+    coreModel.setPartOpacityByIndex(index, opacity);
   }
 
   #getContentBox() {
@@ -338,7 +385,7 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   captureFrame(width, height, options = {}) {
-    if (!this.#model) return null;
+    if (!this.#model || !this.#app) return null;
     width = Math.round(width);
     height = Math.round(height);
     const originalScale = this.#model.scale.clone();
@@ -373,8 +420,13 @@ export class Live2DRenderer extends BaseRenderer {
       if (this.#renderTexture) this.#renderTexture.destroy(true);
       this.#renderTexture = PIXI.RenderTexture.create({ width, height });
     }
-    this.#app.renderer.render(this.#model, { renderTexture: this.#renderTexture });
+    const wasOnStage = this.#model.parent === this.#app.stage;
+    if (!this.#captureContainer) this.#captureContainer = new PIXI.Container();
+    this.#captureContainer.addChild(this.#model);
+    this.#app.renderer.render({ container: this.#captureContainer, target: this.#renderTexture });
     const canvas = this.#app.renderer.extract.canvas(this.#renderTexture);
+    this.#captureContainer.removeChild(this.#model);
+    if (wasOnStage) this.#app.stage.addChild(this.#model);
     this.#model.scale.copyFrom(originalScale);
     this.#model.position.copyFrom(originalPosition);
     this.#model.rotation = originalRotation;
@@ -422,22 +474,18 @@ export class Live2DRenderer extends BaseRenderer {
       }
       const coreModel = this.#model.internalModel?.coreModel;
       if (coreModel) {
-        if (coreModel._parameterIds) {
-          coreModel._parameterIds.forEach((id, idx) => {
-            const initialVal = this.#initialParameterValues.get(idx);
-            if (initialVal !== undefined) {
-              coreModel._parameterValues[idx] = initialVal;
-            }
-          });
-        }
-        if (coreModel._partIds) {
-          coreModel._partIds.forEach((name) => {
-            const initialVal = this.#initialPartOpacities.get(name);
-            if (initialVal !== undefined) {
-              coreModel.setPartOpacityById(name, initialVal);
-            }
-          });
-        }
+        this.#parameterIds.forEach((id, idx) => {
+          const initialVal = this.#initialParameterValues.get(idx);
+          if (initialVal !== undefined) {
+            coreModel._parameterValues[idx] = initialVal;
+          }
+        });
+        this.#partIds.forEach((name) => {
+          const initialVal = this.#initialPartOpacities.get(name);
+          if (initialVal !== undefined) {
+            this.#setPartOpacity(coreModel, name, initialVal);
+          }
+        });
         this.#saveParameterSnapshot();
       }
       return;
@@ -487,8 +535,7 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#model) return [];
     const coreModel = this.#model.internalModel.coreModel;
     if (category === 'parameters') {
-      if (!coreModel._parameterIds) return [];
-      return coreModel._parameterIds
+      return this.#parameterIds
         .map((id, index) => ({
           name: id,
           id,
@@ -502,20 +549,17 @@ export class Live2DRenderer extends BaseRenderer {
         .sort(sortById);
     }
     if (category === 'parts') {
-      const partIds = coreModel?._partIds;
-      if (!partIds) return [];
-      return partIds
+      return this.#partIds
         .map((name, index) => ({
           name,
           index,
           type: 'checkbox',
-          checked: coreModel.getPartOpacityById(name) > 0,
+          checked: coreModel.getPartOpacityByIndex(index) > 0,
         }))
         .sort(sortByText);
     }
     if (category === 'drawables') {
-      if (!coreModel?._drawableIds) return [];
-      return coreModel._drawableIds
+      return this.#drawableIds
         .map((name, index) => {
           let isVisible = !this.#hiddenDrawables.has(index);
           return {
@@ -537,7 +581,7 @@ export class Live2DRenderer extends BaseRenderer {
       coreModel._parameterValues[index] = value;
       this.parameterOverrides.set(index, value);
     } else if (category === 'parts') {
-      coreModel.setPartOpacityById(name, value ? 1 : 0);
+      this.#setPartOpacity(coreModel, name, value ? 1 : 0);
       this.partOverrides.set(name, value ? 1 : 0);
     } else if (category === 'drawables') {
       if (value) {
@@ -557,26 +601,22 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#model) return;
     const coreModel = this.#model.internalModel.coreModel;
     if (category === 'parameters') {
-      if (coreModel._parameterIds) {
-        coreModel._parameterIds.forEach((id, index) => {
-          const defVal = this.#initialParameterValues.has(index)
-            ? this.#initialParameterValues.get(index)
-            : (typeof coreModel.getParameterDefaultValue === 'function'
-              ? coreModel.getParameterDefaultValue(index)
-              : coreModel._parameterValues[index]);
-          coreModel._parameterValues[index] = defVal;
-        });
-        this.#saveParameterSnapshot();
-      }
+      this.#parameterIds.forEach((id, index) => {
+        const defVal = this.#initialParameterValues.has(index)
+          ? this.#initialParameterValues.get(index)
+          : (typeof coreModel.getParameterDefaultValue === 'function'
+            ? coreModel.getParameterDefaultValue(index)
+            : coreModel._parameterValues[index]);
+        coreModel._parameterValues[index] = defVal;
+      });
+      this.#saveParameterSnapshot();
     } else if (category === 'parts') {
-      if (coreModel && coreModel._partIds) {
-        coreModel._partIds.forEach((name) => {
-          const defVal = this.#initialPartOpacities.has(name)
-            ? this.#initialPartOpacities.get(name)
-            : 1.0;
-          coreModel.setPartOpacityById(name, defVal);
-        });
-      }
+      this.#partIds.forEach((name) => {
+        const defVal = this.#initialPartOpacities.has(name)
+          ? this.#initialPartOpacities.get(name)
+          : 1.0;
+        this.#setPartOpacity(coreModel, name, defVal);
+      });
     } else if (category === 'drawables') {
       this.#hiddenDrawables.clear();
       this.#hideMaskMosaicDrawables();
@@ -588,12 +628,8 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#model) return 0;
     const cubism2Entry = getCubism2MotionEntry(this.#model);
     if (cubism2Entry) return getLive2DMotionDuration(cubism2Entry._$w0);
-    const mqm = this.#model.internalModel.motionManager?.queueManager;
-    if (mqm?._motions?.length > 0) {
-      const entry = mqm._motions[0];
-      const motion = entry._motion;
-      if (motion) return getLive2DMotionDuration(motion);
-    }
+    const entry = getMotionEntries(this.#model.internalModel.motionManager?.queueManager)[0];
+    if (entry?._motion) return getLive2DMotionDuration(entry._motion);
     return 0;
   }
 
@@ -626,7 +662,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.render();
       return;
     }
-    const entry = mqm?._motions?.[0];
+    const entry = getMotionEntries(mqm)[0];
     if (entry?._motion) {
       const motion = entry._motion;
       let duration = motion._loopDurationSeconds ||
@@ -639,11 +675,9 @@ export class Live2DRenderer extends BaseRenderer {
         if (entry._motion) {
           entry._motion._fadeInSeconds = 0;
           entry._motion._fadeOutSeconds = 0;
-          if (entry._motion._motionData?.curves) {
-            for (const curve of entry._motion._motionData.curves) {
-              curve.fadeInTime = -1;
-              curve.fadeOutTime = -1;
-            }
+          for (const curve of getMotionCurves(entry._motion)) {
+            curve.fadeInTime = -1;
+            curve.fadeOutTime = -1;
           }
         }
         const savedStateTime = entry._stateTimeSeconds;
@@ -658,7 +692,7 @@ export class Live2DRenderer extends BaseRenderer {
         coreModel.loadParameters?.();
         this.#model.deltaTime = 0;
         this.render();
-        if (this.#app && !this.#model.autoUpdate) {
+        if (this.#app && !this.#model.automator?.autoUpdate) {
           this.#app.render();
         }
       }
@@ -668,9 +702,8 @@ export class Live2DRenderer extends BaseRenderer {
   getCurrentTime() {
     if (!this.#model) return 0;
     if (getCubism2MotionEntry(this.#model)) return this.#cubism2TimeSeconds;
-    const mqm = this.#model.internalModel.motionManager?.queueManager;
-    if (mqm?._motions?.length > 0) {
-      const entry = mqm._motions[0];
+    const entry = getMotionEntries(this.#model.internalModel.motionManager?.queueManager)[0];
+    if (entry) {
       const duration = this.getAnimationDuration();
       if (duration > 0) {
         let t = entry._stateTimeSeconds - entry._startTimeSeconds;
@@ -684,12 +717,9 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#model) return 60;
     const cubism2Entry = getCubism2MotionEntry(this.#model);
     if (cubism2Entry) return Math.max(60, cubism2Entry._$w0._$D0 || 60);
-    const mqm = this.#model.internalModel.motionManager?.queueManager;
-    if (mqm?._motions?.length > 0) {
-      const motion = mqm._motions[0]._motion;
-      if (motion) {
-        return Math.max(60, motion._fps || (motion._motionData && motion._motionData.fps) || 60);
-      }
+    const motion = getMotionEntries(this.#model.internalModel.motionManager?.queueManager)[0]?._motion;
+    if (motion) {
+      return Math.max(60, motion._fps || (motion._motionData && motion._motionData.fps) || 60);
     }
     return 60;
   }
@@ -705,13 +735,8 @@ export class Live2DRenderer extends BaseRenderer {
     const state = super.getSyncState();
     if (this.#model) {
       const coreModel = this.#model.internalModel.coreModel;
-      const partIds = coreModel?._partIds;
-      if (partIds) {
-        state.initialPartOpacities = partIds.map(name => [name, coreModel.getPartOpacityById(name)]);
-      }
-      if (coreModel._parameterIds) {
-        state.initialParameterValues = coreModel._parameterIds.map((id, i) => [id, coreModel._parameterValues[i]]);
-      }
+      state.initialPartOpacities = this.#partIds.map((name, index) => [name, coreModel.getPartOpacityByIndex(index)]);
+      state.initialParameterValues = this.#parameterIds.map((id, i) => [id, coreModel._parameterValues[i]]);
     }
     return state;
   }
@@ -764,8 +789,7 @@ export class Live2DRenderer extends BaseRenderer {
       }
     }
     if (!this.#model) return;
-    const mode = filter === 'nearest' ? PIXI.SCALE_MODES.NEAREST : PIXI.SCALE_MODES.LINEAR;
-    applyLive2DTextureScaleMode(this.#model, this.#app?.renderer, mode);
+    applyLive2DTextureScaleMode(this.#model, resolveScaleMode(filter));
     this.render();
   }
 
@@ -835,7 +859,7 @@ export class Live2DRenderer extends BaseRenderer {
       coreModel._parameterValues[index] = value;
     }
     for (const [name, opacity] of this.partOverrides) {
-      coreModel.setPartOpacityById(name, opacity);
+      this.#setPartOpacity(coreModel, name, opacity);
     }
     if (this.#hiddenDrawables.size > 0 && !this.#opacities) {
       this.#setupDrawableOpacitiesProxy();
@@ -843,9 +867,7 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   #hideMaskMosaicDrawables() {
-    const coreModel = this.#model?.internalModel?.coreModel;
-    if (!coreModel || !coreModel._drawableIds) return;
-    coreModel._drawableIds.forEach((name, index) => {
+    this.#drawableIds.forEach((name, index) => {
       if (name && name.includes('Mosaic')) {
         this.#hiddenDrawables.add(index);
       }

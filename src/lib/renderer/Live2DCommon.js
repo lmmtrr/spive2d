@@ -9,17 +9,74 @@ export function canUpdateLive2DCore(coreModel) {
 
 export const CUBISM2_TIME_BASE = 1e6;
 
-export function applyLive2DTextureScaleMode(model, renderer, scaleMode) {
+export function csmToArray(container) {
+  if (!container) return [];
+  if (Array.isArray(container)) return container.filter(Boolean);
+  if (typeof container.at !== 'function') return [];
+  const size = typeof container.getSize === 'function'
+    ? container.getSize()
+    : (typeof container._size === 'number' ? container._size : 0);
+  const items = [];
+  for (let i = 0; i < size; i++) {
+    const item = container.at(i);
+    if (item) items.push(item);
+  }
+  return items;
+}
+
+function idToString(id) {
+  if (typeof id === 'string') return id;
+  const wrapped = id?._id ?? id?.getString?.();
+  if (typeof wrapped === 'string') return wrapped;
+  if (typeof wrapped?.s === 'string') return wrapped.s;
+  return String(id);
+}
+
+export function toIdArray(container) {
+  return csmToArray(container).map(idToString);
+}
+
+export function getMotionEntries(queueManager) {
+  return csmToArray(queueManager?._motions);
+}
+
+export function getMotionCurves(motion) {
+  return csmToArray(motion?._motionData?.curves);
+}
+
+export function patchCoreRenderOrders(coreModel) {
+  const native = coreModel?._model;
+  if (!native || native.drawables?.renderOrders) return;
+  if (typeof native.getRenderOrders !== 'function') return;
+  coreModel.getDrawableRenderOrders = () => native.getRenderOrders();
+}
+
+export function patchModelSettingsResolveURL(pixi) {
+  const proto = pixi?.live2d?.ModelSettings?.prototype;
+  if (!proto || proto.__spive2dEncodedPathResolve) return;
+  const original = proto.resolveURL;
+  proto.resolveURL = function (path) {
+    const lastEncodedSlash = typeof this.url === 'string' ? this.url.lastIndexOf('%2F') : -1;
+    if (lastEncodedSlash === -1 || /^[a-z][a-z0-9+.-]*:/i.test(path)) {
+      return original.call(this, path);
+    }
+    return original.call(this, this.url.slice(0, lastEncodedSlash + 3) + path);
+  };
+  proto.__spive2dEncodedPathResolve = true;
+}
+
+export function resolveScaleMode(filter) {
+  return filter === 'nearest' ? 'nearest' : 'linear';
+}
+
+export function applyLive2DTextureScaleMode(model, scaleMode) {
   const textures = model?.textures;
   if (!Array.isArray(textures)) return;
-  const contextUID = renderer?.CONTEXT_UID;
   for (const texture of textures) {
-    const baseTexture = texture?.baseTexture;
-    if (!baseTexture || baseTexture.scaleMode === scaleMode) continue;
-    baseTexture.scaleMode = scaleMode;
-    if (contextUID !== undefined && baseTexture._glTextures?.[contextUID]) {
-      renderer.texture.bind(baseTexture, 0);
-    }
+    const source = texture?.source;
+    if (!source || source.scaleMode === scaleMode) continue;
+    source.scaleMode = scaleMode;
+    source.style?.update();
   }
 }
 

@@ -102,7 +102,7 @@ To set up a local development environment, you'll need to install the following 
 **🎭 Live2D Cubism:**
 
 - Cubism 2.1
-- Cubism 4.x
+- Cubism 3.x - 5.x
 
 **🖼️ Layered Sprite (Tachie):**
 
@@ -112,7 +112,7 @@ To set up a local development environment, you'll need to install the following 
 
 - [Tauri](https://github.com/tauri-apps/tauri) ([MIT](https://github.com/tauri-apps/tauri/blob/dev/LICENSE_MIT))
 - [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) ([LICENSE](https://github.com/EsotericSoftware/spine-runtimes/blob/master/LICENSE))
-- [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) ([MIT](https://github.com/guansss/pixi-live2d-display/blob/master/LICENSE))
+- [untitled-pixi-live2d-engine](https://github.com/Untitled-Story/untitled-pixi-live2d-engine) ([MIT](https://github.com/Untitled-Story/untitled-pixi-live2d-engine/blob/main/LICENSE))
 
 ## 📄 Licenses
 

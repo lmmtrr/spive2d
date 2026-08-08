@@ -102,7 +102,7 @@ chmod +x /path/to/spive2d_linux_x64
 **🎭 Live2D Cubism:**
 
 - Cubism 2.1
-- Cubism 4.x
+- Cubism 3.x - 5.x
 
 **🖼️ Layered Sprite (立绘):**
 
@@ -112,7 +112,7 @@ chmod +x /path/to/spive2d_linux_x64
 
 - [Tauri](https://github.com/tauri-apps/tauri) ([MIT](https://github.com/tauri-apps/tauri/blob/dev/LICENSE_MIT))
 - [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) ([LICENSE](https://github.com/EsotericSoftware/spine-runtimes/blob/master/LICENSE))
-- [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) ([MIT](https://github.com/guansss/pixi-live2d-display/blob/master/LICENSE))
+- [untitled-pixi-live2d-engine](https://github.com/Untitled-Story/untitled-pixi-live2d-engine) ([MIT](https://github.com/Untitled-Story/untitled-pixi-live2d-engine/blob/main/LICENSE))
 
 ## 📄 许可证
 
