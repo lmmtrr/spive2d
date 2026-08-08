@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.43] - 2026-08-08
+
+### Added
+
+- Persist export settings across sessions
+
+### Changed
+
+- Replace Live2D library for Cubism 5.x compatibility
+
 ## [0.1.42] - 2026-08-04
 
 ### Fixed
