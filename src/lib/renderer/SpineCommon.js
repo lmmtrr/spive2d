@@ -79,20 +79,40 @@ export function createCanvas(width, height) {
   throw new Error('No canvas implementation available');
 }
 
+export function toSpineAssetUrl(url) {
+  if (typeof url !== 'string' || /^(https?:|data:|blob:)/i.test(url)) return url;
+  const convert = globalThis.__TAURI__?.core?.convertFileSrc;
+  return typeof convert === 'function' ? convert(url) : url;
+}
+
 export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
   const target = assetManager.downloader || assetManager;
   const originalDownloadText = target.downloadText.bind(target);
   target.downloadText = (url, success, error) => {
-    return originalDownloadText(url, (text) => {
-      if (typeof text === 'string' && url.split(/[?#]/)[0].match(/\.(atlas|txt)$/)) {
+    const isAtlas = typeof url === 'string' && /\.(atlas|txt)$/.test(url.split(/[?#]/)[0]);
+    return originalDownloadText(toSpineAssetUrl(url), (text) => {
+      if (typeof text === 'string' && isAtlas) {
         text = normalizeAtlasText(text);
       }
       success?.(text);
     }, error);
   };
+  if (typeof target.downloadBinary === 'function') {
+    const originalDownloadBinary = target.downloadBinary.bind(target);
+    target.downloadBinary = (url, success, error) => originalDownloadBinary(toSpineAssetUrl(url), success, error);
+  }
   const originalLoadTexture = assetManager.loadTexture.bind(assetManager);
   assetManager.loadTexture = (url, success, error) => {
-    originalLoadTexture(url, success, (path, msg) => {
+    const requestUrl = toSpineAssetUrl(url);
+    const mirrorOntoPlainPath = (key) => {
+      if (requestUrl === url || !assetManager.assets) return;
+      const cached = assetManager.assets[key];
+      if (cached !== undefined) assetManager.assets[url] = cached;
+    };
+    originalLoadTexture(requestUrl, (path, asset) => {
+      mirrorOntoPlainPath(path);
+      success?.(path, asset);
+    }, (path, msg) => {
       onFallback?.(path, msg);
       const canvas = (typeof OffscreenCanvas !== 'undefined')
         ? new OffscreenCanvas(1, 1)
@@ -106,6 +126,7 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
       ctx.fillRect(0, 0, 1, 1);
       const texture = new spine.GLTexture(gl, canvas);
       assetManager.assets[path] = texture;
+      mirrorOntoPlainPath(path);
       if (assetManager.errors) delete assetManager.errors[path];
       success?.(path, texture);
     });

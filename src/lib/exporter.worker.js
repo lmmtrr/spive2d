@@ -15,7 +15,8 @@ import {
   getMotionEntries,
   getMotionCurves,
   patchCoreRenderOrders,
-  patchModelSettingsResolveURL,
+  applyLive2DEnginePatches,
+  ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
 } from './renderer/Live2DCommon.js';
 
@@ -48,7 +49,8 @@ async function loadLibraries(rendererType, version = null, libraryBaseUrl = null
     if (self.PIXI.live2d?.Live2DPlugin) {
       self.PIXI.extensions.add(self.PIXI.live2d.Live2DPlugin);
     }
-    patchModelSettingsResolveURL(self.PIXI);
+    applyLive2DEnginePatches(self.PIXI);
+    await ensureLive2DRuntimeReady(self.PIXI);
     if (self.PIXI.live2d?.config) {
       self.PIXI.live2d.config.sound = false;
     }

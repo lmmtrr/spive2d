@@ -5812,7 +5812,6 @@ var spine = (() => {
     loadTexture(path, success = () => {
     }, error = () => {
     }) {
-      path = ((path.startsWith("http")?path:window.__TAURI__.core.convertFileSrc(path)));
       path = this.start(path);
       if (this.reuseAssets(path, success, error)) return;
       this.cache.assetsLoaded[path] = new Promise((resolve, reject) => {
@@ -6101,7 +6100,6 @@ var spine = (() => {
       return this.base64ToUint8Array(dataUri.substr(base64Idx));
     }
     downloadText(url, success, error) {
-      url = ((url.startsWith("http")?url:window.__TAURI__.core.convertFileSrc(url)));
       if (this.start(url, success, error)) return;
       const rawDataUri = this.rawDataUris[url];
       if (rawDataUri && !rawDataUri.includes(".")) {
@@ -6128,7 +6126,6 @@ var spine = (() => {
       }, error);
     }
     downloadBinary(url, success, error) {
-      url = ((url.startsWith("http")?url:window.__TAURI__.core.convertFileSrc(url)));
       if (this.start(url, success, error)) return;
       const rawDataUri = this.rawDataUris[url];
       if (rawDataUri && !rawDataUri.includes(".")) {

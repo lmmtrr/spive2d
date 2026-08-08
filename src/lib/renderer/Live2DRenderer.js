@@ -14,7 +14,8 @@ import {
   getMotionEntries,
   getMotionCurves,
   patchCoreRenderOrders,
-  patchModelSettingsResolveURL,
+  applyLive2DEnginePatches,
+  ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
 import { createSorter } from '../utils.js';
@@ -149,9 +150,11 @@ export class Live2DRenderer extends BaseRenderer {
       this.#canvas.style.display = 'block';
     }
     const url = await resolveLive2DModelUrl(dirName, scene);
-    patchModelSettingsResolveURL(PIXI);
+    applyLive2DEnginePatches(PIXI);
     const { live2d: { Live2DModel } } = PIXI;
     try {
+      await ensureLive2DRuntimeReady(PIXI);
+      if (this.#disposed) return;
       PIXI.TextureSource.defaultOptions.scaleMode = resolveScaleMode(appState.textureFilter);
       const model = await Live2DModel.from(url, {
         autoHitTest: false,

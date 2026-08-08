@@ -51,7 +51,111 @@ export function patchCoreRenderOrders(coreModel) {
   coreModel.getDrawableRenderOrders = () => native.getRenderOrders();
 }
 
-export function patchModelSettingsResolveURL(pixi) {
+export function parseLive2DJSON(text) {
+  if (typeof text !== 'string') return text;
+  const stripped = text.replace(/^﻿/, '').trim();
+  try {
+    return JSON.parse(stripped);
+  } catch {
+    return JSON.parse(stripped.replace(/,\s*([}\]])/g, '$1'));
+  }
+}
+
+function toArrayBuffer(bytes) {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+const SEGMENT_POINT_COUNTS = {
+  0: { points: 1, stride: 3 },
+  1: { points: 3, stride: 7 },
+  2: { points: 1, stride: 3 },
+  3: { points: 1, stride: 3 },
+};
+
+function repairMotion3Meta(json) {
+  const meta = json?.Meta;
+  const curves = json?.Curves;
+  if (!meta || typeof meta !== 'object' || !Array.isArray(curves)) return false;
+  let segmentCount = 0;
+  let pointCount = 0;
+  for (const curve of curves) {
+    const segments = curve?.Segments;
+    if (!Array.isArray(segments)) return false;
+    let i = 0;
+    while (i < segments.length) {
+      if (i === 0) {
+        pointCount += 1;
+        i += 2;
+      }
+      const segment = SEGMENT_POINT_COUNTS[segments[i]];
+      if (!segment || i + segment.stride > segments.length) return false;
+      pointCount += segment.points;
+      i += segment.stride;
+      segmentCount += 1;
+    }
+  }
+  let changed = false;
+  const apply = (key, value) => {
+    if (meta[key] === value) return;
+    meta[key] = value;
+    changed = true;
+  };
+  apply('CurveCount', curves.length);
+  apply('TotalSegmentCount', segmentCount);
+  apply('TotalPointCount', pointCount);
+  return changed;
+}
+
+function normalizeJSONBuffer(buffer) {
+  if (!(buffer instanceof ArrayBuffer)) return buffer;
+  const bytes = new Uint8Array(buffer);
+  const hasBOM = bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF;
+  let i = hasBOM ? 3 : 0;
+  while (i < bytes.length && bytes[i] <= 0x20) i++;
+  if (bytes[i] !== 0x7B) return buffer;
+  const text = new TextDecoder().decode(bytes.subarray(hasBOM ? 3 : 0));
+  let repaired = null;
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    repaired = text.replace(/,\s*([}\]])/g, '$1');
+    try {
+      json = JSON.parse(repaired);
+    } catch {
+      return buffer;
+    }
+  }
+  const encode = (value) => toArrayBuffer(new TextEncoder().encode(value));
+  if (repairMotion3Meta(json)) return encode(JSON.stringify(json));
+  if (repaired !== null) return encode(repaired);
+  return hasBOM ? encode(text) : buffer;
+}
+
+function patchLenientJSONLoader(pixi) {
+  const loader = pixi?.live2d?.XHRLoader;
+  if (!loader || loader.__spive2dLenientJSON) return;
+  const createXHR = loader.createXHR;
+  loader.createXHR = function (target, url, type, onload, onerror) {
+    if (type === 'arraybuffer') {
+      return createXHR.call(this, target, url, type, buffer => onload(normalizeJSONBuffer(buffer)), onerror);
+    }
+    if (type !== 'json') return createXHR.call(this, target, url, type, onload, onerror);
+    return createXHR.call(this, target, url, 'text', (text) => {
+      let json;
+      try {
+        json = parseLive2DJSON(text);
+      } catch (e) {
+        onerror(new Error(`Failed to parse JSON: ${url} (${e.message})`));
+        return;
+      }
+      onload(json);
+    }, onerror);
+  };
+  loader.__spive2dLenientJSON = true;
+}
+
+function patchModelSettingsResolveURL(pixi) {
   const proto = pixi?.live2d?.ModelSettings?.prototype;
   if (!proto || proto.__spive2dEncodedPathResolve) return;
   const original = proto.resolveURL;
@@ -63,6 +167,35 @@ export function patchModelSettingsResolveURL(pixi) {
     return original.call(this, this.url.slice(0, lastEncodedSlash + 3) + path);
   };
   proto.__spive2dEncodedPathResolve = true;
+}
+
+function patchCubismMocReleaseOrder(pixi) {
+  const proto = pixi?.live2d?.CubismInternalModel?.prototype;
+  if (!proto || proto.__spive2dMocReleaseOrder) return;
+  const original = proto.destroy;
+  proto.destroy = function () {
+    const moc = this.__moc;
+    if (moc) this.__moc = undefined;
+    try {
+      return original.apply(this, arguments);
+    } finally {
+      if (moc && moc._moc) {
+        if (typeof moc._modelCount === 'number') moc._modelCount = 0;
+        moc.release();
+      }
+    }
+  };
+  proto.__spive2dMocReleaseOrder = true;
+}
+
+export function applyLive2DEnginePatches(pixi) {
+  patchModelSettingsResolveURL(pixi);
+  patchLenientJSONLoader(pixi);
+  patchCubismMocReleaseOrder(pixi);
+}
+
+export async function ensureLive2DRuntimeReady(pixi) {
+  await pixi?.live2d?.cubismReady?.();
 }
 
 export function resolveScaleMode(filter) {
@@ -246,9 +379,7 @@ export async function resolveLive2DModelUrl(dirName, scene) {
     try {
       const res = await fetch(url);
       if (res.ok) {
-        const text = await res.text();
-        const cleanedText = text.replace(/^\uFEFF/, '').trim().replace(/,\s*([}\]])/g, '$1');
-        const json = JSON.parse(cleanedText);
+        const json = parseLive2DJSON(await res.text());
         if (isValidLive2DSettings(json)) {
           return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
         }

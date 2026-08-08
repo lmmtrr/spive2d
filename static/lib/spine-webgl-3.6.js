@@ -1898,7 +1898,6 @@ var spine;
 			this.pathPrefix = pathPrefix;
 		}
 		AssetManager.prototype.downloadText = function (url, success, error) {
-			url = ((url.startsWith("http")?url:window.__TAURI__.core.convertFileSrc(url)));
 			var request = new XMLHttpRequest();
 			request.open("GET", url, true);
 			request.onload = function () {
@@ -1915,7 +1914,6 @@ var spine;
 			request.send();
 		};
 		AssetManager.prototype.downloadBinary = function (url, success, error) {
-			url = ((url.startsWith("http")?url:window.__TAURI__.core.convertFileSrc(url)));
 			var request = new XMLHttpRequest();
 			request.open("GET", url, true);
 			request.responseType = "arraybuffer";
@@ -1995,7 +1993,7 @@ var spine;
 				if (error)
 					error(path, "Couldn't load image " + path);
 			};
-			img.src = ((path.startsWith("http")?path:window.__TAURI__.core.convertFileSrc(path)));
+			img.src = path;
 		};
 		AssetManager.prototype.loadTextureData = function (path, data, success, error) {
 			var _this = this;
