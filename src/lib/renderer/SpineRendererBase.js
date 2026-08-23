@@ -8,8 +8,19 @@ import {
   updateAtlasRegions,
   parseAtlasDeclaredSizes,
   normalizeAtlasText,
-  createCanvas
+  createCanvas,
+  createMaskShader,
+  MASK_UNIFORM
 } from './SpineCommon.js';
+import {
+  MASK_MODE_DESIGN,
+  loadMaskTextures,
+  uploadMaskImages,
+  selectMaskTexture,
+  collectVariantSuffixes,
+  disposeMask,
+  stripExtension
+} from './SpineMask.js';
 
 export class SpineRendererBase extends BaseRenderer {
   _canvas;
@@ -30,6 +41,9 @@ export class SpineRendererBase extends BaseRenderer {
   _attachmentsCache = {};
   _activeSkins = null;
   _isFileJson = false;
+  _maskShader = null;
+  _maskShaderFailed = false;
+  _siblingFilesCache = null;
 
   constructor(canvas, spineLib, isExport = false) {
     super(isExport);
@@ -180,6 +194,8 @@ export class SpineRendererBase extends BaseRenderer {
     this._dirName = dirName;
     this._fileNames = scene;
     this._isFileJson = isJson;
+    this._siblingFilesCache = null;
+    this._disposeMasks();
     this._skeletons = {};
     this._animationStates = [];
     this._attachmentsCache = {};
@@ -944,6 +960,12 @@ export class SpineRendererBase extends BaseRenderer {
     const { skeleton, state, initialSkinNames } = initializeSkeleton(this._spine, atlas, this._assetManager.get(makePath(fileName, sceneInfo.mainExt)), this._isFileJson);
     if (!this._activeSkins) this._activeSkins = new Set(initialSkinNames);
     this._animationStates.push(state);
+    const designRect = {
+      x: Number.isFinite(skeleton.data.x) ? skeleton.data.x : 0,
+      y: Number.isFinite(skeleton.data.y) ? skeleton.data.y : 0,
+      width: skeleton.data.width,
+      height: skeleton.data.height
+    };
     const bounds = this._calculateBounds(skeleton);
     if (skeleton.data.width === 0 || isNaN(skeleton.data.width)) {
       skeleton.data.width = bounds.size.x;
@@ -951,7 +973,126 @@ export class SpineRendererBase extends BaseRenderer {
     }
     const animations = skeleton.data.animations;
     if (animations.length > 0) state.setAnimation(0, animations[0].name, true);
-    return { skeleton, state, bounds, name: fileName };
+    const mask = await this._loadMask(atlas, designRect, skeleton.data, fileName, normalizedDirName, isWebUrl);
+    return { skeleton, state, bounds, name: fileName, mask, designRect };
+  }
+
+  _isLocalAssetPath(path) {
+    try {
+      const url = new URL(path);
+      return url.protocol === 'tauri:' ||
+        url.hostname === 'tauri.localhost' ||
+        url.hostname === 'asset.localhost';
+    } catch (e) {
+      return path.startsWith('tauri://');
+    }
+  }
+
+  _hasTauriInvoke() {
+    return typeof window !== 'undefined' &&
+      ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') ||
+        (window.__TAURI__?.core?.invoke !== undefined));
+  }
+
+  async _loadOptionalImage(path, isWebUrl) {
+    try {
+      let blob;
+      if (isWebUrl && !this._isLocalAssetPath(path) && this._hasTauriInvoke()) {
+        const fetched = await invoke('fetch_url_bytes', { url: path });
+        blob = new Blob([new Uint8Array(fetched)]);
+      } else {
+        const url = this._isLocalAssetPath(path) ? path : convertFileSrc(path);
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        blob = await res.blob();
+      }
+      if (!blob || blob.size === 0) return null;
+      return await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async _listSiblingFiles(dirName, isWebUrl) {
+    if (isWebUrl || /^[a-z][a-z0-9+.-]*:\/\//i.test(dirName) || !this._hasTauriInvoke()) return null;
+    if (this._siblingFilesCache?.dirName === dirName) return this._siblingFilesCache.names;
+    let names = null;
+    try {
+      const listed = await invoke('list_dir_files', { dirPath: dirName.replace(/\/+$/, '') });
+      if (Array.isArray(listed) && listed.length > 0) {
+        names = new Set(listed.map((n) => n.toLowerCase()));
+      }
+    } catch (e) {
+      names = null;
+    }
+    this._siblingFilesCache = { dirName, names };
+    return names;
+  }
+
+  async _loadMask(atlas, designRect, skeletonData, fileName, normalizedDirName, isWebUrl) {
+    const page = atlas?.pages?.[0];
+    if (!page) return null;
+    const assetNames = [];
+    for (const atlasPage of atlas.pages) {
+      if (atlasPage?.name) assetNames.push(stripExtension(atlasPage.name));
+    }
+    if (!assetNames.includes(fileName)) assetNames.push(fileName);
+    try {
+      const mask = await loadMaskTextures({
+        assetNames,
+        loadImage: (name) => this._loadOptionalImage(`${normalizedDirName}${name}`, isWebUrl),
+        pageSize: { width: page.width, height: page.height },
+        designSize: designRect,
+        variantSuffixes: collectVariantSuffixes(skeletonData),
+        listing: await this._listSiblingFiles(normalizedDirName, isWebUrl)
+      });
+      if (!mask) return null;
+      if (mask.mode === MASK_MODE_DESIGN && !(designRect.width > 0 && designRect.height > 0)) return null;
+      if (!this._getMaskShader()) return null;
+      return uploadMaskImages(this._spine, this._ctx.gl, mask, this._alphaMode);
+    } catch (e) {
+      console.warn('[SpineRendererBase] mask texture load failed:', e);
+      return null;
+    }
+  }
+
+  _getMaskShader() {
+    if (this._maskShader || this._maskShaderFailed || !this._ctx) return this._maskShader;
+    this._maskShader = createMaskShader(this._spine, this._ctx);
+    this._maskShaderFailed = !this._maskShader;
+    return this._maskShader;
+  }
+
+  _bindMaskUniforms(shader, entry) {
+    const mask = entry.mask;
+    const texture = selectMaskTexture(mask, entry.skeleton, entry.state);
+    if (!texture) return false;
+    const gl = this._ctx.gl;
+    const rect = entry.designRect;
+    const originX = (entry.skeleton.x || 0) + rect.x;
+    const originY = (entry.skeleton.y || 0) + rect.y;
+    const premultiplied = (this._alphaMode === 'unpack' || this._alphaMode === 'pma') ? 1 : 0;
+    try {
+      texture.bind(1);
+      gl.activeTexture(gl.TEXTURE0);
+      shader.setUniformi(MASK_UNIFORM.SAMPLER, 1);
+      shader.setUniform4f(MASK_UNIFORM.CHANNEL, ...mask.channel);
+      shader.setUniform4f(MASK_UNIFORM.PARAMS, mask.mode, premultiplied, 0, 0);
+      shader.setUniform4f(MASK_UNIFORM.RECT, originX, originY, 1 / rect.width, 1 / rect.height);
+      return true;
+    } catch (e) {
+      console.warn('[SpineRendererBase] disabling mask, uniform setup failed:', e);
+      this._maskShaderFailed = true;
+      entry.mask = null;
+      return false;
+    }
+  }
+
+  _disposeMasks() {
+    for (const key in this._skeletons) {
+      disposeMask(this._skeletons[key]?.mask);
+      if (this._skeletons[key]) this._skeletons[key].mask = null;
+    }
   }
 
   async _resizeAtlasPages(atlas, atlasPath, isWebUrl) {
@@ -1101,16 +1242,23 @@ export class SpineRendererBase extends BaseRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     const sortedKeys = this._getSortedSkeletonKeys();
     for (const key of sortedKeys) {
-      const { skeleton, state } = this._skeletons[key];
+      const entry = this._skeletons[key];
+      const { skeleton, state } = entry;
       if (delta > 0 && !this._paused) state.update(delta * this._speed);
       state.apply(skeleton);
       this._applyParameterOverrides(key);
       skeleton.updateWorldTransform(2);
       this._syncHiddenAttachments(skeleton, key);
-      this._shader.bind();
-      this._shader.setUniformi(this._spine.Shader.SAMPLER, 0);
-      this._shader.setUniform4x4f(this._spine.Shader.MVP_MATRIX, this._mvp.values);
-      this._batcher.begin(this._shader);
+      const maskShader = entry.mask ? this._getMaskShader() : null;
+      let shader = maskShader || this._shader;
+      shader.bind();
+      if (maskShader && !this._bindMaskUniforms(shader, entry)) {
+        shader = this._shader;
+        shader.bind();
+      }
+      shader.setUniformi(this._spine.Shader.SAMPLER, 0);
+      shader.setUniform4x4f(this._spine.Shader.MVP_MATRIX, this._mvp.values);
+      this._batcher.begin(shader);
       this._skeletonRenderer.premultipliedAlpha = (this._alphaMode === 'unpack' || this._alphaMode === 'pma');
       this._skeletonRenderer.draw(this._batcher, skeleton);
       this._batcher.end();
@@ -1175,9 +1323,12 @@ export class SpineRendererBase extends BaseRenderer {
 
   dispose() {
     if (this._ctx) {
+      this._disposeMasks();
       this._ctx.gl.getExtension('WEBGL_lose_context')?.loseContext();
       this._ctx = null;
     }
+    this._maskShader = null;
+    this._maskShaderFailed = false;
     this._skeletons = {};
     this._animationStates = [];
     this._primaryCache = null;

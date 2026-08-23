@@ -1114,6 +1114,25 @@ async fn fetch_url_bytes(url: String) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
+fn list_dir_files(dir_path: String) -> Result<Vec<String>, String> {
+    let dir = Path::new(&dir_path);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if !entry.path().is_file() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            names.push(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
+#[tauri::command]
 async fn clear_cache(current_path: Option<String>, app_handle: AppHandle) -> Result<(), String> {
     for window in app_handle.webview_windows().values() {
         window.clear_all_browsing_data().map_err(|e: tauri::Error| e.to_string())?;
@@ -1947,7 +1966,8 @@ pub fn run() {
             handle_urls,
             append_to_list,
             clear_cache,
-            fetch_url_bytes
+            fetch_url_bytes,
+            list_dir_files
         ])
         .plugin(tauri_plugin_dialog::init())
         .run(tauri::generate_context!())

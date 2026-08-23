@@ -68,6 +68,78 @@ export function updateAtlasRegions(atlas, resizedPages) {
   }
 }
 
+export const MASK_UNIFORM = {
+  SAMPLER: 'u_mask',
+  CHANNEL: 'u_maskChannel',
+  PARAMS: 'u_maskParams',
+  RECT: 'u_maskRect'
+};
+
+export function createMaskShader(spine, ctx) {
+  const S = spine.Shader;
+  const vs = `
+attribute vec4 ${S.POSITION};
+attribute vec4 ${S.COLOR};
+attribute vec4 ${S.COLOR2};
+attribute vec2 ${S.TEXCOORDS};
+uniform mat4 ${S.MVP_MATRIX};
+uniform vec4 ${MASK_UNIFORM.RECT};
+varying vec4 v_light;
+varying vec4 v_dark;
+varying vec2 v_texCoords;
+varying vec2 v_maskCoords;
+
+void main () {
+	v_light = ${S.COLOR};
+	v_dark = ${S.COLOR2};
+	v_texCoords = ${S.TEXCOORDS};
+	v_maskCoords = vec2(
+		(${S.POSITION}.x - ${MASK_UNIFORM.RECT}.x) * ${MASK_UNIFORM.RECT}.z,
+		1.0 - (${S.POSITION}.y - ${MASK_UNIFORM.RECT}.y) * ${MASK_UNIFORM.RECT}.w);
+	gl_Position = ${S.MVP_MATRIX} * ${S.POSITION};
+}
+`;
+  const fs = `
+#ifdef GL_ES
+	#define LOWP lowp
+	precision mediump float;
+#else
+	#define LOWP
+#endif
+varying LOWP vec4 v_light;
+varying LOWP vec4 v_dark;
+varying vec2 v_texCoords;
+varying vec2 v_maskCoords;
+uniform sampler2D ${S.SAMPLER};
+uniform sampler2D ${MASK_UNIFORM.SAMPLER};
+uniform vec4 ${MASK_UNIFORM.CHANNEL};
+uniform vec4 ${MASK_UNIFORM.PARAMS};
+
+void main () {
+	vec4 texColor = texture2D(${S.SAMPLER}, v_texCoords);
+	gl_FragColor.a = texColor.a * v_light.a;
+	gl_FragColor.rgb = ((texColor.a - 1.0) * v_dark.a + 1.0 - texColor.rgb) * v_dark.rgb + texColor.rgb * v_light.rgb;
+	if (${MASK_UNIFORM.PARAMS}.x > 0.5) {
+		bool designSpace = ${MASK_UNIFORM.PARAMS}.x < 1.5;
+		vec2 maskCoords = designSpace ? v_maskCoords : v_texCoords;
+		float coverage = dot(texture2D(${MASK_UNIFORM.SAMPLER}, maskCoords), ${MASK_UNIFORM.CHANNEL});
+		if (designSpace) {
+			coverage *= step(0.0, maskCoords.x) * step(maskCoords.x, 1.0)
+				* step(0.0, maskCoords.y) * step(maskCoords.y, 1.0);
+		}
+		gl_FragColor.a *= coverage;
+		gl_FragColor.rgb *= mix(1.0, coverage, ${MASK_UNIFORM.PARAMS}.y);
+	}
+}
+`;
+  try {
+    return new S(ctx, vs, fs);
+  } catch (e) {
+    console.warn('[SpineCommon] mask shader unavailable, falling back to the stock shader:', e);
+    return null;
+  }
+}
+
 export function createCanvas(width, height) {
   if (typeof document !== 'undefined') {
     const canvas = document.createElement('canvas');
