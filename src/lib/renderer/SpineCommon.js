@@ -173,13 +173,15 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
     const originalDownloadBinary = target.downloadBinary.bind(target);
     target.downloadBinary = (url, success, error) => originalDownloadBinary(toSpineAssetUrl(url), success, error);
   }
+  const getAssetsCache = () => assetManager.cache?.assets || assetManager.assets;
   const originalLoadTexture = assetManager.loadTexture.bind(assetManager);
   assetManager.loadTexture = (url, success, error) => {
     const requestUrl = toSpineAssetUrl(url);
     const mirrorOntoPlainPath = (key) => {
-      if (requestUrl === url || !assetManager.assets) return;
-      const cached = assetManager.assets[key];
-      if (cached !== undefined) assetManager.assets[url] = cached;
+      const assets = getAssetsCache();
+      if (requestUrl === url || !assets) return;
+      const cached = assets[key];
+      if (cached !== undefined) assets[url] = cached;
     };
     originalLoadTexture(requestUrl, (path, asset) => {
       mirrorOntoPlainPath(path);
@@ -197,7 +199,8 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
       ctx.fillStyle = '#cccccc';
       ctx.fillRect(0, 0, 1, 1);
       const texture = new spine.GLTexture(gl, canvas);
-      assetManager.assets[path] = texture;
+      const assets = getAssetsCache();
+      if (assets) assets[path] = texture;
       mirrorOntoPlainPath(path);
       if (assetManager.errors) delete assetManager.errors[path];
       success?.(path, texture);
