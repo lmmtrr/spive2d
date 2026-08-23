@@ -67,36 +67,20 @@ export class SpineRendererBase extends BaseRenderer {
     const gl = this._ctx.gl;
     if (gl) {
       gl.clearColor(0, 0, 0, 0);
-      const originalBlendFunc = gl.blendFunc.bind(gl);
       const originalBlendFuncSeparate = gl.blendFuncSeparate.bind(gl);
+      const applyBlend = (srcRGB, dstRGB, srcAlpha) => {
+        let src = srcRGB;
+        let dst = dstRGB;
+        if (dstRGB === gl.ONE_MINUS_SRC_COLOR || srcAlpha === gl.ONE_MINUS_SRC_COLOR) {
+          dst = gl.ONE_MINUS_SRC_COLOR;
+          if (this._alphaMode === 'npm') src = gl.SRC_ALPHA;
+        }
+        const additive = dst === gl.ONE;
+        originalBlendFuncSeparate(src, dst, gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+      };
       const patchBlend = (target) => {
-        target.blendFunc = (src, dst) => {
-          if (dst === gl.ONE_MINUS_SRC_ALPHA) {
-            const srcFactor = this._alphaMode === 'npm' ? gl.SRC_ALPHA : gl.ONE;
-            originalBlendFuncSeparate(srcFactor, dst, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-          } else if (src === gl.ONE && dst === gl.ONE) {
-            originalBlendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
-          } else if (src === gl.SRC_ALPHA && dst === gl.ONE) {
-            originalBlendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);
-          } else {
-            originalBlendFunc(src, dst);
-          }
-        };
-        target.blendFuncSeparate = (srcRGB, dstRGB, srcAlpha, dstAlpha) => {
-          if (dstRGB === gl.ONE_MINUS_SRC_ALPHA) {
-            if (srcAlpha === gl.ONE_MINUS_SRC_COLOR) {
-              if (this._alphaMode === 'npm') {
-                originalBlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_COLOR, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-              } else {
-                originalBlendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_COLOR, gl.ONE, gl.ONE_MINUS_SRC_COLOR);
-              }
-            } else {
-              originalBlendFuncSeparate(srcRGB, dstRGB, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            }
-          } else {
-            originalBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
-          }
-        };
+        target.blendFunc = (src, dst) => applyBlend(src, dst);
+        target.blendFuncSeparate = (srcRGB, dstRGB, srcAlpha) => applyBlend(srcRGB, dstRGB, srcAlpha);
       };
       patchBlend(gl);
       patchBlend(this._ctx);
