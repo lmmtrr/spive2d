@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.44] - 2026-08-23
+
+### Added
+
+- Add mask texture support for Spine models
+
+### Fixed
+
+- Standardize Spine WebGL blend modes and transparent canvas alpha
+
 ## [0.1.43] - 2026-08-08
 
 ### Added
