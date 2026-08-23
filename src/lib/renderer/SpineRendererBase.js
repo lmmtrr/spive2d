@@ -946,7 +946,7 @@ export class SpineRendererBase extends BaseRenderer {
     if (atlas.regions) setupAtlas(atlas);
     this._loadedAtlases.push(atlas);
     const isWebUrl = this._dirName.startsWith('http://') || this._dirName.startsWith('https://');
-    await this._resizeAtlasPages(atlas, atlasPath, isWebUrl);
+    await this._alignAtlasPageSizes(atlas, atlasPath, isWebUrl);
     const filterType = this._textureFilter === 'nearest'
       ? this._spine.TextureFilter.Nearest
       : this._spine.TextureFilter.Linear;
@@ -1095,7 +1095,7 @@ export class SpineRendererBase extends BaseRenderer {
     }
   }
 
-  async _resizeAtlasPages(atlas, atlasPath, isWebUrl) {
+  async _alignAtlasPageSizes(atlas, atlasPath, isWebUrl) {
     let atlasText = null;
     try {
       const isLocalAsset = (() => {
@@ -1120,12 +1120,11 @@ export class SpineRendererBase extends BaseRenderer {
         if (res.ok) atlasText = await res.text();
       }
     } catch (e) {
-      console.warn('[SpineRendererBase] Could not fetch atlas text for resize check:', e);
+      console.warn('[SpineRendererBase] Could not fetch atlas text for page size check:', e);
     }
     if (atlasText) atlasText = normalizeAtlasText(atlasText);
     else return;
     const declaredSizes = parseAtlasDeclaredSizes(atlasText);
-    const gl = this._ctx.gl;
     const resizedPages = new Set();
     for (const page of atlas.pages) {
       const tex = page.texture;
@@ -1134,16 +1133,8 @@ export class SpineRendererBase extends BaseRenderer {
       if (!img) continue;
       const declared = declaredSizes.get(page.name);
       if (!declared || (img.width === declared.width && img.height === declared.height)) continue;
-      const canvas = createCanvas(declared.width, declared.height);
-      const ctx2d = canvas.getContext('2d');
-      ctx2d.imageSmoothingEnabled = false;
-      const source = img._bitmap || img;
-      ctx2d.drawImage(source, 0, 0, declared.width, declared.height);
-      tex._image = canvas;
-      tex.bind();
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this._alphaMode === 'unpack');
+      const declaredImage = { width: declared.width, height: declared.height };
+      tex.getImage = () => declaredImage;
       page.width = declared.width;
       page.height = declared.height;
       resizedPages.add(page);
