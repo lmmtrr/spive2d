@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.45] - 2026-08-31
+
+### Added
+
+- Add model export functionality and update shortcut bindings (R for export, F for settings)
+
 ## [0.1.44] - 2026-08-23
 
 ### Added
