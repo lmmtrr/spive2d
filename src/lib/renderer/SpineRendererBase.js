@@ -1027,26 +1027,45 @@ export class SpineRendererBase extends BaseRenderer {
 
   async _listSiblingFiles(dirName, isWebUrl) {
     if (isWebUrl || /^[a-z][a-z0-9+.-]*:\/\//i.test(dirName) || !this._hasTauriInvoke()) return null;
-    if (this._siblingFilesCache?.dirName === dirName) return this._siblingFilesCache.names;
+    if (!this._siblingFilesCache) this._siblingFilesCache = new Map();
+    if (this._siblingFilesCache.has(dirName)) return this._siblingFilesCache.get(dirName);
     let names = null;
     try {
       const listed = await invoke('list_dir_files', { dirPath: dirName.replace(/\/+$/, '') });
-      if (Array.isArray(listed) && listed.length > 0) {
+      if (Array.isArray(listed)) {
         names = new Set(listed.map((n) => n.toLowerCase()));
       }
     } catch (e) {
       names = null;
     }
-    this._siblingFilesCache = { dirName, names };
+    this._siblingFilesCache.set(dirName, names);
     return names;
+  }
+
+  async _buildAssetListing(normalizedDirName, assetNames, isWebUrl) {
+    const prefixes = new Set();
+    for (const name of assetNames) {
+      const i = name.lastIndexOf('/');
+      prefixes.add(i >= 0 ? name.substring(0, i + 1) : '');
+    }
+    const listing = new Set();
+    for (const prefix of prefixes) {
+      const names = await this._listSiblingFiles(`${normalizedDirName}${prefix}`, isWebUrl);
+      if (!names) return null;
+      const lowerPrefix = prefix.toLowerCase();
+      for (const name of names) listing.add(`${lowerPrefix}${name}`);
+    }
+    return listing;
   }
 
   async _loadMask(atlas, designRect, skeletonData, fileName, normalizedDirName, isWebUrl) {
     const page = atlas?.pages?.[0];
     if (!page) return null;
+    const slash = fileName.lastIndexOf('/');
+    const subDir = slash >= 0 ? fileName.substring(0, slash + 1) : '';
     const assetNames = [];
     for (const atlasPage of atlas.pages) {
-      if (atlasPage?.name) assetNames.push(stripExtension(atlasPage.name));
+      if (atlasPage?.name) assetNames.push(`${subDir}${stripExtension(atlasPage.name)}`);
     }
     if (!assetNames.includes(fileName)) assetNames.push(fileName);
     try {
@@ -1056,7 +1075,7 @@ export class SpineRendererBase extends BaseRenderer {
         pageSize: { width: page.width, height: page.height },
         designSize: designRect,
         variantSuffixes: collectVariantSuffixes(skeletonData),
-        listing: await this._listSiblingFiles(normalizedDirName, isWebUrl)
+        listing: await this._buildAssetListing(normalizedDirName, assetNames, isWebUrl)
       });
       if (!mask) return null;
       if (mask.mode === MASK_MODE_DESIGN && !(designRect.width > 0 && designRect.height > 0)) return null;
