@@ -61,6 +61,7 @@
   "shortcutExportImage": "Export Image",
   "shortcutExportImageSeq": "Export Image Sequence",
   "shortcutExportAnim": "Export Animation",
+  "shortcutExportModel": "Export Model Files",
   "exportImageSeq": "Export Image Sequence",
   "shortcutToggleDialog": "Toggle Settings",
   "shortcutAddToList": "Add to List",
@@ -76,6 +77,9 @@
   "exportImageSuccess": "Image exported",
   "exportAnimationSuccess": "Animation exported",
   "exportAnimationError": "Animation export failed",
+  "exportModelSuccess": "Model files exported",
+  "exportModelError": "Model file export failed",
+  "exportModelUnsupported": "This model type cannot be exported",
   "mediaRecorderNotSupported": "Animation recording is not supported in this browser",
   "addedToList": "Added to list",
   "noFilesFound": "No supported files found"

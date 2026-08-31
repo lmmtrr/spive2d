@@ -599,6 +599,41 @@ export class Live2DRenderer extends BaseRenderer {
     }
   }
 
+  #getParameterDefaults() {
+    const coreModel = this.#model?.internalModel?.coreModel;
+    if (!coreModel || this.#parameterIds.length === 0) return null;
+    const defaults = [];
+    for (let index = 0; index < this.#parameterIds.length; index++) {
+      let value;
+      if (typeof coreModel.getParameterDefaultValue === 'function') {
+        value = coreModel.getParameterDefaultValue(index);
+      }
+      if (!Number.isFinite(value)) value = this.#initialParameterValues.get(index);
+      if (!Number.isFinite(value)) return null;
+      defaults.push(value);
+    }
+    return defaults;
+  }
+
+  getModelEdits() {
+    const parameters = [];
+    for (const [rawIndex, value] of this.parameterOverrides) {
+      const index = Number(rawIndex);
+      const id = this.#parameterIds[index];
+      if (id) parameters.push({ id, index, value: Number(value) });
+    }
+    const parts = [];
+    for (const [name, opacity] of this.partOverrides) {
+      parts.push({ id: name, opacity: Number(opacity) });
+    }
+    const drawables = [];
+    for (const [rawIndex, visible] of this.drawableOverrides) {
+      const id = this.#drawableIds[Number(rawIndex)];
+      if (id) drawables.push({ id, visible: !!visible });
+    }
+    return { type: 'live2d', parameters, parameterDefaults: this.#getParameterDefaults(), parts, drawables };
+  }
+
   resetOverrides(category) {
     super.resetOverrides(category);
     if (!this.#model) return;

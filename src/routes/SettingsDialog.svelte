@@ -43,7 +43,7 @@
   const shortcutActions = [
     'prevDir', 'nextDir', 'prevScene', 'nextScene',
     'prevAnim', 'nextAnim', 
-    'exportImage', 'exportImageSeq', 'exportAnim',
+    'exportImage', 'exportImageSeq', 'exportAnim', 'exportModel',
     'toggleDialog', 'addToList',
   ];
 
@@ -58,6 +58,7 @@
     exportImage: 'shortcutExportImage',
     exportImageSeq: 'shortcutExportImageSeq',
     exportAnim: 'shortcutExportAnim',
+    exportModel: 'shortcutExportModel',
     addToList: 'shortcutAddToList',
   };
 

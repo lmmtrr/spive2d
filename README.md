@@ -29,7 +29,8 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | 📷 Export Image          | `E`                        |
 | 🖼️ Export Image Sequence | `D`                        |
 | 💾 Export Animation      | `C`                        |
-| ⚙️ Open/Close Settings   | `R`                        |
+| 🦴 Export Model Files    | `R`                        |
+| ⚙️ Open/Close Settings   | `F`                        |
 | 📝 Append to List        | `V`                        |
 | ❌ Exit                  | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 

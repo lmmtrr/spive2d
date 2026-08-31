@@ -61,6 +61,7 @@
   "shortcutExportImage": "画像エクスポート",
   "shortcutExportImageSeq": "連番画像エクスポート",
   "shortcutExportAnim": "アニメーションエクスポート",
+  "shortcutExportModel": "モデルファイルエクスポート",
   "exportImageSeq": "連番画像エクスポート",
   "shortcutToggleDialog": "設定の切替",
   "shortcutAddToList": "リストに追加",
@@ -76,6 +77,9 @@
   "exportImageSuccess": "画像をエクスポートしました",
   "exportAnimationSuccess": "アニメーションをエクスポートしました",
   "exportAnimationError": "アニメーションのエクスポートに失敗しました",
+  "exportModelSuccess": "モデルファイルをエクスポートしました",
+  "exportModelError": "モデルファイルのエクスポートに失敗しました",
+  "exportModelUnsupported": "このモデル形式はエクスポートできません",
   "mediaRecorderNotSupported": "このブラウザではアニメーション録画がサポートされていません",
   "addedToList": "リストに追加しました",
   "noFilesFound": "対応ファイルが見つかりません"

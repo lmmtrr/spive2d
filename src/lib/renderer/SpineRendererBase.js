@@ -22,6 +22,34 @@ import {
   stripExtension
 } from './SpineMask.js';
 
+const BONE_PARAM_PROPS = ['x', 'y', 'rotation', 'scaleX', 'scaleY'];
+const TRANSFORM_PARAM_PROPS = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
+const PATH_PARAM_PROPS = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY'];
+
+function decodeParameterLocalId(localId, skeleton) {
+  if (localId >= 100000) {
+    const bone = skeleton.bones?.[Math.floor((localId - 100000) / 10)];
+    const prop = BONE_PARAM_PROPS[(localId - 100000) % 10];
+    if (!bone || !prop) return null;
+    return { kind: 'bones', name: bone.data.name, prop };
+  }
+  if (localId >= 20000) {
+    const constraint = skeleton.pathConstraints?.[Math.floor((localId - 20000) / 10)];
+    const prop = PATH_PARAM_PROPS[(localId - 20000) % 10];
+    if (!constraint || !prop) return null;
+    return { kind: 'path', name: constraint.data.name, prop };
+  }
+  if (localId >= 10000) {
+    const constraint = skeleton.transformConstraints?.[Math.floor((localId - 10000) / 10)];
+    const prop = TRANSFORM_PARAM_PROPS[(localId - 10000) % 10];
+    if (!constraint || !prop) return null;
+    return { kind: 'transform', name: constraint.data.name, prop };
+  }
+  const constraint = skeleton.ikConstraints?.[localId];
+  if (!constraint) return null;
+  return { kind: 'ik', name: constraint.data.name, prop: 'mix' };
+}
+
 export class SpineRendererBase extends BaseRenderer {
   _canvas;
   _spine = null;
@@ -958,7 +986,7 @@ export class SpineRendererBase extends BaseRenderer {
     const animations = skeleton.data.animations;
     if (animations.length > 0) state.setAnimation(0, animations[0].name, true);
     const mask = await this._loadMask(atlas, designRect, skeleton.data, fileName, normalizedDirName, isWebUrl);
-    return { skeleton, state, bounds, name: fileName, mask, designRect };
+    return { skeleton, state, bounds, name: fileName, mask, designRect, atlas };
   }
 
   _isLocalAssetPath(path) {
@@ -1647,7 +1675,7 @@ export class SpineRendererBase extends BaseRenderer {
       if (skel.transformConstraints) {
         skel.transformConstraints.forEach((tc, i) => {
           if (!hasAnimations || animatedTF.has(i)) {
-            const props = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
+            const props = TRANSFORM_PARAM_PROPS;
             props.forEach((p, pi) => {
               if (tc[p] !== undefined) addRange(`TF ${tc.data.name}: ${p}`, tc, p, 0, 1, 0.01, 10000 + i * 10 + pi);
             });
@@ -1657,7 +1685,7 @@ export class SpineRendererBase extends BaseRenderer {
       if (skel.pathConstraints) {
         skel.pathConstraints.forEach((pc, i) => {
           if (!hasAnimations || animatedPath.has(i)) {
-            const props = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY'];
+            const props = PATH_PARAM_PROPS;
             props.forEach((p, pi) => {
               if (pc[p] !== undefined) addRange(`Path ${pc.data.name}: ${p}`, pc, p, 0, 1, 0.01, 20000 + i * 10 + pi);
             });
@@ -1696,6 +1724,68 @@ export class SpineRendererBase extends BaseRenderer {
     this._parameterItems = items;
     this._parameterItemsMap = new Map(items.map(i => [i.index, i]));
     return items;
+  }
+
+  getModelEdits() {
+    const sceneInfo = this._fileNames || {};
+    const skeletons = [];
+    for (const key in this._skeletons) {
+      const entry = this._skeletons[key];
+      const skeleton = entry?.skeleton;
+      if (!skeleton) continue;
+      const skeletonId = parseInt(key);
+      const buckets = { bones: {}, ik: {}, transform: {}, path: {} };
+      for (const [rawIndex, value] of this.parameterOverrides) {
+        const index = Number(rawIndex);
+        if (Math.floor(index / 1000000) !== skeletonId) continue;
+        const target = decodeParameterLocalId(index % 1000000, skeleton);
+        if (!target) continue;
+        const bucket = buckets[target.kind];
+        if (!bucket[target.name]) bucket[target.name] = {};
+        bucket[target.name][target.prop] = Number(value);
+      }
+      const hiddenAttachments = [];
+      for (const compositeKey in this._attachmentsCache) {
+        const cached = this._attachmentsCache[compositeKey];
+        if (!cached) continue;
+        const [slotIndex, name, cachedSkeletonId] = cached;
+        if (String(cachedSkeletonId ?? '0') !== String(key)) continue;
+        hiddenAttachments.push({
+          slotIndex: Number(slotIndex),
+          slotName: skeleton.slots?.[slotIndex]?.data?.name ?? null,
+          name
+        });
+      }
+      skeletons.push({ key, fileName: entry.name, ...buckets, hiddenAttachments });
+    }
+    return {
+      type: 'spine',
+      isJson: this._isFileJson,
+      mainExt: sceneInfo.mainExt || '',
+      skeletons
+    };
+  }
+
+  async getSourceFiles() {
+    const sceneInfo = this._fileNames || {};
+    const mainExt = sceneInfo.mainExt || '';
+    const atlasExt = sceneInfo.atlasExt || '';
+    const names = new Set();
+    for (const key in this._skeletons) {
+      const entry = this._skeletons[key];
+      if (!entry?.name) continue;
+      if (mainExt) names.add(`${entry.name}${mainExt}`);
+      if (atlasExt) names.add(`${entry.name}${atlasExt}`);
+      if (entry.mask?.base?.url) names.add(entry.mask.base.url);
+      entry.mask?.variants?.forEach((variant) => {
+        if (variant?.url) names.add(variant.url);
+      });
+      const dir = entry.name.slice(0, entry.name.lastIndexOf('/') + 1);
+      for (const page of entry.atlas?.pages || []) {
+        if (page?.name) names.add(`${dir}${page.name}`);
+      }
+    }
+    return Array.from(names);
   }
 
   _applyParameterOverrides(skeletonId) {
@@ -1757,7 +1847,7 @@ export class SpineRendererBase extends BaseRenderer {
               if (suffix === 'rotation') finalIdx += 2;
               if (suffix === 'scaleX') finalIdx += 3;
               if (suffix === 'scaleY') finalIdx += 4;
-              const props = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
+              const props = TRANSFORM_PARAM_PROPS;
               const pi = props.indexOf(prop);
               if (pi !== -1) finalIdx += pi;
             }

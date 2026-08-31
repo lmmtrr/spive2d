@@ -6,6 +6,7 @@
   import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '$lib/utils.js';
   import { getAssetUrl } from '$lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
+  import { exportModelFiles } from '$lib/modelExporter.js';
   import { createTransformAction } from '$lib/inputAction.js';
   import { loadSetting } from '$lib/settings.js';
   import { showNotification } from '$lib/notificationStore.svelte.js';
@@ -430,6 +431,7 @@
     else if (e.key === shortcuts.exportImage) { doExportImage(); }
     else if (e.key === shortcuts.exportImageSeq) { doExportImageSequence(); }
     else if (e.key === shortcuts.exportAnim) { doExportAnimation(); }
+    else if (e.key === shortcuts.exportModel) { doExportModel(); }
     else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
     else if (e.key === shortcuts.addToList) {
       invoke('append_to_list', { text: getSceneText() }).then(() => {
@@ -487,6 +489,10 @@
     const animValue = sidebar?.getSelectedAnimation?.() || '';
     const exprValue = sidebar?.getSelectedExpression?.() || '';
     exportAnimation(sceneText, animText, animValue, exprValue);
+  }
+
+  function doExportModel() {
+    exportModelFiles(getSceneText());
   }
 
   async function doExportImageSequence() {

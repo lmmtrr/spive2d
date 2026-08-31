@@ -323,7 +323,7 @@ function isValidLive2DSettings(json) {
   return false;
 }
 
-export async function resolveLive2DModelUrl(dirName, scene) {
+export async function resolveLive2DSettings(dirName, scene) {
   const sceneName = scene.name;
   const mainExt = scene.mainExt || '';
   let candidates = [];
@@ -381,7 +381,7 @@ export async function resolveLive2DModelUrl(dirName, scene) {
       if (res.ok) {
         const json = parseLive2DJSON(await res.text());
         if (isValidLive2DSettings(json)) {
-          return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+          return { file: candidate, url, json };
         }
       }
     } catch {
@@ -391,10 +391,15 @@ export async function resolveLive2DModelUrl(dirName, scene) {
   let ext = '.model3.json';
   if (mainExt.includes('.moc3')) ext = sceneName === 'model3' ? '.json' : '.model3.json';
   else if (mainExt.includes('.moc')) ext = sceneName === 'model' ? '.json' : '.model.json';
-  const fallbackRaw = `${dirName}${sceneName}${ext}`;
+  const fallbackFile = `${sceneName}${ext}`;
+  const fallbackRaw = `${dirName}${fallbackFile}`;
   const fallbackUrl = (fallbackRaw.startsWith('http://') || fallbackRaw.startsWith('https://'))
     ? fallbackRaw
     : convertFileSrc(fallbackRaw);
-  return fallbackUrl + (fallbackUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+  return { file: fallbackFile, url: fallbackUrl, json: null };
 }
 
+export async function resolveLive2DModelUrl(dirName, scene) {
+  const { url } = await resolveLive2DSettings(dirName, scene);
+  return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+}

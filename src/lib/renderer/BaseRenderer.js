@@ -82,6 +82,14 @@ export class BaseRenderer {
     }
   }
 
+  getModelEdits() {
+    return null;
+  }
+
+  async getSourceFiles() {
+    return [];
+  }
+
   getAnimationDuration() {
     return 0;
   }

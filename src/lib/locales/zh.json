@@ -61,6 +61,7 @@
   "shortcutExportImage": "导出图片",
   "shortcutExportImageSeq": "导出图像序列帧",
   "shortcutExportAnim": "导出动画",
+  "shortcutExportModel": "导出模型文件",
   "exportImageSeq": "导出图像序列帧",
   "shortcutToggleDialog": "切换设置",
   "shortcutAddToList": "添加到列表",
@@ -76,6 +77,9 @@
   "exportImageSuccess": "图片已导出",
   "exportAnimationSuccess": "动画已导出",
   "exportAnimationError": "动画导出失败",
+  "exportModelSuccess": "模型文件已导出",
+  "exportModelError": "模型文件导出失败",
+  "exportModelUnsupported": "该模型类型无法导出",
   "mediaRecorderNotSupported": "此浏览器不支持动画录制",
   "addedToList": "已添加到列表",
   "noFilesFound": "未找到支持的文件"
