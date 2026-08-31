@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 export function setupWorkerEnv(self) {
   self.window = self;
   self.HTMLCanvasElement = OffscreenCanvas;
@@ -21,13 +22,16 @@ export function setupWorkerEnv(self) {
           if (!res.ok) throw new Error(`Failed to load image: ${url}`);
           return res.blob();
         })
-        .then(blob => Promise.all([
-          createImageBitmap(blob, { premultiplyAlpha: this.premultiplyAlpha }),
-          this.decodeFlipY
-            ? createImageBitmap(blob, { premultiplyAlpha: this.premultiplyAlpha, imageOrientation: 'flipY' })
-              .catch(() => null)
-            : null,
-        ]))
+        .then(blob => {
+          const premultiplyAlpha = this.premultiplyAlpha === 'none' ? 'none' : 'premultiply';
+          return Promise.all([
+            createImageBitmap(blob, { premultiplyAlpha }),
+            this.decodeFlipY
+              ? createImageBitmap(blob, { premultiplyAlpha, imageOrientation: 'flipY' })
+                .catch(() => null)
+              : null,
+          ]);
+        })
         .then(([bitmap, flippedBitmap]) => {
           this.width = bitmap.width;
           this.height = bitmap.height;

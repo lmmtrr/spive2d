@@ -29,7 +29,7 @@ export class SpineVersionManager {
             spineLibs[version] = window.spine;
             window.spine = undefined;
             script.remove();
-            resolve();
+            resolve(undefined);
           };
           document.head.appendChild(script);
         });

@@ -60,7 +60,7 @@ export class SpineRendererBase extends BaseRenderer {
   _assetManager = null;
   _mvp = null;
   _dirName = '';
-  _fileNames = [];
+  _fileNames = null;
   _skeletons = {};
   _animationStates = [];
   _alphaMode = 'pma';
@@ -193,7 +193,7 @@ export class SpineRendererBase extends BaseRenderer {
     return new Promise((resolve) => {
       const check = () => {
         if (!this._assetManager || this._assetManager.isLoadingComplete()) {
-          resolve();
+          resolve(undefined);
         } else {
           requestAnimationFrame(check);
         }
@@ -623,7 +623,7 @@ export class SpineRendererBase extends BaseRenderer {
 
   _idle() {
     return new Promise((res) => {
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => res(), { timeout: 100 });
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => res(undefined), { timeout: 100 });
       else setTimeout(res, 0);
     });
   }

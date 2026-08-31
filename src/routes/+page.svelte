@@ -274,8 +274,8 @@
     if (canvasContainer && !canvasContainer.contains(canvas)) {
       canvasContainer.appendChild(canvas);
     }
-    if (renderer.setAlphaMode) {
-      renderer.setAlphaMode(appState.alphaMode);
+    if (renderer['setAlphaMode']) {
+      renderer['setAlphaMode'](appState.alphaMode);
     }    
     if (renderer.setTextureFilter) {
       renderer.setTextureFilter(appState.textureFilter);
@@ -296,7 +296,7 @@
     setRenderer(renderer);
     const rendererCanvas = renderer.getCanvas();
     requestAnimationFrame(() => {
-      if (typeof renderer._revealCanvas !== 'function') rendererCanvas.style.opacity = '1';
+      if (typeof renderer['_revealCanvas'] !== 'function') rendererCanvas.style.opacity = '1';
     });
     const categories = renderer.getPropertyCategories();
     appState.propertyCategory = categories[0] || 'parameters';

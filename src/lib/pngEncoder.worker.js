@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 let canvas = null;
 let ctx = null;
 
