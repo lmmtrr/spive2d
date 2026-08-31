@@ -18,7 +18,7 @@
       "@tauri-apps/plugin-fs": "^2.5.1",
       "@tauri-apps/plugin-opener": "^2.5.4",
       "@tauri-apps/plugin-window-state": "^2.4.1",
-      "mediabunny": "^1.55.2"
+      "mediabunny": "^1.55.4"
    },
    "devDependencies": {
       "@sveltejs/adapter-static": "^3.0.10",
@@ -26,9 +26,9 @@
       "@sveltejs/vite-plugin-svelte": "^7.3.0",
       "@tauri-apps/cli": "^2.11.4",
       "@typescript/native": "npm:typescript@^7.0.2",
-      "svelte": "^5.56.10",
+      "svelte": "^5.57.0",
       "svelte-check": "^4.7.6",
-      "typescript": "~6.0.3",
+      "typescript": "~7.0.2",
       "vite": "^8.2.2"
    },
    "overrides": {
