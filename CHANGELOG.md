@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.46] - 2026-09-02
+
+### Added
+
+- Add support for Spine 4.3 runtime
+
 ## [0.1.45] - 2026-08-31
 
 ### Added
