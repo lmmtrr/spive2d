@@ -3,6 +3,11 @@ import { BaseRenderer } from './BaseRenderer.js';
 import {
   setupSpineAssetManager,
   initializeSkeleton,
+  setToSetupPose,
+  getSlotAttachment,
+  setSlotAttachment,
+  getTargetProperty,
+  setTargetProperty,
   calculateSpineMVP,
   setupAtlas,
   updateAtlasRegions,
@@ -333,7 +338,7 @@ export class SpineRendererBase extends BaseRenderer {
         if (pass === 'anim') { info.seen++; info.animSet.add(animIndex); }
       }
     };
-    probe.setToSetupPose();
+    setToSetupPose(probe);
     probe.updateWorldTransform(2);
     record('setup', -1);
     const setupExtent = this._unionSlotBounds(probe);
@@ -342,7 +347,7 @@ export class SpineRendererBase extends BaseRenderer {
       const n = Math.min(24, Math.max(2, Math.ceil((anim.duration || 0) * 8)));
       for (let i = 0; i <= n; i++) {
         const t = anim.duration ? (anim.duration * i) / n : 0;
-        probe.setToSetupPose();
+        setToSetupPose(probe);
         anim.apply(probe, 0, t, true, null, 1.0, 0, 0);
         probe.updateWorldTransform(2);
         frames++;
@@ -452,19 +457,26 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   _getSlotWorldBounds(slot) {
-    const attachment = slot.attachment;
+    const attachment = getSlotAttachment(slot);
     if (!attachment) return null;
     let vertices;
     if (attachment.computeWorldVertices) {
+      const skeleton = this._getSlotSkeleton(slot);
+      const version = skeleton?.data?.version || '';
+      const verNum = parseFloat(version) || 0;
       if (typeof attachment.worldVerticesLength === 'number') {
         vertices = new Float32Array(attachment.worldVerticesLength);
-        attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, vertices, 0, 2);
+        if (verNum >= 4.3 && skeleton) {
+          attachment.computeWorldVertices(skeleton, slot, 0, attachment.worldVerticesLength, vertices, 0, 2);
+        } else {
+          attachment.computeWorldVertices(slot, 0, attachment.worldVerticesLength, vertices, 0, 2);
+        }
       } else if (slot.bone) {
         vertices = new Float32Array(8);
-        const skeleton = this._getSlotSkeleton(slot);
-        const version = skeleton?.data?.version || '';
-        const verNum = parseFloat(version) || 0;
-        if (verNum >= 4.1) {
+        if (verNum >= 4.3) {
+          const offsets = attachment.getOffsets ? attachment.getOffsets(slot.appliedPose || 0) : vertices;
+          attachment.computeWorldVertices(slot, offsets, vertices, 0, 2);
+        } else if (verNum >= 4.1) {
           attachment.computeWorldVertices(slot, vertices, 0, 2);
         } else {
           attachment.computeWorldVertices(slot.bone, vertices, 0, 2);
@@ -694,7 +706,7 @@ export class SpineRendererBase extends BaseRenderer {
       const n = Math.min(48, Math.max(2, Math.ceil((anim.duration || 0) * samplesPerSec)));
       for (let i = 0; i <= n; i++) {
         const t = anim.duration ? (anim.duration * i) / n : 0;
-        probe.setToSetupPose();
+        setToSetupPose(probe);
         anim.apply(probe, 0, t, true, null, 1.0, 0, 0);
         probe.updateWorldTransform(2);
         this._syncHiddenAttachments(probe, key);
@@ -917,7 +929,8 @@ export class SpineRendererBase extends BaseRenderer {
       if (skeleton.skin) addFromSkin(skeleton.skin);
       skeleton.slots.forEach((slot, slotIndex) => {
         const names = [];
-        if (slot.attachment) names.push(slot.attachment.name);
+        const att = getSlotAttachment(slot);
+        if (att) names.push(att.name);
         if (slot.data.attachmentName && !names.includes(slot.data.attachmentName)) names.push(slot.data.attachmentName);
         names.forEach(n => attachmentMap.set(`${n}##${slotIndex}`, slotIndex));
       });
@@ -939,8 +952,9 @@ export class SpineRendererBase extends BaseRenderer {
           const compositeKey = `${skelId}##${name}##${slotIndex}`;
           this._attachmentsCache[compositeKey] = [slotIndex, name, skelId];
           const slot = skeleton.slots[slotIndex];
-          if (slot?.attachment && slot.attachment.name === name) {
-            slot.attachment = null;
+          const att = getSlotAttachment(slot);
+          if (att && att.name === name) {
+            setSlotAttachment(slot, null);
           }
         }
       });
@@ -1183,7 +1197,7 @@ export class SpineRendererBase extends BaseRenderer {
       for (const skin of allSkins) combinedSkin.addSkin(skin);
       skeleton.setSkin(combinedSkin);
     }
-    skeleton.setToSetupPose();
+    setToSetupPose(skeleton);
     skeleton.updateWorldTransform(2);
     const unit = this._getUnit(skeleton);
     const setupCoreBox = this._getCoreBounds(skeleton);
@@ -1250,7 +1264,7 @@ export class SpineRendererBase extends BaseRenderer {
       isDefault = true;
     }
     skeleton.setSkin(originalSkin);
-    skeleton.setToSetupPose();
+    setToSetupPose(skeleton);
     skeleton.updateWorldTransform(2);
     return { offset, size, core: setupCoreBox, isDefault };
   }
@@ -1336,8 +1350,9 @@ export class SpineRendererBase extends BaseRenderer {
       const [idx, name, cachedSkelId] = entry;
       if (String(cachedSkelId || '0') === String(id)) {
         const slot = skeleton.slots[idx];
-        if (slot?.attachment && slot.attachment.name === name) {
-          slot.attachment = null;
+        const att = getSlotAttachment(slot);
+        if (att && att.name === name) {
+          setSlotAttachment(slot, null);
         }
       }
     }
@@ -1462,7 +1477,7 @@ export class SpineRendererBase extends BaseRenderer {
       for (const key in this._skeletons) {
         const entry = this._skeletons[key];
         entry.state.clearTracks();
-        entry.skeleton.setToSetupPose();
+        setToSetupPose(entry.skeleton);
         entry.state.apply(entry.skeleton);
         entry.skeleton.updateWorldTransform(2);
       }
@@ -1526,7 +1541,8 @@ export class SpineRendererBase extends BaseRenderer {
       if (skeleton.skin) addFromSkin(skeleton.skin);
       skeleton.slots.forEach((slot, slotIndex) => {
         const names = [];
-        if (slot.attachment) names.push(slot.attachment.name);
+        const att = getSlotAttachment(slot);
+        if (att) names.push(att.name);
         if (slot.data.attachmentName && !names.includes(slot.data.attachmentName)) names.push(slot.data.attachmentName);
         names.forEach(n => attachmentMap.set(`${n}##${slotIndex}`, slotIndex));
       });
@@ -1678,7 +1694,7 @@ export class SpineRendererBase extends BaseRenderer {
           index: (skelId * 1000000) + localId,
           type: 'range',
           min, max, step,
-          value: target[prop],
+          value: getTargetProperty(target, prop),
           _target: target,
           _prop: prop,
           _skeletonId: key
@@ -1696,7 +1712,7 @@ export class SpineRendererBase extends BaseRenderer {
           if (!hasAnimations || animatedTF.has(i)) {
             const props = TRANSFORM_PARAM_PROPS;
             props.forEach((p, pi) => {
-              if (tc[p] !== undefined) addRange(`TF ${tc.data.name}: ${p}`, tc, p, 0, 1, 0.01, 10000 + i * 10 + pi);
+              if (getTargetProperty(tc, p) !== undefined) addRange(`TF ${tc.data.name}: ${p}`, tc, p, 0, 1, 0.01, 10000 + i * 10 + pi);
             });
           }
         });
@@ -1706,7 +1722,7 @@ export class SpineRendererBase extends BaseRenderer {
           if (!hasAnimations || animatedPath.has(i)) {
             const props = PATH_PARAM_PROPS;
             props.forEach((p, pi) => {
-              if (pc[p] !== undefined) addRange(`Path ${pc.data.name}: ${p}`, pc, p, 0, 1, 0.01, 20000 + i * 10 + pi);
+              if (getTargetProperty(pc, p) !== undefined) addRange(`Path ${pc.data.name}: ${p}`, pc, p, 0, 1, 0.01, 20000 + i * 10 + pi);
             });
           }
         });
@@ -1819,7 +1835,7 @@ export class SpineRendererBase extends BaseRenderer {
       if (Math.floor(idx / 1000000) === skelIdInt) {
         const item = this._parameterItemsMap.get(idx);
         if (item) {
-          item._target[item._prop] = value;
+          setTargetProperty(item._target, item._prop, value);
         }
       }
     }
@@ -1838,41 +1854,24 @@ export class SpineRendererBase extends BaseRenderer {
           if (!isMerged && k !== item._skeletonId) continue;
           const s = this._skeletons[k].skeleton;
           let targetObj = null;
-          let localIdBase = 0;
           if (itemName.startsWith('Bone ')) {
             const bName = itemName.split(': ')[0].replace('Bone ', '');
             targetObj = s.findBone(bName);
-            if (targetObj) localIdBase = 100000 + s.bones.indexOf(targetObj) * 10;
           } else if (itemName.startsWith('IK: ')) {
             const ikName = itemName.replace('IK: ', '');
             targetObj = s.findIkConstraint(ikName);
-            if (targetObj) localIdBase = 0 + s.ikConstraints.indexOf(targetObj);
           } else if (itemName.startsWith('TF ')) {
             const tfName = itemName.split(': ')[0].replace('TF ', '');
             targetObj = s.findTransformConstraint(tfName);
-            if (targetObj) localIdBase = 10000 + s.transformConstraints.indexOf(targetObj) * 10;
           } else if (itemName.startsWith('Path ')) {
             const pathName = itemName.split(': ')[0].replace('Path ', '');
             targetObj = s.findPathConstraint(pathName);
-            if (targetObj) localIdBase = 20000 + s.pathConstraints.indexOf(targetObj) * 10;
           }
           if (targetObj) {
-            targetObj[prop] = val;
-            const skelId = parseInt(k);
-            let finalIdx = (skelId * 1000000) + localIdBase;
-            if (itemName.includes(': ')) {
-              const suffix = itemName.split(': ')[1];
-              if (suffix === 'y') finalIdx += 1;
-              if (suffix === 'rotation') finalIdx += 2;
-              if (suffix === 'scaleX') finalIdx += 3;
-              if (suffix === 'scaleY') finalIdx += 4;
-              const props = TRANSFORM_PARAM_PROPS;
-              const pi = props.indexOf(prop);
-              if (pi !== -1) finalIdx += pi;
-            }
-            this.parameterOverrides.set(finalIdx, val);
+            setTargetProperty(targetObj, prop, val);
           }
         }
+        this.parameterOverrides.set(idx, val);
       }
     } else if (category === 'skins') {
       this._toggleSkin(name, value);
@@ -1888,7 +1887,7 @@ export class SpineRendererBase extends BaseRenderer {
     if (category === 'parameters') {
       for (const key in this._skeletons) {
         const { skeleton, state } = this._skeletons[key];
-        skeleton.setToSetupPose();
+        setToSetupPose(skeleton);
         state.apply(skeleton);
         skeleton.updateWorldTransform(2);
       }
@@ -1896,7 +1895,7 @@ export class SpineRendererBase extends BaseRenderer {
       this._attachmentsCache = {};
       for (const key in this._skeletons) {
         const { skeleton, state } = this._skeletons[key];
-        skeleton.setToSetupPose();
+        setToSetupPose(skeleton);
         state.apply(skeleton);
         skeleton.updateWorldTransform(2);
       }
@@ -1922,7 +1921,7 @@ export class SpineRendererBase extends BaseRenderer {
         if (s) newSkin.addSkin(s);
       }
       skel.setSkin(newSkin);
-      skel.setToSetupPose();
+      setToSetupPose(skel);
       this._skeletons[key].state.apply(skel);
       skel.updateWorldTransform(2);
     }
@@ -1938,14 +1937,15 @@ export class SpineRendererBase extends BaseRenderer {
       if (this._attachmentsCache[compositeKey]) {
         delete this._attachmentsCache[compositeKey];
         const skeleton = skelEntry.skeleton;
-        skeleton.setToSetupPose();
+        setToSetupPose(skeleton);
         if (skelEntry.state) skelEntry.state.apply(skeleton);
       }
     } else {
       this._attachmentsCache[compositeKey] = [slotIndex, name, skeletonId];
       const skeleton = skelEntry.skeleton;
-      if (skeleton.slots[slotIndex]?.attachment?.name === name) {
-        skeleton.slots[slotIndex].attachment = null;
+      const slot = skeleton.slots[slotIndex];
+      if (getSlotAttachment(slot)?.name === name) {
+        setSlotAttachment(slot, null);
       }
     }
     this._syncAllHiddenAttachments();
@@ -1960,8 +1960,9 @@ export class SpineRendererBase extends BaseRenderer {
         const [idx, name, cachedSkelId] = entry;
         if (String(cachedSkelId || '0') === String(key)) {
           const slot = skeleton.slots[idx];
-          if (slot?.attachment && slot.attachment.name === name) {
-            slot.attachment = null;
+          const att = getSlotAttachment(slot);
+          if (att && att.name === name) {
+            setSlotAttachment(slot, null);
           }
         }
       }

@@ -1,7 +1,7 @@
 import { showNotification } from '../notificationStore.svelte.js';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
-const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2'];
+const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2', '4.3'];
 const spineLibs = {};
 let initPromise = null;
 

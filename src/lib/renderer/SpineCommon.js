@@ -218,21 +218,75 @@ export function getInitialSkinName(skins) {
   }
 }
 
+export function setToSetupPose(skeleton) {
+  if (!skeleton) return;
+  if (typeof skeleton.setToSetupPose === 'function') {
+    skeleton.setToSetupPose();
+  } else if (typeof skeleton.setupPose === 'function') {
+    skeleton.setupPose();
+  }
+}
+
+export function getSlotAttachment(slot) {
+  if (!slot) return null;
+  return slot.appliedPose?.attachment ?? slot.pose?.attachment ?? slot.attachment ?? null;
+}
+
+export function setSlotAttachment(slot, attachment) {
+  if (!slot) return;
+  if (slot.pose?.setAttachment) {
+    slot.pose.setAttachment(attachment);
+  } else if (slot.pose) {
+    slot.pose.attachment = attachment;
+  }
+  if (slot.appliedPose?.setAttachment) {
+    slot.appliedPose.setAttachment(attachment);
+  } else if (slot.appliedPose) {
+    slot.appliedPose.attachment = attachment;
+  }
+  slot.attachment = attachment;
+}
+
+export function getTargetProperty(target, prop) {
+  if (!target) return undefined;
+  if (target.pose && target.pose[prop] !== undefined) return target.pose[prop];
+  return target[prop];
+}
+
+export function setTargetProperty(target, prop, value) {
+  if (!target) return;
+  if (target.pose && target.pose[prop] !== undefined) {
+    target.pose[prop] = value;
+  }
+  if (target.appliedPose && target.appliedPose[prop] !== undefined) {
+    target.appliedPose[prop] = value;
+  }
+  target[prop] = value;
+}
+
 export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson) {
   const atlasLoader = new spine.AtlasAttachmentLoader(atlas);
   const originalNewRegionAttachment = atlasLoader.newRegionAttachment;
-  atlasLoader.newRegionAttachment = function (skin, name, path, sequence) {
-    if (sequence == null && !atlas.findRegion(path)) {
+  atlasLoader.newRegionAttachment = function (...args) {
+    const isV43 = args.length >= 5;
+    const path = isV43 ? args[3] : args[2];
+    const sequence = isV43 ? args[4] : args[3];
+    const isSequence = sequence && (typeof sequence.pathSuffix === 'boolean' ? sequence.pathSuffix : true);
+    if (!isSequence && !atlas.findRegion(path)) {
       return null;
     }
-    return originalNewRegionAttachment.call(atlasLoader, skin, name, path, sequence);
+    return originalNewRegionAttachment.apply(atlasLoader, args);
   };
   const originalNewMeshAttachment = atlasLoader.newMeshAttachment;
-  atlasLoader.newMeshAttachment = function (skin, name, path, sequence) {
-    if (sequence == null && !atlas.findRegion(path)) {
+  atlasLoader.newMeshAttachment = function (...args) {
+    const isV43 = args.length >= 5;
+    const path = isV43 ? args[3] : args[2];
+    const sequence = isV43 ? args[4] : args[3];
+    const isSequence = sequence && (typeof sequence.pathSuffix === 'boolean' ? sequence.pathSuffix : true);
+    if (!isSequence && !atlas.findRegion(path)) {
       return null;
     }
-    return originalNewMeshAttachment.call(atlasLoader, skin, name, path, sequence);
+    return originalNewMeshAttachment.apply(atlasLoader, args);
   };
   const skeletonLoader = !isFileJson
     ? new spine.SkeletonBinary(atlasLoader)
@@ -250,7 +304,7 @@ export function initializeSkeleton(spine, atlas, skeletonDataOrText, isFileJson)
   skeleton.setSkin(newSkin);
   if (!skeleton.data.defaultSkin)
     skeleton.data.defaultSkin = new spine.Skin('default');
-  skeleton.setToSetupPose();
+  setToSetupPose(skeleton);
   skeleton.updateWorldTransform(2);
   const animationStateData = new spine.AnimationStateData(skeleton.data);
   const animationState = new spine.AnimationState(animationStateData);

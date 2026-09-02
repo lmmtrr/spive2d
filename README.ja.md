@@ -98,7 +98,7 @@ chmod +x /path/to/spive2d_linux_x64
 
 **🦴 Spine ランタイム:**
 
-- Spine 3.6-4.2
+- Spine 3.6-4.3
 
 **🎭 Live2D Cubism:**
 

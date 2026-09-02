@@ -98,7 +98,7 @@ To set up a local development environment, you'll need to install the following 
 
 **🦴 Spine Runtimes:**
 
-- Spine 3.6-4.2
+- Spine 3.6-4.3
 
 **🎭 Live2D Cubism:**
 
