@@ -80,6 +80,7 @@
   "exportModelSuccess": "モデルファイルをエクスポートしました",
   "exportModelError": "モデルファイルのエクスポートに失敗しました",
   "exportModelUnsupported": "このモデル形式はエクスポートできません",
+  "exportModelSkelParamsIgnored": "skel（バイナリ）形式は編集できないため、パラメーターの変更はエクスポートに反映されません",
   "mediaRecorderNotSupported": "このブラウザではアニメーション録画がサポートされていません",
   "addedToList": "リストに追加しました",
   "noFilesFound": "対応ファイルが見つかりません"

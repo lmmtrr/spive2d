@@ -170,6 +170,13 @@ function patchSpineJson(text, edits) {
   return JSON.stringify(data);
 }
 
+function hasSpineEdits(edits) {
+  return (edits.skeletons || []).some(skeleton =>
+    (skeleton.hiddenAttachments || []).length > 0 ||
+    ['bones', 'ik', 'transform', 'path'].some(kind => Object.keys(skeleton[kind] || {}).length > 0)
+  );
+}
+
 async function exportSpineModel(dirName, renderer, targetDir) {
   const edits = renderer.getModelEdits();
   if (!edits) return null;
@@ -186,7 +193,9 @@ async function exportSpineModel(dirName, renderer, targetDir) {
   if (!Array.from(copied).some(file => IMAGE_EXTENSIONS.test(file))) {
     await copySourceFiles(dirName, targetDir, filterImages(dirFiles), prefix);
   }
-  if (!edits.isJson) return true;
+  if (!edits.isJson) {
+    return { warning: hasSpineEdits(edits) ? 'exportModelSkelParamsIgnored' : null };
+  }
   for (const skeleton of edits.skeletons) {
     const relPath = `${skeleton.fileName}${edits.mainExt}`;
     const bytes = await readSourceFile(dirName, relPath);
@@ -392,6 +401,7 @@ export async function exportModelFiles(sceneText) {
     }
     exportQueue.updateStatus(taskId, 'completed');
     showNotification(`${t('exportModelSuccess')}: ${name}`, 'success');
+    if (exported?.warning) showNotification(t(exported.warning), 'info', 6000);
   } catch (err) {
     console.error('Failed to export model files:', err);
     exportQueue.updateStatus(taskId, 'error');

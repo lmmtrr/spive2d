@@ -80,6 +80,7 @@
   "exportModelSuccess": "Model files exported",
   "exportModelError": "Model file export failed",
   "exportModelUnsupported": "This model type cannot be exported",
+  "exportModelSkelParamsIgnored": "Binary .skel models cannot be edited, so parameter changes were not applied to the exported files",
   "mediaRecorderNotSupported": "Animation recording is not supported in this browser",
   "addedToList": "Added to list",
   "noFilesFound": "No supported files found"

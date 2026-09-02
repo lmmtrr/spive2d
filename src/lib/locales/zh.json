@@ -80,6 +80,7 @@
   "exportModelSuccess": "模型文件已导出",
   "exportModelError": "模型文件导出失败",
   "exportModelUnsupported": "该模型类型无法导出",
+  "exportModelSkelParamsIgnored": "二进制 .skel 模型无法编辑，参数修改未应用到导出文件",
   "mediaRecorderNotSupported": "此浏览器不支持动画录制",
   "addedToList": "已添加到列表",
   "noFilesFound": "未找到支持的文件"
