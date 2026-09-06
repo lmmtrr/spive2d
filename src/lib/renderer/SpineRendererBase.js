@@ -89,8 +89,20 @@ export class SpineRendererBase extends BaseRenderer {
     this._loadedAtlases = [];
   }
 
+  _patchScreenBlendMode() {
+    const converter = this._spine?.WebGLBlendModeConverter;
+    const modes = this._spine?.BlendMode;
+    if (!converter || !modes || converter.__screenBlendPatched) return;
+    const GL_ONE_MINUS_SRC_COLOR = 0x0301;
+    const original = converter.getDestGLBlendMode.bind(converter);
+    converter.getDestGLBlendMode = (blendMode) =>
+      blendMode === modes.Screen ? GL_ONE_MINUS_SRC_COLOR : original(blendMode);
+    converter.__screenBlendPatched = true;
+  }
+
   async initCtx(alphaMode = 'pma') {
     this._alphaMode = alphaMode;
+    this._patchScreenBlendMode();
     this._ctx = new this._spine.ManagedWebGLRenderingContext(this._canvas, {
       preserveDrawingBuffer: true,
       alpha: true,
