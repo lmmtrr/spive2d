@@ -134,6 +134,9 @@ export class SpineRendererBase extends BaseRenderer {
     this._shader = this._spine.Shader.newTwoColoredTextured(this._ctx);
     this._batcher = new this._spine.PolygonBatcher(this._ctx);
     this._skeletonRenderer = new this._spine.SkeletonRenderer(this._ctx);
+    if ('pmaAdditiveBatching' in this._skeletonRenderer) {
+      this._skeletonRenderer.pmaAdditiveBatching = false;
+    }
     this._mvp = new this._spine.Matrix4();
   }
 
@@ -1292,9 +1295,11 @@ export class SpineRendererBase extends BaseRenderer {
     for (const key of sortedKeys) {
       const entry = this._skeletons[key];
       const { skeleton, state } = entry;
-      if (delta > 0 && !this._paused) state.update(delta * this._speed);
+      const advance = delta > 0 && !this._paused;
+      if (advance) state.update(delta * this._speed);
       state.apply(skeleton);
       this._applyParameterOverrides(key);
+      if (advance) skeleton.update?.(delta * this._speed);
       skeleton.updateWorldTransform(2);
       this._syncHiddenAttachments(skeleton, key);
       const maskShader = entry.mask ? this._getMaskShader() : null;
@@ -1989,6 +1994,7 @@ export class SpineRendererBase extends BaseRenderer {
         entry.trackTime = entry.animation.duration * progress;
         state.apply(skeleton);
         this._applyParameterOverrides(key);
+        if (typeof skeleton.time === 'number') skeleton.time = entry.trackTime;
         skeleton.updateWorldTransform(2);
       }
     }
