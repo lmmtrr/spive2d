@@ -52,6 +52,110 @@ export function applyTextureAlphaMode(assetManager, alphaMode) {
   assetManager.textureLoader = (image) => textureLoader(image, pma);
 }
 
+const GLOW_ALPHA_NOISE_FLOOR = 13;
+
+function isGlowBlendMode(spine, blendMode) {
+  const modes = spine?.BlendMode;
+  if (!modes || blendMode === undefined || blendMode === null) return false;
+  return blendMode === modes.Additive || blendMode === modes.Screen;
+}
+
+function collectGlowOnlyRegions(spine, skeletonData) {
+  const glow = new Set();
+  const plain = new Set();
+  for (const skin of skeletonData?.skins || []) {
+    if (typeof skin?.getAttachments !== 'function') continue;
+    for (const entry of skin.getAttachments()) {
+      const region = entry?.attachment?.region;
+      if (!region?.page) continue;
+      const slotData = skeletonData.slots?.[entry.slotIndex];
+      if (!slotData) continue;
+      (isGlowBlendMode(spine, slotData.blendMode) ? glow : plain).add(region);
+    }
+  }
+  for (const region of plain) glow.delete(region);
+  return glow;
+}
+
+function getRegionPageRect(region) {
+  const rotated = region.degrees === 90 || region.rotate === true;
+  return {
+    x: region.x,
+    y: region.y,
+    width: rotated ? region.height : region.width,
+    height: rotated ? region.width : region.height
+  };
+}
+
+function rewriteGlowAlpha(data, premultiply) {
+  let changed = false;
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a === 0) continue;
+    let r = data[i], g = data[i + 1], b = data[i + 2];
+    if (premultiply) {
+      r = Math.round(r * a / 255);
+      g = Math.round(g * a / 255);
+      b = Math.round(b * a / 255);
+      data[i] = r; data[i + 1] = g; data[i + 2] = b;
+      changed = true;
+    }
+    const light = Math.max(r, g, b);
+    if (light <= GLOW_ALPHA_NOISE_FLOOR) {
+      data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 0;
+      changed = true;
+    } else if (light < a) {
+      data[i + 3] = light;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode) {
+  if (!gl || !skeletonData || alphaMode === 'npm') return;
+  const byPage = new Map();
+  for (const region of collectGlowOnlyRegions(spine, skeletonData)) {
+    if (region.__spive2d_glowAlpha || !region.page.texture) continue;
+    if (!byPage.has(region.page)) byPage.set(region.page, []);
+    byPage.get(region.page).push(region);
+  }
+  const premultiplyOnUpload = alphaMode === 'unpack';
+  for (const [page, regions] of byPage) {
+    const texture = page.texture;
+    let ctx2d = null;
+    let image = null;
+    try {
+      image = texture.getImage?.();
+      if (!image || image.width !== page.width || image.height !== page.height) continue;
+      const canvas = createCanvas(image.width, image.height);
+      ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+      ctx2d.drawImage(image, 0, 0);
+    } catch (e) {
+      console.warn('[SpineCommon] glow alpha pass skipped for', page.name, e);
+      continue;
+    }
+    texture.bind();
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    try {
+      for (const region of regions) {
+        const rect = getRegionPageRect(region);
+        if (!(rect.width > 0 && rect.height > 0)) continue;
+        if (rect.x < 0 || rect.y < 0 ||
+          rect.x + rect.width > image.width || rect.y + rect.height > image.height) continue;
+        region.__spive2d_glowAlpha = true;
+        const pixels = ctx2d.getImageData(rect.x, rect.y, rect.width, rect.height);
+        if (!rewriteGlowAlpha(pixels.data, premultiplyOnUpload)) continue;
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, rect.x, rect.y, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      }
+    } catch (e) {
+      console.warn('[SpineCommon] glow alpha pass failed for', page.name, e);
+    } finally {
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplyOnUpload);
+    }
+  }
+}
+
 export function setupAtlas(atlas) {
   if (!atlas || !atlas.regions || atlas.__spive2d_setup) return;
   atlas.__spive2d_setup = true;

@@ -11,6 +11,7 @@ import {
   calculateSpineMVP,
   resolveAlphaMode,
   applyTextureAlphaMode,
+  neutralizeGlowTextureAlpha,
   setupAtlas,
   updateAtlasRegions,
   parseAtlasDeclaredSizes,
@@ -126,14 +127,19 @@ export class SpineRendererBase extends BaseRenderer {
       gl.clearColor(0, 0, 0, 0);
       const originalBlendFuncSeparate = gl.blendFuncSeparate.bind(gl);
       const applyBlend = (srcRGB, dstRGB, srcAlpha) => {
-        let src = srcRGB;
-        let dst = dstRGB;
+        const nonPremultiplied = this._effectiveAlphaMode === 'npm';
         if (dstRGB === gl.ONE_MINUS_SRC_COLOR || srcAlpha === gl.ONE_MINUS_SRC_COLOR) {
-          dst = gl.ONE_MINUS_SRC_COLOR;
-          if (this._effectiveAlphaMode === 'npm') src = gl.SRC_ALPHA;
+          originalBlendFuncSeparate(
+            nonPremultiplied ? gl.SRC_ALPHA : gl.DST_ALPHA,
+            gl.ONE_MINUS_SRC_COLOR, gl.ZERO, gl.ONE);
+          return;
         }
-        const additive = dst === gl.ONE;
-        originalBlendFuncSeparate(src, dst, gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+        const additive = dstRGB === gl.ONE;
+        if (additive && nonPremultiplied) {
+          originalBlendFuncSeparate(srcRGB, dstRGB, gl.ZERO, gl.ONE);
+          return;
+        }
+        originalBlendFuncSeparate(srcRGB, dstRGB, gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
       };
       const patchBlend = (target) => {
         target.blendFunc = (src, dst) => applyBlend(src, dst);
@@ -1012,6 +1018,7 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     const { skeleton, state, initialSkinNames } = initializeSkeleton(this._spine, atlas, this._assetManager.get(makePath(fileName, sceneInfo.mainExt)), this._isFileJson);
+    neutralizeGlowTextureAlpha(this._spine, this._ctx.gl, skeleton.data, this._effectiveAlphaMode);
     if (!this._activeSkins) this._activeSkins = new Set(initialSkinNames);
     this._animationStates.push(state);
     const designRect = {
