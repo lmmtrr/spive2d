@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.47] - 2026-09-06
+
+### Fixed
+
+- Correct Screen blend mode on Spine 3.6-3.8 runtimes
+- Normalize Spine runtime rendering quirks across versions
+- Honor alpha mode on Spine 4.3 texture uploads
+
 ## [0.1.46] - 2026-09-02
 
 ### Added
