@@ -1,6 +1,7 @@
 import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
 import { SpineRendererBase } from './renderer/SpineRendererBase.js';
+import { resolveAlphaMode } from './renderer/SpineCommon.js';
 import {
   getLive2DFrameBox,
   fitLive2DBox,
@@ -465,7 +466,8 @@ self.onmessage = async (e) => {
   try {
     if (type === 'START_VIDEO' || type === 'START_PNG_SEQUENCE') {
       await loadLibraries(p.rendererType, p.spineVersion, p.libraryBaseUrl);
-      self.useNonePMA = (p.rendererType === 'spine' && p.alphaMode !== 'unpack');
+      self.useNonePMA = (p.rendererType === 'spine' &&
+        resolveAlphaMode(self.spineLib, p.alphaMode) !== 'unpack');
       self.wantFlipYBitmap = (p.rendererType === 'live2d');
       const canvas = new OffscreenCanvas(p.width, p.height);
       const renderCanvas = new OffscreenCanvas(p.width, p.height);

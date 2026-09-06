@@ -33,6 +33,25 @@ export function parseAtlasDeclaredSizes(atlasText) {
   return sizes;
 }
 
+export function supportsNonPremultipliedRendering(spine) {
+  const blendModes = spine?.PolygonBatcher?.blendModesGL;
+  if (!Array.isArray(blendModes) || blendModes.length === 0) return true;
+  return 'srcRgb' in blendModes[0];
+}
+
+export function resolveAlphaMode(spine, alphaMode) {
+  if (alphaMode !== 'npm') return alphaMode;
+  return supportsNonPremultipliedRendering(spine) ? 'npm' : 'unpack';
+}
+
+export function applyTextureAlphaMode(assetManager, alphaMode) {
+  if (!assetManager || !('texturePmaInfo' in assetManager)) return;
+  const textureLoader = assetManager.textureLoader;
+  if (typeof textureLoader !== 'function') return;
+  const pma = alphaMode === 'pma';
+  assetManager.textureLoader = (image) => textureLoader(image, pma);
+}
+
 export function setupAtlas(atlas) {
   if (!atlas || !atlas.regions || atlas.__spive2d_setup) return;
   atlas.__spive2d_setup = true;

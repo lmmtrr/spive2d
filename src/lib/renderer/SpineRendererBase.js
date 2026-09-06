@@ -9,6 +9,8 @@ import {
   getTargetProperty,
   setTargetProperty,
   calculateSpineMVP,
+  resolveAlphaMode,
+  applyTextureAlphaMode,
   setupAtlas,
   updateAtlasRegions,
   parseAtlasDeclaredSizes,
@@ -69,6 +71,7 @@ export class SpineRendererBase extends BaseRenderer {
   _skeletons = {};
   _animationStates = [];
   _alphaMode = 'pma';
+  _effectiveAlphaMode = 'pma';
   _paused = false;
   _speed = 1.0;
   _attachmentsCache = {};
@@ -100,8 +103,17 @@ export class SpineRendererBase extends BaseRenderer {
     converter.__screenBlendPatched = true;
   }
 
+  _setAlphaMode(mode) {
+    this._alphaMode = mode;
+    this._effectiveAlphaMode = resolveAlphaMode(this._spine, mode);
+  }
+
+  _isPremultipliedAlpha() {
+    return this._effectiveAlphaMode === 'unpack' || this._effectiveAlphaMode === 'pma';
+  }
+
   async initCtx(alphaMode = 'pma') {
-    this._alphaMode = alphaMode;
+    this._setAlphaMode(alphaMode);
     this._patchScreenBlendMode();
     this._ctx = new this._spine.ManagedWebGLRenderingContext(this._canvas, {
       preserveDrawingBuffer: true,
@@ -118,7 +130,7 @@ export class SpineRendererBase extends BaseRenderer {
         let dst = dstRGB;
         if (dstRGB === gl.ONE_MINUS_SRC_COLOR || srcAlpha === gl.ONE_MINUS_SRC_COLOR) {
           dst = gl.ONE_MINUS_SRC_COLOR;
-          if (this._alphaMode === 'npm') src = gl.SRC_ALPHA;
+          if (this._effectiveAlphaMode === 'npm') src = gl.SRC_ALPHA;
         }
         const additive = dst === gl.ONE;
         originalBlendFuncSeparate(src, dst, gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
@@ -129,7 +141,7 @@ export class SpineRendererBase extends BaseRenderer {
       };
       patchBlend(gl);
       patchBlend(this._ctx);
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, alphaMode === 'unpack');
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this._effectiveAlphaMode === 'unpack');
     }
     this._shader = this._spine.Shader.newTwoColoredTextured(this._ctx);
     this._batcher = new this._spine.PolygonBatcher(this._ctx);
@@ -141,10 +153,10 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   async setAlphaMode(mode) {
-    this._alphaMode = mode;
+    this._setAlphaMode(mode);
     if (this._ctx?.gl) {
       const gl = this._ctx.gl;
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, mode === 'unpack');
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this._effectiveAlphaMode === 'unpack');
     }
     if (this._dirName) {
       await this.loadAssets(this._dirName, this._fileNames, this._isFileJson);
@@ -240,6 +252,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._loadedAtlases = [];
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
     setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl);
+    applyTextureAlphaMode(this._assetManager, this._effectiveAlphaMode);
     const mainExt = scene.mainExt;
     const atlasExt = scene.atlasExt;
     const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
@@ -1109,7 +1122,7 @@ export class SpineRendererBase extends BaseRenderer {
       if (!mask) return null;
       if (mask.mode === MASK_MODE_DESIGN && !(designRect.width > 0 && designRect.height > 0)) return null;
       if (!this._getMaskShader()) return null;
-      return uploadMaskImages(this._spine, this._ctx.gl, mask, this._alphaMode);
+      return uploadMaskImages(this._spine, this._ctx.gl, mask, this._effectiveAlphaMode);
     } catch (e) {
       console.warn('[SpineRendererBase] mask texture load failed:', e);
       return null;
@@ -1131,7 +1144,7 @@ export class SpineRendererBase extends BaseRenderer {
     const rect = entry.designRect;
     const originX = (entry.skeleton.x || 0) + rect.x;
     const originY = (entry.skeleton.y || 0) + rect.y;
-    const premultiplied = (this._alphaMode === 'unpack' || this._alphaMode === 'pma') ? 1 : 0;
+    const premultiplied = this._isPremultipliedAlpha() ? 1 : 0;
     try {
       texture.bind(1);
       gl.activeTexture(gl.TEXTURE0);
@@ -1312,7 +1325,7 @@ export class SpineRendererBase extends BaseRenderer {
       shader.setUniformi(this._spine.Shader.SAMPLER, 0);
       shader.setUniform4x4f(this._spine.Shader.MVP_MATRIX, this._mvp.values);
       this._batcher.begin(shader);
-      this._skeletonRenderer.premultipliedAlpha = (this._alphaMode === 'unpack' || this._alphaMode === 'pma');
+      this._skeletonRenderer.premultipliedAlpha = this._isPremultipliedAlpha();
       this._skeletonRenderer.draw(this._batcher, skeleton);
       this._batcher.end();
     }
