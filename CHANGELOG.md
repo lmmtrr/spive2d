@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.49] - 2026-09-07
+
+### Fixed
+
+- Stop overlapping atlas rects from blocking the glow alpha pass
+
 ## [0.1.48] - 2026-09-07
 
 ### Added
