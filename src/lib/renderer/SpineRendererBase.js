@@ -1050,7 +1050,7 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     const { skeleton, state, initialSkinNames } = initializeSkeleton(this._spine, atlas, this._assetManager.get(makePath(fileName, sceneInfo.mainExt)), this._isFileJson);
-    neutralizeGlowTextureAlpha(this._spine, this._ctx.gl, skeleton.data, this._effectiveAlphaMode);
+    neutralizeGlowTextureAlpha(this._spine, this._ctx.gl, skeleton.data, this._effectiveAlphaMode, atlas);
     if (!this._activeSkins) this._activeSkins = new Set(initialSkinNames);
     this._animationStates.push(state);
     const designRect = {

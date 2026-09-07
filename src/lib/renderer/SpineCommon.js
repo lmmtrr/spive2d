@@ -128,7 +128,7 @@ function isGlowBlendMode(spine, blendMode) {
   return blendMode === modes.Additive || blendMode === modes.Screen;
 }
 
-function collectGlowOnlyRegions(spine, skeletonData) {
+function collectGlowRegions(spine, skeletonData) {
   const glow = new Set();
   const plain = new Set();
   for (const skin of skeletonData?.skins || []) {
@@ -142,7 +142,7 @@ function collectGlowOnlyRegions(spine, skeletonData) {
     }
   }
   for (const region of plain) glow.delete(region);
-  return glow;
+  return { glow, plain };
 }
 
 function getRegionPageRect(region) {
@@ -155,9 +155,36 @@ function getRegionPageRect(region) {
   };
 }
 
-function rewriteGlowAlpha(data, premultiply) {
+function collectGuardRects(atlas, page, glow, plain) {
+  const rects = [];
+  const regions = atlas?.regions?.length ? atlas.regions : plain;
+  for (const region of regions) {
+    if (region.page !== page || glow.has(region)) continue;
+    rects.push(getRegionPageRect(region));
+  }
+  return rects;
+}
+
+function buildGuardMask(rect, guardRects) {
+  let mask = null;
+  for (const other of guardRects) {
+    const x0 = Math.max(rect.x, other.x);
+    const y0 = Math.max(rect.y, other.y);
+    const x1 = Math.min(rect.x + rect.width, other.x + other.width);
+    const y1 = Math.min(rect.y + rect.height, other.y + other.height);
+    if (x1 <= x0 || y1 <= y0) continue;
+    if (!mask) mask = new Uint8Array(rect.width * rect.height);
+    for (let y = y0; y < y1; y++) {
+      const row = (y - rect.y) * rect.width - rect.x;
+      mask.fill(1, row + x0, row + x1);
+    }
+  }
+  return mask;
+}
+
+function rewriteGlowAlpha(data, premultiply, guard) {
   let changed = false;
-  for (let i = 0; i < data.length; i += 4) {
+  for (let i = 0, pixel = 0; i < data.length; i += 4, pixel++) {
     const a = data[i + 3];
     if (a === 0) continue;
     let r = data[i], g = data[i + 1], b = data[i + 2];
@@ -168,6 +195,7 @@ function rewriteGlowAlpha(data, premultiply) {
       data[i] = r; data[i + 1] = g; data[i + 2] = b;
       changed = true;
     }
+    if (guard && guard[pixel]) continue;
     const light = Math.max(r, g, b);
     if (light <= GLOW_ALPHA_NOISE_FLOOR) {
       data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 0;
@@ -180,10 +208,11 @@ function rewriteGlowAlpha(data, premultiply) {
   return changed;
 }
 
-export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode) {
+export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode, atlas) {
   if (!gl || !skeletonData || alphaMode === 'npm') return;
+  const { glow, plain } = collectGlowRegions(spine, skeletonData);
   const byPage = new Map();
-  for (const region of collectGlowOnlyRegions(spine, skeletonData)) {
+  for (const region of glow) {
     if (region.__spive2d_glowAlpha || !region.page.texture) continue;
     if (!byPage.has(region.page)) byPage.set(region.page, []);
     byPage.get(region.page).push(region);
@@ -203,6 +232,7 @@ export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode) {
       console.warn('[SpineCommon] glow alpha pass skipped for', page.name, e);
       continue;
     }
+    const guardRects = collectGuardRects(atlas, page, glow, plain);
     texture.bind();
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     try {
@@ -213,7 +243,8 @@ export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode) {
           rect.x + rect.width > image.width || rect.y + rect.height > image.height) continue;
         region.__spive2d_glowAlpha = true;
         const pixels = ctx2d.getImageData(rect.x, rect.y, rect.width, rect.height);
-        if (!rewriteGlowAlpha(pixels.data, premultiplyOnUpload)) continue;
+        const guard = buildGuardMask(rect, guardRects);
+        if (!rewriteGlowAlpha(pixels.data, premultiplyOnUpload, guard)) continue;
         gl.texSubImage2D(gl.TEXTURE_2D, 0, rect.x, rect.y, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
       }
     } catch (e) {
