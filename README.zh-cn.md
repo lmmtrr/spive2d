@@ -14,6 +14,7 @@ https://github.com/user-attachments/assets/c20288f2-75a5-4f1f-b8df-4532e65a2f7b
 - 🕹️ 实时参数控制
 - 🎨 动画/皮肤切换界面
 - 🖱️ 支持鼠标交互
+- 🔍 根据图集页面自动判定 Alpha 模式（仅在 PMA 与 UNPACK 之间选择，不会覆盖已指定的 NPM）
 - 🖥️ 跨平台 (Windows/macOS/Linux)
 
 ## ⌨️ 键盘快捷键

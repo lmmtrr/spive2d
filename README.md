@@ -14,6 +14,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 - 🕹️ Real-time parameter controls
 - 🎨 Animation/Skin switching UI
 - 🖱️ Mouse interaction support
+- 🔍 Automatic alpha mode detection from the atlas pages (chooses between PMA and UNPACK only; an explicit NPM setting is never overwritten)
 - 🖥️ Cross-platform (Windows/macOS/Linux)
 
 ## ⌨️ Keyboard Shortcuts
