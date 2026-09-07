@@ -1940,6 +1940,9 @@ export class SpineRendererBase extends BaseRenderer {
       const slotIndex = mergedIndex % 1000000;
       this._toggleAttachment(name, slotIndex, value, skeletonId);
     }
+    if (this._paused) {
+      this.render(0);
+    }
   }
 
   resetOverrides(category) {
@@ -1986,6 +1989,9 @@ export class SpineRendererBase extends BaseRenderer {
       skel.updateWorldTransform(2);
     }
     this._syncAllHiddenAttachments();
+    if (this._paused) {
+      this.render(0);
+    }
   }
 
   _toggleAttachment(name, slotIndex, checked, targetSkeletonId) {

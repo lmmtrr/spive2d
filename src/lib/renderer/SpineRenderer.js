@@ -91,6 +91,13 @@ export class SpineRenderer extends SpineRendererBase {
     super.render(delta, options);
   }
 
+  applyTransform(scale, moveX, moveY, rotate) {
+    super.applyTransform(scale, moveX, moveY, rotate);
+    if (this._paused) {
+      this.render(0, { dpr: window.devicePixelRatio || 1 });
+    }
+  }
+
   seekAnimation(progress) {
     super.seekAnimation(progress);
     this.render(0, { dpr: window.devicePixelRatio || 1 });
