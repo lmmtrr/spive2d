@@ -275,7 +275,7 @@
       canvasContainer.appendChild(canvas);
     }
     if (renderer['setAlphaMode']) {
-      renderer['setAlphaMode'](appState.alphaMode);
+      renderer['setAlphaMode'](loadSetting('spive2d_alpha_mode', 'pma'));
     }    
     if (renderer.setTextureFilter) {
       renderer.setTextureFilter(appState.textureFilter);
@@ -293,6 +293,10 @@
       return;
     }
     loadingRenderers = loadingRenderers.filter(r => r !== renderer);
+    const detectedAlphaMode = renderer.getAlphaMode?.();
+    if (detectedAlphaMode && detectedAlphaMode !== appState.alphaMode) {
+      appState.alphaMode = detectedAlphaMode;
+    }
     setRenderer(renderer);
     const rendererCanvas = renderer.getCanvas();
     requestAnimationFrame(() => {

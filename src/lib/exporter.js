@@ -198,7 +198,7 @@ async function prepareExportContext(taskId, baseFilename, WorkerClass) {
     syncState: activeRenderer?.getSyncState() || null,
     spineVersion,
     isFileJson,
-    alphaMode: appState.alphaMode
+    alphaMode: activeRenderer?.getEffectiveAlphaMode?.() || appState.alphaMode
   };
 }
 

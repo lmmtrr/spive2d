@@ -15,6 +15,8 @@ import {
   setupAtlas,
   updateAtlasRegions,
   parseAtlasDeclaredSizes,
+  detectAtlasAlphaMode,
+  reuploadAtlasTextures,
   normalizeAtlasText,
   createCanvas,
   createMaskShader,
@@ -73,6 +75,7 @@ export class SpineRendererBase extends BaseRenderer {
   _animationStates = [];
   _alphaMode = 'pma';
   _effectiveAlphaMode = 'pma';
+  _detectAlphaOnLoad = false;
   _paused = false;
   _speed = 1.0;
   _attachmentsCache = {};
@@ -91,6 +94,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._primaryCache = null;
     this._textureFilter = 'linear';
     this._loadedAtlases = [];
+    this._atlasPaths = [];
   }
 
   _patchScreenBlendMode() {
@@ -107,6 +111,30 @@ export class SpineRendererBase extends BaseRenderer {
   _setAlphaMode(mode) {
     this._alphaMode = mode;
     this._effectiveAlphaMode = resolveAlphaMode(this._spine, mode);
+  }
+
+  _sceneAtlases() {
+    if (!this._assetManager) return [];
+    return this._atlasPaths.map(path => this._assetManager.get(path)).filter(Boolean);
+  }
+
+  _applyDetectedAlphaMode() {
+    if (!this._detectAlphaOnLoad) return;
+    this._detectAlphaOnLoad = false;
+    if (this._alphaMode === 'npm') return;
+    const atlases = this._sceneAtlases();
+    const detected = detectAtlasAlphaMode(atlases);
+    if (!detected || detected === this._alphaMode) return;
+    this._setAlphaMode(detected);
+    reuploadAtlasTextures(this._ctx.gl, atlases, this._effectiveAlphaMode);
+  }
+
+  getAlphaMode() {
+    return this._alphaMode;
+  }
+
+  getEffectiveAlphaMode() {
+    return this._effectiveAlphaMode;
   }
 
   _isPremultipliedAlpha() {
@@ -256,17 +284,20 @@ export class SpineRendererBase extends BaseRenderer {
     this._parameterItems = null;
     this._parameterItemsMap = null;
     this._loadedAtlases = [];
+    this._atlasPaths = [];
+    const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
     setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl);
     applyTextureAlphaMode(this._assetManager, this._effectiveAlphaMode);
     const mainExt = scene.mainExt;
     const atlasExt = scene.atlasExt;
-    const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
     const makePath = (name, ext) => `${normalizedDirName}${name}${ext}`;
     const loadModel = (name) => {
       if (!this._isFileJson) this._assetManager.loadBinary(makePath(name, mainExt));
       else this._assetManager.loadText(makePath(name, mainExt));
-      this._assetManager.loadTextureAtlas(makePath(name, atlasExt));
+      const atlasPath = makePath(name, atlasExt);
+      this._atlasPaths.push(atlasPath);
+      this._assetManager.loadTextureAtlas(atlasPath);
     };
     if (scene.isMerged) {
       for (const name of scene.files) loadModel(name);
@@ -280,6 +311,7 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   async processLoadedAssets() {
+    this._applyDetectedAlphaMode();
     const sceneInfo = this._fileNames;
     if (sceneInfo.isMerged) {
       for (let i = 0; i < sceneInfo.files.length; i++) {
@@ -1175,30 +1207,21 @@ export class SpineRendererBase extends BaseRenderer {
     }
   }
 
+  async _fetchAtlasText(atlasPath, isWebUrl) {
+    const isLocalAsset = this._isLocalAssetPath(atlasPath);
+    if (isWebUrl && !isLocalAsset && this._hasTauriInvoke()) {
+      const fetched = await invoke('fetch_url_bytes', { url: atlasPath });
+      return new TextDecoder().decode(new Uint8Array(fetched));
+    }
+    const url = isLocalAsset ? atlasPath : convertFileSrc(atlasPath);
+    const res = await fetch(url);
+    return res.ok ? await res.text() : null;
+  }
+
   async _alignAtlasPageSizes(atlas, atlasPath, isWebUrl) {
     let atlasText = null;
     try {
-      const isLocalAsset = (() => {
-        try {
-          const url = new URL(atlasPath);
-          return url.protocol === 'tauri:' ||
-            url.hostname === 'tauri.localhost' ||
-            url.hostname === 'asset.localhost';
-        } catch (e) {
-          return atlasPath.startsWith('tauri://');
-        }
-      })();
-      const hasTauriInvoke = typeof window !== 'undefined' &&
-        ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') ||
-          (window.__TAURI__?.core?.invoke !== undefined));
-      if (isWebUrl && !isLocalAsset && hasTauriInvoke) {
-        const fetched = await invoke('fetch_url_bytes', { url: atlasPath });
-        atlasText = new TextDecoder().decode(new Uint8Array(fetched));
-      } else {
-        const url = isLocalAsset ? atlasPath : convertFileSrc(atlasPath);
-        const res = await fetch(url);
-        if (res.ok) atlasText = await res.text();
-      }
+      atlasText = await this._fetchAtlasText(atlasPath, isWebUrl);
     } catch (e) {
       console.warn('[SpineRendererBase] Could not fetch atlas text for page size check:', e);
     }

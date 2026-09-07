@@ -33,6 +33,74 @@ export function parseAtlasDeclaredSizes(atlasText) {
   return sizes;
 }
 
+const PMA_PROBE_STRIDE = 2;
+const PMA_PROBE_TOLERANCE = 16;
+const PMA_PROBE_MIN_SAMPLES = 2048;
+const PMA_PROBE_RATIO = 0.05;
+
+export function detectStraightAlphaImage(image) {
+  if (!image?.width || !image?.height) return null;
+  let pixels;
+  try {
+    const canvas = createCanvas(image.width, image.height);
+    const ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+    ctx2d.drawImage(image, 0, 0);
+    pixels = ctx2d.getImageData(0, 0, image.width, image.height).data;
+  } catch (e) {
+    console.warn('[SpineCommon] alpha mode probe failed:', e);
+    return null;
+  }
+  const rowStep = image.width * 4 * PMA_PROBE_STRIDE;
+  const colStep = 4 * PMA_PROBE_STRIDE;
+  let samples = 0;
+  let brighterThanAlpha = 0;
+  for (let row = 0; row < pixels.length; row += rowStep) {
+    const end = row + image.width * 4;
+    for (let i = row; i < end; i += colStep) {
+      const a = pixels[i + 3];
+      if (a === 0 || a === 255) continue;
+      samples++;
+      if (Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) > a + PMA_PROBE_TOLERANCE) brighterThanAlpha++;
+    }
+  }
+  if (samples < PMA_PROBE_MIN_SAMPLES) return null;
+  return brighterThanAlpha / samples >= PMA_PROBE_RATIO;
+}
+
+export function detectAtlasAlphaMode(atlases) {
+  for (const atlas of atlases) {
+    for (const page of atlas?.pages || []) {
+      let image = null;
+      try {
+        image = page.texture?.getImage?.();
+      } catch (e) {
+        image = null;
+      }
+      const straight = image ? detectStraightAlphaImage(image) : null;
+      if (straight === null) continue;
+      return straight ? 'unpack' : 'pma';
+    }
+  }
+  return null;
+}
+
+export function reuploadAtlasTextures(gl, atlases, alphaMode) {
+  const premultiplyOnUpload = alphaMode === 'unpack';
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplyOnUpload);
+  for (const atlas of atlases) {
+    for (const page of atlas?.pages || []) {
+      const texture = page.texture;
+      if (typeof texture?.update !== 'function') continue;
+      if ('pma' in texture) texture.pma = alphaMode === 'pma';
+      try {
+        texture.update(texture.useMipMaps === true);
+      } catch (e) {
+        console.warn('[SpineCommon] texture re-upload failed for', page.name, e);
+      }
+    }
+  }
+}
+
 export function supportsNonPremultipliedRendering(spine) {
   const blendModes = spine?.PolygonBatcher?.blendModesGL;
   if (!Array.isArray(blendModes) || blendModes.length === 0) return true;

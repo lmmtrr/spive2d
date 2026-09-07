@@ -37,6 +37,7 @@ export class SpineRenderer extends SpineRendererBase {
     this._canvas.style.width = `${window.innerWidth}px`;
     this._canvas.style.height = `${window.innerHeight}px`;
     await this.initCtx(this._alphaMode);
+    this._detectAlphaOnLoad = true;
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
     await this.processLoadedAssets();
