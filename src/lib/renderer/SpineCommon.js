@@ -131,18 +131,25 @@ function isGlowBlendMode(spine, blendMode) {
 function collectGlowRegions(spine, skeletonData) {
   const glow = new Set();
   const plain = new Set();
+  const plainAttachments = [];
   for (const skin of skeletonData?.skins || []) {
     if (typeof skin?.getAttachments !== 'function') continue;
     for (const entry of skin.getAttachments()) {
-      const region = entry?.attachment?.region;
+      const attachment = entry?.attachment;
+      const region = attachment?.region;
       if (!region?.page) continue;
       const slotData = skeletonData.slots?.[entry.slotIndex];
       if (!slotData) continue;
-      (isGlowBlendMode(spine, slotData.blendMode) ? glow : plain).add(region);
+      if (isGlowBlendMode(spine, slotData.blendMode)) {
+        glow.add(region);
+      } else {
+        plain.add(region);
+        plainAttachments.push(attachment);
+      }
     }
   }
   for (const region of plain) glow.delete(region);
-  return { glow, plain };
+  return { glow, plainAttachments };
 }
 
 function getRegionPageRect(region) {
@@ -155,28 +162,85 @@ function getRegionPageRect(region) {
   };
 }
 
-function collectGuardRects(atlas, page, glow, plain) {
-  const rects = [];
-  const regions = atlas?.regions?.length ? atlas.regions : plain;
-  for (const region of regions) {
-    if (region.page !== page || glow.has(region)) continue;
-    rects.push(getRegionPageRect(region));
-  }
-  return rects;
+function fillMaskRect(mask, width, height, rect) {
+  const x0 = Math.max(0, rect.x);
+  const y0 = Math.max(0, rect.y);
+  const x1 = Math.min(width, rect.x + rect.width);
+  const y1 = Math.min(height, rect.y + rect.height);
+  for (let y = y0; y < y1; y++) mask.fill(1, y * width + x0, y * width + x1);
 }
 
-function buildGuardMask(rect, guardRects) {
+function fillMaskTriangle(mask, width, height, x0, y0, x1, y1, x2, y2) {
+  const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2)));
+  const maxX = Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2)));
+  const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2)));
+  const maxY = Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2)));
+  if (maxX < minX || maxY < minY) return;
+  const det = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+  if (det === 0) return;
+  for (let y = minY; y <= maxY; y++) {
+    const row = y * width;
+    const py = y + 0.5;
+    for (let x = minX; x <= maxX; x++) {
+      const px = x + 0.5;
+      const w0 = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / det;
+      if (w0 < 0) continue;
+      const w1 = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / det;
+      if (w1 < 0 || w0 + w1 > 1) continue;
+      mask[row + x] = 1;
+    }
+  }
+}
+
+function buildPageCoverage(page, plainAttachments) {
+  const width = page.width;
+  const height = page.height;
+  if (!(width > 0 && height > 0)) return null;
   let mask = null;
-  for (const other of guardRects) {
-    const x0 = Math.max(rect.x, other.x);
-    const y0 = Math.max(rect.y, other.y);
-    const x1 = Math.min(rect.x + rect.width, other.x + other.width);
-    const y1 = Math.min(rect.y + rect.height, other.y + other.height);
-    if (x1 <= x0 || y1 <= y0) continue;
-    if (!mask) mask = new Uint8Array(rect.width * rect.height);
-    for (let y = y0; y < y1; y++) {
-      const row = (y - rect.y) * rect.width - rect.x;
-      mask.fill(1, row + x0, row + x1);
+  for (const attachment of plainAttachments) {
+    if (attachment.region?.page !== page) continue;
+    if (!mask) mask = new Uint8Array(width * height);
+    const uvs = attachment.uvs;
+    const triangles = attachment.triangles;
+    if (uvs && triangles) {
+      for (let i = 0; i < triangles.length; i += 3) {
+        const a = triangles[i] * 2;
+        const b = triangles[i + 1] * 2;
+        const c = triangles[i + 2] * 2;
+        fillMaskTriangle(mask, width, height,
+          uvs[a] * width, uvs[a + 1] * height,
+          uvs[b] * width, uvs[b + 1] * height,
+          uvs[c] * width, uvs[c + 1] * height);
+      }
+    } else {
+      fillMaskRect(mask, width, height, getRegionPageRect(attachment.region));
+    }
+  }
+  return mask;
+}
+
+function isCovered(coverage, width, height, x, y) {
+  const x0 = Math.max(0, x - 1);
+  const y0 = Math.max(0, y - 1);
+  const x1 = Math.min(width - 1, x + 1);
+  const y1 = Math.min(height - 1, y + 1);
+  for (let cy = y0; cy <= y1; cy++) {
+    const row = cy * width;
+    for (let cx = x0; cx <= x1; cx++) {
+      if (coverage[row + cx]) return true;
+    }
+  }
+  return false;
+}
+
+function buildGuardMask(rect, coverage, width, height) {
+  if (!coverage) return null;
+  let mask = null;
+  for (let y = 0; y < rect.height; y++) {
+    for (let x = 0; x < rect.width; x++) {
+      if (!isCovered(coverage, width, height, rect.x + x, rect.y + y)) continue;
+      if (!mask) mask = new Uint8Array(rect.width * rect.height);
+      mask[y * rect.width + x] = 1;
     }
   }
   return mask;
@@ -208,9 +272,9 @@ function rewriteGlowAlpha(data, premultiply, guard) {
   return changed;
 }
 
-export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode, atlas) {
+export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode) {
   if (!gl || !skeletonData || alphaMode === 'npm') return;
-  const { glow, plain } = collectGlowRegions(spine, skeletonData);
+  const { glow, plainAttachments } = collectGlowRegions(spine, skeletonData);
   const byPage = new Map();
   for (const region of glow) {
     if (region.__spive2d_glowAlpha || !region.page.texture) continue;
@@ -232,7 +296,7 @@ export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode, a
       console.warn('[SpineCommon] glow alpha pass skipped for', page.name, e);
       continue;
     }
-    const guardRects = collectGuardRects(atlas, page, glow, plain);
+    const coverage = buildPageCoverage(page, plainAttachments);
     texture.bind();
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     try {
@@ -243,7 +307,7 @@ export function neutralizeGlowTextureAlpha(spine, gl, skeletonData, alphaMode, a
           rect.x + rect.width > image.width || rect.y + rect.height > image.height) continue;
         region.__spive2d_glowAlpha = true;
         const pixels = ctx2d.getImageData(rect.x, rect.y, rect.width, rect.height);
-        const guard = buildGuardMask(rect, guardRects);
+        const guard = buildGuardMask(rect, coverage, image.width, image.height);
         if (!rewriteGlowAlpha(pixels.data, premultiplyOnUpload, guard)) continue;
         gl.texSubImage2D(gl.TEXTURE_2D, 0, rect.x, rect.y, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
       }
