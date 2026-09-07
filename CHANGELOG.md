@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.48] - 2026-09-07
+
+### Added
+
+- Automatically detect alpha mode from atlas pages
+
+### Fixed
+
+- Fix glow slot rendering issues on transparent canvas and nested atlas regions
+- Render frame on transform and property changes when paused
+
 ## [0.1.47] - 2026-09-06
 
 ### Fixed
