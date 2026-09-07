@@ -31,6 +31,9 @@ import {
   disposeMask,
   stripExtension
 } from './SpineMask.js';
+import { createSorter } from '../utils.js';
+
+const sortByDisplayName = createSorter(item => item.displayName || item.name);
 
 const BONE_PARAM_PROPS = ['x', 'y', 'rotation', 'scaleX', 'scaleY'];
 const TRANSFORM_PARAM_PROPS = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
@@ -1632,7 +1635,7 @@ export class SpineRendererBase extends BaseRenderer {
         });
       });
     }
-    return items.sort((a, b) => (a.displayName || a.name).localeCompare(b.displayName || b.name));
+    return items.sort(sortByDisplayName);
   }
 
   _getSkinsItems() {
@@ -1667,7 +1670,7 @@ export class SpineRendererBase extends BaseRenderer {
         }
       });
     }
-    return items.sort((a, b) => (a.displayName || a.name).localeCompare(b.displayName || b.name));
+    return items.sort(sortByDisplayName);
   }
 
   _getParameterItems() {
