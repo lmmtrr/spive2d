@@ -36,8 +36,25 @@ function stripPrefix(relPath, prefix) {
   return prefix && relPath.startsWith(prefix) ? relPath.slice(prefix.length) : relPath;
 }
 
+function safeRelPath(relPath) {
+  const parts = String(relPath).replace(/\\/g, '/').split('/');
+  const stack = [];
+  for (const part of parts) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (stack.length === 0) return null;
+      stack.pop();
+    } else {
+      stack.push(part);
+    }
+  }
+  return stack.join('/');
+}
+
 async function readSourceFile(dirName, relPath) {
-  const rawUrl = `${normalizeDir(dirName)}${relPath}`;
+  const safePath = safeRelPath(relPath);
+  if (safePath === null) return null;
+  const rawUrl = `${normalizeDir(dirName)}${safePath}`;
   const web = isWebDir(dirName);
   try {
     const res = await fetch(web ? rawUrl : convertFileSrc(rawUrl));
