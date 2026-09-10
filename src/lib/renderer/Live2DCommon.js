@@ -257,6 +257,20 @@ export function getLive2DMotionDuration(motion) {
   return 0;
 }
 
+function clampToCanvasBox(box, canvasBox) {
+  if (!(canvasBox.width > 0) || !(canvasBox.height > 0)) return box;
+  const left = Math.max(box.x, canvasBox.x);
+  const top = Math.max(box.y, canvasBox.y);
+  const right = Math.min(box.x + box.width, canvasBox.x + canvasBox.width);
+  const bottom = Math.min(box.y + box.height, canvasBox.y + canvasBox.height);
+  const width = right - left;
+  const height = bottom - top;
+  if (!(width > 0) || !(height > 0)) return box;
+  const CANVAS_IS_COVERED = 0.5;
+  const covered = (width * height) / (canvasBox.width * canvasBox.height);
+  return covered >= CANVAS_IS_COVERED ? { x: left, y: top, width, height } : box;
+}
+
 export function getLive2DFrameBox(internalModel) {
   if (!internalModel) return null;
   const canvasBox = { x: 0, y: 0, width: internalModel.originalWidth, height: internalModel.originalHeight };
@@ -296,7 +310,7 @@ export function getLive2DFrameBox(internalModel) {
   if (!(maxX > minX) || !(maxY > minY)) return null;
   const CANVAS_IS_THE_FRAME = 0.75;
   if (drawn > 0 && insideCanvas / drawn >= CANVAS_IS_THE_FRAME) return canvasBox;
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  return clampToCanvasBox({ x: minX, y: minY, width: maxX - minX, height: maxY - minY }, canvasBox);
 }
 
 export function fitLive2DBox(internalModel, box, viewWidth, viewHeight, marginX = 0, marginY = 0) {
