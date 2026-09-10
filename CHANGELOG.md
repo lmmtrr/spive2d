@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.50] - 2026-09-10
+
+### Fixed
+
+- Keep off-canvas Live2D layers from shrinking the fitted model
+
 ## [0.1.49] - 2026-09-07
 
 ### Fixed
