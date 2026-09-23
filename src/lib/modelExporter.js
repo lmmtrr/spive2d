@@ -22,6 +22,29 @@ function isWebDir(dirName) {
   return dirName.startsWith('http://') || dirName.startsWith('https://');
 }
 
+function isBlockedHost(hostname) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host === '::1' || host === '::') return true;
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (a === 127 || a === 10 || a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+  }
+  return false;
+}
+
+function isBlockedUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    return (url.protocol !== 'http:' && url.protocol !== 'https:') || isBlockedHost(url.hostname);
+  } catch {
+    return true;
+  }
+}
+
 function dirPartOf(relPath) {
   return relPath.slice(0, relPath.lastIndexOf('/') + 1);
 }
