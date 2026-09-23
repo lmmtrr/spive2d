@@ -22,7 +22,8 @@ export class SpineRenderer extends SpineRendererBase {
 
   async load(dirName, scene, options = {}) {
     this.dispose();
-    this._canvas.style.display = 'block';
+    const isPreload = typeof options === 'boolean' ? false : !!options?.isPreload;
+    this._canvas.style.display = isPreload ? 'none' : 'block';
     await SpineVersionManager.init();
     const { version, isJson } = await SpineVersionManager.detectVersion(dirName, scene);
     this._spine = SpineVersionManager.getLib(version);
@@ -41,6 +42,19 @@ export class SpineRenderer extends SpineRendererBase {
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
     await this.processLoadedAssets();
+  }
+
+  activate() {
+    this._canvas.style.display = 'block';
+    this.#lastFrameTime = Date.now() / 1000;
+    if (!this.isExport && !this._paused && !this.#requestId) {
+      this.#requestId = requestAnimationFrame(() => this.#renderLoop());
+    }
+    if (typeof this._revealCanvas === 'function') {
+      this._revealCanvas();
+    } else {
+      this._canvas.style.opacity = '1';
+    }
   }
 
   async _waitForAssets() {

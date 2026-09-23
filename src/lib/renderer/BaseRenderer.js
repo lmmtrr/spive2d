@@ -18,6 +18,9 @@ export class BaseRenderer {
     throw new Error('load() must be implemented');
   }
 
+  activate() {
+  }
+
   dispose() {
     throw new Error('dispose() must be implemented');
   }

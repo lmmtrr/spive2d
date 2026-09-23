@@ -3,6 +3,7 @@
   import { appState } from '$lib/appState.svelte.js';
   import { getRenderer, setRenderer } from '$lib/rendererStore.svelte.js';
   import { createRenderer } from '$lib/renderer/createRenderer.js';
+  import { preloadManager } from '$lib/renderer/preloadManager.js';
   import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '$lib/utils.js';
   import { getAssetUrl } from '$lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
@@ -269,35 +270,63 @@
     const scenes = files[selectedDir];
     if (!scenes || scenes.length === 0) return;
     const fileNames = scenes[selectedScene];
-    const renderer = createRenderer(fileNames);
-    loadingRenderers.push(renderer);
+    let renderer = await preloadManager.consumePreloaded(selectedDir, fileNames);
+    if (renderer) {
+      if (typeof renderer.activate === 'function') {
+        renderer.activate();
+      }
+      const oldRenderer = getRenderer();
+      if (oldRenderer && oldRenderer !== renderer) {
+        oldRenderer.dispose();
+        const oldCanvas = oldRenderer.getCanvas();
+        if (canvasContainer?.contains(oldCanvas) && oldCanvas !== renderer.getCanvas()) {
+          canvasContainer.removeChild(oldCanvas);
+        }
+      }
+    } else {
+      const oldRenderer = getRenderer();
+      if (oldRenderer) {
+        oldRenderer.dispose();
+        const oldCanvas = oldRenderer.getCanvas();
+        if (canvasContainer?.contains(oldCanvas)) {
+          canvasContainer.removeChild(oldCanvas);
+        }
+        setRenderer(null);
+      }
+      renderer = createRenderer(fileNames);
+      loadingRenderers.push(renderer);
+      if (renderer['setAlphaMode']) {
+        renderer['setAlphaMode'](appState.alphaMode);
+      }
+      if (renderer.setTextureFilter) {
+        renderer.setTextureFilter(appState.textureFilter);
+      }
+      try {
+        await renderer.load(selectedDir, fileNames, { detectAlpha });
+      } catch (e) {
+        console.error(e);
+        loadingRenderers = loadingRenderers.filter(r => r !== renderer);
+        return;
+      }
+      if (loadId !== currentLoadId) {
+        loadingRenderers = loadingRenderers.filter(r => r !== renderer);
+        renderer.dispose();
+        return;
+      }
+      loadingRenderers = loadingRenderers.filter(r => r !== renderer);
+    }
     const canvas = renderer.getCanvas();
     if (canvasContainer && !canvasContainer.contains(canvas)) {
       canvasContainer.appendChild(canvas);
     }
-    if (renderer['setAlphaMode']) {
-      renderer['setAlphaMode'](appState.alphaMode);
-    }    
-    if (renderer.setTextureFilter) {
-      renderer.setTextureFilter(appState.textureFilter);
-    }
-    try {
-      await renderer.load(selectedDir, fileNames, { detectAlpha });
-    } catch (e) {
-      console.error(e);
-      loadingRenderers = loadingRenderers.filter(r => r !== renderer);
-      return;
-    }
-    if (loadId !== currentLoadId) {
-      loadingRenderers = loadingRenderers.filter(r => r !== renderer);
-      renderer.dispose();
-      return;
-    }
-    loadingRenderers = loadingRenderers.filter(r => r !== renderer);
     const detectedAlphaMode = renderer.getAlphaMode?.();
-    if (detectAlpha && detectedAlphaMode && detectedAlphaMode !== appState.alphaMode) {
-      appState.alphaMode = detectedAlphaMode;
-      saveSetting('spive2d_alpha_mode', detectedAlphaMode);
+    if (detectAlpha && detectedAlphaMode) {
+      if (detectedAlphaMode !== appState.alphaMode) {
+        appState.alphaMode = detectedAlphaMode;
+        saveSetting('spive2d_alpha_mode', detectedAlphaMode);
+      }
+    } else if (typeof renderer.setAlphaMode === 'function' && renderer.getAlphaMode && renderer.getAlphaMode() !== appState.alphaMode) {
+      await renderer.setAlphaMode(appState.alphaMode);
     }
     setRenderer(renderer);
     const rendererCanvas = renderer.getCanvas();
@@ -354,10 +383,14 @@
       sidebar?.setSelectedAnimation('');
       handleAnimationChange('');
     }
+    preloadManager.triggerPreload(selectedDir, scenes, selectedScene, { detectAlpha });
   }
 
-  function disposeModel() {
+  function disposeModel(clearPreload = true) {
     currentLoadId++;
+    if (clearPreload) {
+      preloadManager.clear();
+    }
     const renderer = getRenderer();
     if (renderer) {
       renderer.dispose();
@@ -391,7 +424,7 @@
     }
     appState.directories.selectedScene = index === -1 ? 0 : index;
     const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
-    disposeModel();
+    disposeModel(true);
     initModel(previousSkins);
   }
 
@@ -399,7 +432,7 @@
     const idx = e.target.selectedIndex;
     appState.directories.selectedScene = idx;
     const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
-    disposeModel();
+    disposeModel(false);
     initModel(previousSkins);
   }
 
