@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.51] - 2026-09-23
+
+### Added
+
+- Improve scene switching speed with Spine model preloading
+
+### Changed
+
+- Restrict auto alpha mode detection to initial folder load
+
 ## [0.1.50] - 2026-09-10
 
 ### Fixed
