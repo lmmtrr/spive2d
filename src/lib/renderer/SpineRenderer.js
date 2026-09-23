@@ -20,7 +20,7 @@ export class SpineRenderer extends SpineRendererBase {
     return this._canvas;
   }
 
-  async load(dirName, scene) {
+  async load(dirName, scene, options = {}) {
     this.dispose();
     this._canvas.style.display = 'block';
     await SpineVersionManager.init();
@@ -37,7 +37,7 @@ export class SpineRenderer extends SpineRendererBase {
     this._canvas.style.width = `${window.innerWidth}px`;
     this._canvas.style.height = `${window.innerHeight}px`;
     await this.initCtx(this._alphaMode);
-    this._detectAlphaOnLoad = true;
+    this._detectAlphaOnLoad = typeof options === 'boolean' ? options : !!options?.detectAlpha;
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
     await this.processLoadedAssets();

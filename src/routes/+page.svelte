@@ -8,7 +8,7 @@
   import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
   import { exportModelFiles } from '$lib/modelExporter.js';
   import { createTransformAction } from '$lib/inputAction.js';
-  import { loadSetting } from '$lib/settings.js';
+  import { loadSetting, saveSetting } from '$lib/settings.js';
   import { showNotification } from '$lib/notificationStore.svelte.js';
   import { t } from '$lib/i18n.svelte.js';
   import { getShortcuts } from '$lib/shortcutKeys.js';
@@ -230,7 +230,7 @@
       };
       const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
       disposeModel();
-      await initModel(previousSkins);
+      await initModel(previousSkins, { detectAlpha: true });
       appState.initialized = true;
       dialogOpen = false;
     } catch (error) {
@@ -258,7 +258,8 @@
     }
   }
 
-  async function initModel(previousSkins = []) {
+  async function initModel(previousSkins = [], options = {}) {
+    const detectAlpha = typeof options === 'boolean' ? options : !!options?.detectAlpha;
     currentLoadId++;
     const loadId = currentLoadId;
     const previousAnimation = sidebar?.getSelectedAnimation() ?? '';
@@ -275,13 +276,13 @@
       canvasContainer.appendChild(canvas);
     }
     if (renderer['setAlphaMode']) {
-      renderer['setAlphaMode'](loadSetting('spive2d_alpha_mode', 'pma'));
+      renderer['setAlphaMode'](appState.alphaMode);
     }    
     if (renderer.setTextureFilter) {
       renderer.setTextureFilter(appState.textureFilter);
     }
     try {
-      await renderer.load(selectedDir, fileNames);
+      await renderer.load(selectedDir, fileNames, { detectAlpha });
     } catch (e) {
       console.error(e);
       loadingRenderers = loadingRenderers.filter(r => r !== renderer);
@@ -294,8 +295,9 @@
     }
     loadingRenderers = loadingRenderers.filter(r => r !== renderer);
     const detectedAlphaMode = renderer.getAlphaMode?.();
-    if (detectedAlphaMode && detectedAlphaMode !== appState.alphaMode) {
+    if (detectAlpha && detectedAlphaMode && detectedAlphaMode !== appState.alphaMode) {
       appState.alphaMode = detectedAlphaMode;
+      saveSetting('spive2d_alpha_mode', detectedAlphaMode);
     }
     setRenderer(renderer);
     const rendererCanvas = renderer.getCanvas();
