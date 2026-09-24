@@ -128,7 +128,8 @@ export class Live2DRenderer extends BaseRenderer {
     return this.#canvas;
   }
 
-  async load(dirName, scene) {
+  async load(dirName, scene, options = {}) {
+    const isPreload = typeof options === 'boolean' ? false : !!options?.isPreload;
     if (this.#disposed) return;
     await this.#appReady;
     if (this.#disposed) return;
@@ -146,7 +147,7 @@ export class Live2DRenderer extends BaseRenderer {
     }
     this.#lastFrameParameters = null;
     this.#baseParameters = null;
-    if (!this.#isExport && this.#canvas) {
+    if (!this.#isExport && this.#canvas && !isPreload) {
       this.#canvas.style.display = 'block';
     }
     const url = await resolveLive2DModelUrl(dirName, scene);
@@ -204,6 +205,9 @@ export class Live2DRenderer extends BaseRenderer {
       const { baseScale, dx, dy } = this.#fit(w, h);
       model.scale.set(baseScale);
       model.position.set(w * 0.5 - dx * baseScale, h * 0.5 - dy * baseScale);
+      if (isPreload) {
+        model.visible = false;
+      }
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.addChild(model);
       }
@@ -251,21 +255,11 @@ export class Live2DRenderer extends BaseRenderer {
         }
         if (steps === MAX_STEPS_PER_FRAME) this.#accumulatedMS = 0;
       };
-      this.#app.ticker.add(this.#updateFn);
-      if (!this.#isExport) {
-        this.#pointerMoveHandler = (e) => {
-          if (appState.enableMouseTracking && this.#model) {
-            this.#focusAt(e.clientX, e.clientY);
-          }
-        };
-        this.#pointerLeaveHandler = () => {
-          if (this.#model?.internalModel?.focusController) {
-            this.#model.internalModel.focusController.focus(0, 0);
-          }
-        };
-        window.addEventListener('pointermove', this.#pointerMoveHandler);
-        window.addEventListener('pointerleave', this.#pointerLeaveHandler);
-        document.addEventListener('mouseleave', this.#pointerLeaveHandler);
+      if (!isPreload) {
+        this.#app.ticker.add(this.#updateFn);
+        if (!this.#isExport) {
+          this.#attachPointerListeners();
+        }
       }
       model._spive2dSpeed = this.#speed;
       this.#hideMaskMosaicDrawables();
@@ -276,9 +270,45 @@ export class Live2DRenderer extends BaseRenderer {
     }
   }
 
-  dispose() {
+  activate() {
     if (this.#disposed) return;
-    this.#disposed = true;
+    if (!this.#isExport && this.#canvas) {
+      this.#canvas.style.display = 'block';
+      this.#canvas.style.opacity = '1';
+    }
+    if (this.#model) {
+      this.#model.visible = true;
+      this.resetTransform();
+    }
+    if (this.#updateFn && this.#app) {
+      this.#lastTime = performance.now();
+      this.#accumulatedMS = 0;
+      this.#app.ticker.remove(this.#updateFn);
+      this.#app.ticker.add(this.#updateFn);
+    }
+    if (!this.#isExport) {
+      this.#attachPointerListeners();
+    }
+  }
+
+  #attachPointerListeners() {
+    this.#detachPointerListeners();
+    this.#pointerMoveHandler = (e) => {
+      if (appState.enableMouseTracking && this.#model) {
+        this.#focusAt(e.clientX, e.clientY);
+      }
+    };
+    this.#pointerLeaveHandler = () => {
+      if (this.#model?.internalModel?.focusController) {
+        this.#model.internalModel.focusController.focus(0, 0);
+      }
+    };
+    window.addEventListener('pointermove', this.#pointerMoveHandler);
+    window.addEventListener('pointerleave', this.#pointerLeaveHandler);
+    document.addEventListener('mouseleave', this.#pointerLeaveHandler);
+  }
+
+  #detachPointerListeners() {
     if (this.#pointerMoveHandler) {
       window.removeEventListener('pointermove', this.#pointerMoveHandler);
       this.#pointerMoveHandler = null;
@@ -288,6 +318,12 @@ export class Live2DRenderer extends BaseRenderer {
       document.removeEventListener('mouseleave', this.#pointerLeaveHandler);
       this.#pointerLeaveHandler = null;
     }
+  }
+
+  dispose() {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#detachPointerListeners();
     if (this.#updateFn && this.#app) {
       this.#app.ticker.remove(this.#updateFn);
       this.#updateFn = null;

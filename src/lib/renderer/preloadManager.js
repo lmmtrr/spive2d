@@ -1,11 +1,6 @@
 import { createRenderer } from './createRenderer.js';
 import { appState } from '../appState.svelte.js';
 
-function isLive2D(scene) {
-  const ext = scene?.mainExt || '';
-  return ext.includes('.moc') || ext.includes('.model3.json') || ext.includes('.model.json');
-}
-
 class PreloadManager {
   #preloaded = null;
   #loadingPromise = null;
@@ -21,10 +16,6 @@ class PreloadManager {
     if (!dirName || !Array.isArray(scenes) || scenes.length <= 1) return;
     const nextIndex = (currentIndex + 1) % scenes.length;
     const nextScene = scenes[nextIndex];
-    if (isLive2D(nextScene)) {
-      this.clear();
-      return;
-    }
     const key = this.getKey(dirName, nextScene);
     if (this.#preloaded?.key === key) return;
     this.clear();
@@ -53,7 +44,7 @@ class PreloadManager {
           renderer.dispose();
         }
       } catch (err) {
-        console.warn('[PreloadManager] Failed to preload next Spine scene:', err);
+        console.warn('[PreloadManager] Failed to preload next scene:', err);
         renderer.dispose();
       } finally {
         if (this.#currentLoadId === loadId) {
