@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.52] - 2026-09-24
+
+### Added
+
+- Improve scene switching speed with Live2D model preloading
+
 ## [0.1.51] - 2026-09-23
 
 ### Added
