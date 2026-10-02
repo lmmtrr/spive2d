@@ -1378,8 +1378,7 @@ export class SpineRendererBase extends BaseRenderer {
       }
       return;
     }
-    const isExportOrCapture = this.isExport || options.isExport || options.screenBaseScale !== undefined || options.ignoreTransform !== undefined;
-    const fitBounds = this._getFitBounds(primary.entry, isExportOrCapture ? 2.5 : 1.15);
+    const fitBounds = this._getFitBounds(primary.entry, options.ignoreTransform ? 2.5 : 1.15);
     let screenBaseScale = options.screenBaseScale;
     if (!screenBaseScale && !this.isExport) {
       screenBaseScale = Math.max(
@@ -1485,7 +1484,7 @@ export class SpineRendererBase extends BaseRenderer {
       const primary = this._getPrimarySkeleton();
       const firstSkel = primary?.entry;
       if (firstSkel) {
-        const fitBounds = this._getFitBounds(firstSkel, 2.5);
+        const fitBounds = this._getFitBounds(firstSkel, 1.15);
         if (fitBounds && fitBounds.size) {
           screenBaseScale = Math.max(
             fitBounds.size.x / window.innerWidth,

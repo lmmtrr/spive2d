@@ -426,7 +426,8 @@ class WorkerSpineRenderer extends SpineRendererBase {
       marginY: this.marginY,
       contentWidth: this.contentWidth,
       contentHeight: this.contentHeight,
-      screenBaseScale: this.screenBaseScale
+      screenBaseScale: this.screenBaseScale,
+      ignoreTransform: this.ignoreTransform
     });
   }
 }
