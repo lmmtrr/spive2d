@@ -1,7 +1,8 @@
-import { Output, WebMOutputFormat, BufferTarget, CanvasSource } from 'mediabunny';
+import { Output, WebMOutputFormat, BufferTarget, VideoSample, VideoSampleSource } from 'mediabunny';
 import { setupWorkerEnv } from './workerPolyfills.js';
 import { SpineRendererBase } from './renderer/SpineRendererBase.js';
 import { resolveAlphaMode } from './renderer/SpineCommon.js';
+import { I420AConverter } from './i420aConverter.js';
 import {
   getLive2DFrameBox,
   fitLive2DBox,
@@ -20,6 +21,8 @@ import {
   ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
 } from './renderer/Live2DCommon.js';
+
+const VIDEO_ALPHA_FADE_THRESHOLD = 32;
 
 let currentTasks = new Map();
 let libsLoaded = false;
@@ -428,6 +431,23 @@ class WorkerSpineRenderer extends SpineRendererBase {
   }
 }
 
+async function addVideoFrame(t, timestamp) {
+  const { width, height } = t.canvas;
+  const sample = new VideoSample(t.converter.convert(t.canvas), {
+    format: 'I420A',
+    codedWidth: width,
+    codedHeight: height,
+    colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: true },
+    timestamp,
+    duration: 1 / t.fps
+  });
+  try {
+    await t.videoSource.add(sample);
+  } finally {
+    sample.close();
+  }
+}
+
 async function processQueue(id) {
   const t = currentTasks.get(id);
   if (!t || t.isRendering || t.renderQueue.length === 0) return;
@@ -450,7 +470,7 @@ async function processQueue(id) {
         throw new Error('Failed to get 2D context for compositing. The resolution might be too high for the GPU.');
       }
       if (t.videoSource) {
-        await t.videoSource.add(containerTime, 1 / t.fps);
+        await addVideoFrame(t, containerTime);
         self.postMessage({ type: 'FRAME_ADDED', id });
       } else {
         const bitmap = await createImageBitmap(t.canvas);
@@ -525,14 +545,15 @@ self.onmessage = async (e) => {
         if (p.syncState) renderer.applySyncState(p.syncState);
         if (p.animName) await renderer.setAnimation(p.animName);
       }
-      let output = null, videoSource = null;
+      let output = null, videoSource = null, converter = null;
       if (type === 'START_VIDEO') {
+        converter = new I420AConverter(p.width, p.height, VIDEO_ALPHA_FADE_THRESHOLD);
         output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
-        videoSource = new CanvasSource(canvas, { codec: 'vp9', bitrate: p.bitrate, alpha: 'keep' });
+        videoSource = new VideoSampleSource({ codec: 'vp9', bitrate: p.bitrate, alpha: 'keep' });
         output.addVideoTrack(videoSource);
         await output.start();
       }
-      currentTasks.set(id, { canvas, renderCanvas, compositeCtx, bgBitmap: p.bgBitmap, bgColor: p.bgColor, renderer, output, videoSource, fps: p.fps, lastSampleTime: 0, ready: true, renderQueue: [], isRendering: false });
+      currentTasks.set(id, { canvas, renderCanvas, compositeCtx, bgBitmap: p.bgBitmap, bgColor: p.bgColor, renderer, output, videoSource, converter, fps: p.fps, lastSampleTime: 0, ready: true, renderQueue: [], isRendering: false });
       self.postMessage({ type: 'READY', id, duration: renderer._currentDuration, fps: renderer.getFPS ? renderer.getFPS() : 60 });
     } else if (type === 'RENDER_FRAME') {
       const t = currentTasks.get(id);
@@ -545,6 +566,7 @@ self.onmessage = async (e) => {
         self.postMessage({ type: 'DONE_VIDEO', id, buffer }, { transfer: [buffer] });
         if (t.bgBitmap) t.bgBitmap.close();
         if (t.renderer?.dispose) t.renderer.dispose();
+        t.converter?.dispose();
         currentTasks.delete(id);
       }
     }
@@ -554,6 +576,7 @@ self.onmessage = async (e) => {
       if (t) {
         if (t.bgBitmap) t.bgBitmap.close();
         if (t.renderer?.dispose) t.renderer.dispose();
+        t.converter?.dispose();
         currentTasks.delete(id);
       }
     }
