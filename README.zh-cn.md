@@ -11,11 +11,7 @@ https://github.com/user-attachments/assets/c20288f2-75a5-4f1f-b8df-4532e65a2f7b
 - 📂 拖放加载模型（单个文件夹或单个压缩文件：仅限 zip 或 7z）
 - 📦 支持直接加载/解析 Unity 资源文件
 - 🎭 同时支持 Spine、Live2D 和 Layered Sprite (仅限 Unity 资源文件) 模型
-- 🕹️ 实时参数控制
-- 🎨 动画/皮肤切换界面
-- 🖱️ 支持鼠标交互
 - 🔍 根据图集页面自动判定 Alpha 模式（仅在 PMA 与 UNPACK 之间选择，不会覆盖已指定的 NPM）
-- 🖥️ 跨平台 (Windows/macOS/Linux)
 
 ## ⌨️ 键盘快捷键
 
@@ -106,7 +102,7 @@ chmod +x /path/to/spive2d_linux_x64
 - Cubism 2.1
 - Cubism 3.x - 5.x
 
-**🖼️ Layered Sprite (立绘):**
+**🖼️ Layered Sprite:**
 
 - Unity Sprite / RectTransform 资源包文件
 
