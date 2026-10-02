@@ -799,6 +799,7 @@
   dialog {
     background: var(--sidebar-color);
     color: var(--text-color);
+    text-shadow: var(--text-shadow);
     border: var(--border-color);
     border-radius: 10px;
     padding: 0;
@@ -919,6 +920,7 @@
     color: var(--text-color);
     border: var(--border-color);
     background-color: #0006;
+    text-shadow: var(--text-shadow);
     font-size: 15px;
     user-select: text;
   }
@@ -940,6 +942,7 @@
     color: var(--text-color);
     border: var(--border-color);
     background-color: #0006;
+    text-shadow: var(--text-shadow);
     font-size: 14px;
     user-select: text;
     resize: vertical;
@@ -958,6 +961,10 @@
     margin: 0;
   }
 
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: #222;
+  }
 
   .result-row {
     font-weight: bold;
