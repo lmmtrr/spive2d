@@ -437,7 +437,7 @@ async function addVideoFrame(t, timestamp) {
     format: 'I420A',
     codedWidth: width,
     codedHeight: height,
-    colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: true },
+    colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
     timestamp,
     duration: 1 / t.fps
   });

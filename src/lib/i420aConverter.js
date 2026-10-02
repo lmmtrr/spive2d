@@ -11,9 +11,9 @@ uniform int uOutWidth;
 uniform float uFade;
 out vec4 outColor;
 
-const vec3 Y_COEF = vec3(0.2126, 0.7152, 0.0722);
-const vec3 U_COEF = vec3(-0.2126 / 1.8556, -0.7152 / 1.8556, 0.5);
-const vec3 V_COEF = vec3(0.5, -0.7152 / 1.5748, -0.0722 / 1.5748);
+const vec3 Y_COEF = vec3(0.2126, 0.7152, 0.0722) * (219.0 / 255.0);
+const vec3 U_COEF = vec3(-0.2126 / 1.8556, -0.7152 / 1.8556, 0.5) * (224.0 / 255.0);
+const vec3 V_COEF = vec3(0.5, -0.7152 / 1.5748, -0.0722 / 1.5748) * (224.0 / 255.0);
 
 vec4 fetch(ivec2 p) {
   return texelFetch(uTex, clamp(p, ivec2(0), uSize - 1), 0);
@@ -30,7 +30,7 @@ float byteAt(int idx) {
   int cw = (w + 1) / 2;
   int cSize = cw * ((h + 1) / 2);
   if (idx < ySize) {
-    return dot(faded(fetch(ivec2(idx % w, idx / w))), Y_COEF) * 255.0;
+    return dot(faded(fetch(ivec2(idx % w, idx / w))), Y_COEF) * 255.0 + 16.0;
   }
   idx -= ySize;
   if (idx < cSize * 2) {
