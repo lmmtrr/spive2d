@@ -1,5 +1,6 @@
 import { SpineRendererBase } from './SpineRendererBase.js';
 import { SpineVersionManager } from './SpineVersionManager.js';
+import { installWorkerTextureLoader } from './workerTextureLoader.js';
 import { showNotification } from '../notificationStore.svelte.js';
 
 export class SpineRenderer extends SpineRendererBase {
@@ -7,6 +8,7 @@ export class SpineRenderer extends SpineRendererBase {
   #lastFrameTime = 0;
   #onFirstRender = null;
   #firstRender = true;
+  #isPreload = false;
 
   constructor(isExport = false) {
     const canvas = document.createElement('canvas');
@@ -22,8 +24,8 @@ export class SpineRenderer extends SpineRendererBase {
 
   async load(dirName, scene, options = {}) {
     this.dispose();
-    const isPreload = typeof options === 'boolean' ? false : !!options?.isPreload;
-    this._canvas.style.display = isPreload ? 'none' : 'block';
+    this.#isPreload = typeof options === 'boolean' ? false : !!options?.isPreload;
+    this._canvas.style.display = this.#isPreload ? 'none' : 'block';
     await SpineVersionManager.init();
     const { version, isJson } = await SpineVersionManager.detectVersion(dirName, scene);
     this._spine = SpineVersionManager.getLib(version);
@@ -45,6 +47,7 @@ export class SpineRenderer extends SpineRendererBase {
   }
 
   activate() {
+    this.#isPreload = false;
     this._canvas.style.display = 'block';
     this.#lastFrameTime = Date.now() / 1000;
     if (!this.isExport && !this._paused && !this.#requestId) {
@@ -61,12 +64,19 @@ export class SpineRenderer extends SpineRendererBase {
     await super._waitForAssets();
     this.#lastFrameTime = Date.now() / 1000;
     if (!this.isExport && !this._paused) {
-      if (!this.#requestId) {
+      if (!this.#requestId && !this.#isPreload) {
         this.#requestId = requestAnimationFrame(() => this.#renderLoop());
       }
     } else if (this.isExport) {
       this.#triggerFirstRender();
     }
+  }
+
+  _installTextureLoader(assetManager) {
+    installWorkerTextureLoader(assetManager, {
+      premultiply: this._effectiveAlphaMode === 'unpack',
+      probeAlpha: this._detectAlphaOnLoad && this._alphaMode !== 'npm'
+    });
   }
 
   async setAlphaMode(mode) {

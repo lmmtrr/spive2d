@@ -121,7 +121,7 @@ export class SpineRendererBase extends BaseRenderer {
     return this._atlasPaths.map(path => this._assetManager.get(path)).filter(Boolean);
   }
 
-  _applyDetectedAlphaMode() {
+  async _applyDetectedAlphaMode() {
     if (!this._detectAlphaOnLoad) return;
     this._detectAlphaOnLoad = false;
     if (this._alphaMode === 'npm') return;
@@ -129,7 +129,7 @@ export class SpineRendererBase extends BaseRenderer {
     const detected = detectAtlasAlphaMode(atlases);
     if (!detected || detected === this._alphaMode) return;
     this._setAlphaMode(detected);
-    reuploadAtlasTextures(this._ctx.gl, atlases, this._effectiveAlphaMode);
+    await reuploadAtlasTextures(this._ctx.gl, atlases, this._effectiveAlphaMode);
   }
 
   getAlphaMode() {
@@ -258,6 +258,9 @@ export class SpineRendererBase extends BaseRenderer {
     return 60;
   }
 
+  _installTextureLoader(assetManager) {
+  }
+
   _waitForAssets() {
     return new Promise((resolve) => {
       const check = () => {
@@ -290,6 +293,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._atlasPaths = [];
     const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
+    this._installTextureLoader(this._assetManager);
     setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl);
     applyTextureAlphaMode(this._assetManager, this._effectiveAlphaMode);
     const mainExt = scene.mainExt;
@@ -314,7 +318,7 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   async processLoadedAssets() {
-    this._applyDetectedAlphaMode();
+    await this._applyDetectedAlphaMode();
     const sceneInfo = this._fileNames;
     if (sceneInfo.isMerged) {
       for (let i = 0; i < sceneInfo.files.length; i++) {

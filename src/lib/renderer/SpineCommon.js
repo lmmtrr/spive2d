@@ -76,7 +76,10 @@ export function detectAtlasAlphaMode(atlases) {
       } catch (e) {
         image = null;
       }
-      const straight = image ? detectStraightAlphaImage(image) : null;
+      if (!image) continue;
+      const straight = '__spive2dStraightAlpha' in image
+        ? image.__spive2dStraightAlpha
+        : detectStraightAlphaImage(image);
       if (straight === null) continue;
       return straight ? 'unpack' : 'pma';
     }
@@ -84,8 +87,23 @@ export function detectAtlasAlphaMode(atlases) {
   return null;
 }
 
-export function reuploadAtlasTextures(gl, atlases, alphaMode) {
+async function rebakeBitmapAlpha(texture, premultiply) {
+  const image = texture.getImage?.();
+  if (typeof image?.__spive2dPremultiplied !== 'boolean' || image.__spive2dPremultiplied === premultiply) return;
+  try {
+    const converted = await createImageBitmap(image, { premultiplyAlpha: premultiply ? 'premultiply' : 'none' });
+    converted.__spive2dPremultiplied = premultiply;
+    texture._image = converted;
+    image.close?.();
+  } catch (e) {
+    console.warn('[SpineCommon] bitmap alpha conversion failed:', e);
+  }
+}
+
+export async function reuploadAtlasTextures(gl, atlases, alphaMode) {
   const premultiplyOnUpload = alphaMode === 'unpack';
+  const textures = atlases.flatMap(atlas => (atlas?.pages || []).map(page => page.texture)).filter(Boolean);
+  await Promise.all(textures.map(texture => rebakeBitmapAlpha(texture, premultiplyOnUpload)));
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplyOnUpload);
   for (const atlas of atlases) {
     for (const page of atlas?.pages || []) {
