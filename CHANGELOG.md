@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.53] - 2026-10-02
+
+### Added
+
+- Decode Spine textures in a web worker to reduce preload stutter
+- Add Korean language support
+
+### Fixed
+
+- Remove white halo around transparent edges in WebM export
+- Encode WebM export in limited range to prevent washed-out playback
+- Match Spine export framing to on-screen view in current-screen mode
+
 ## [0.1.52] - 2026-09-24
 
 ### Added
