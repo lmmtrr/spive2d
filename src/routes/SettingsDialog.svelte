@@ -578,7 +578,7 @@
 
 <svelte:window onresize={handleResize} />
 
-<dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja'} onclick={handleDialogClick} class:wide={activeTab === 'export'}>
+<dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja' || locale === 'ko'} onclick={handleDialogClick} class:wide={activeTab === 'export'}>
   <div class="tab-bar">
     <button id="tabBtnGeneral" class="tab-btn" class:active={activeTab === 'general'} onclick={() => activeTab = 'general'}>
       {t('tabGeneral')}
@@ -598,6 +598,7 @@
         <select id="languageSelector" value={locale} onchange={handleLanguageChange}>
           <option value="en">English</option>
           <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
           <option value="zh">中文</option>
         </select>
       </div>

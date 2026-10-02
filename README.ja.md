@@ -1,6 +1,6 @@
 # Spive2D
 
-[English](README.md) | 日本語 | [中文](README.zh-cn.md)
+[English](README.md) | 日本語 | [한국어](README.ko.md) | [中文](README.zh-cn.md)
 
 https://github.com/user-attachments/assets/c20288f2-75a5-4f1f-b8df-4532e65a2f7b
 

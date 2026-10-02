@@ -1,8 +1,9 @@
 import en from './locales/en.json';
 import ja from './locales/ja.json';
+import ko from './locales/ko.json';
 import zh from './locales/zh.json';
 
-const translations = { en, ja, zh };
+const translations = { en, ja, ko, zh };
 
 let locale = $state(localStorage.getItem('spive2d_language') || 'en');
 
