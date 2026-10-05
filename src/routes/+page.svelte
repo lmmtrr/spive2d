@@ -1,18 +1,18 @@
 <script>
   import { onMount } from 'svelte';
-  import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer, setRenderer } from '$lib/rendererStore.svelte.js';
-  import { createRenderer } from '$lib/renderer/createRenderer.js';
-  import { preloadManager } from '$lib/renderer/preloadManager.js';
-  import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '$lib/utils.js';
-  import { getAssetUrl, getExportDirectory } from '$lib/fileManager.js';
-  import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
-  import { exportModelFiles } from '$lib/modelExporter.js';
-  import { createTransformAction } from '$lib/inputAction.js';
-  import { loadSetting, saveSetting } from '$lib/settings.js';
-  import { showNotification } from '$lib/notificationStore.svelte.js';
-  import { t } from '$lib/i18n.svelte.js';
-  import { getShortcuts } from '$lib/shortcutKeys.js';
+  import { appState } from '#lib/appState.svelte.js';
+  import { getRenderer, setRenderer } from '#lib/rendererStore.svelte.js';
+  import { createRenderer } from '#lib/renderer/createRenderer.js';
+  import { preloadManager } from '#lib/renderer/preloadManager.js';
+  import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '#lib/utils.js';
+  import { getAssetUrl, getExportDirectory } from '#lib/fileManager.js';
+  import { exportImage, exportAnimation, exportImageSequence } from '#lib/exporter.js';
+  import { exportModelFiles } from '#lib/modelExporter.js';
+  import { createTransformAction } from '#lib/inputAction.js';
+  import { loadSetting, saveSetting } from '#lib/settings.js';
+  import { showNotification } from '#lib/notificationStore.svelte.js';
+  import { t } from '#lib/i18n.svelte.js';
+  import { getShortcuts } from '#lib/shortcutKeys.js';
   import SettingsDialog from './SettingsDialog.svelte';
   import Sidebar from './Sidebar.svelte';
   import AnimationController from './AnimationController.svelte';
@@ -23,7 +23,7 @@
   import { join } from '@tauri-apps/api/path';
   import { mkdir } from '@tauri-apps/plugin-fs';
   import { getCurrentWindow } from '@tauri-apps/api/window';
-  import { toggleFullscreen, exitFullscreen } from '$lib/windowManager.js';
+  import { toggleFullscreen, exitFullscreen } from '#lib/windowManager.js';
 
   if (typeof window !== 'undefined') {
     window.__TAURI__ = window.__TAURI__ || {};

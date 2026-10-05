@@ -1,7 +1,7 @@
 <script>
-  import { exportQueue } from '$lib/exportQueue.svelte.js';
-  import { t } from '$lib/i18n.svelte.js';
-  import { openExportDirectory } from '$lib/fileManager.js';
+  import { exportQueue } from '#lib/exportQueue.svelte.js';
+  import { t } from '#lib/i18n.svelte.js';
+  import { openExportDirectory } from '#lib/fileManager.js';
 
   function handleCancel(id) {
     const item = exportQueue.items.find(i => i.id === id);

@@ -1,5 +1,5 @@
 <script>
-  import { getNotifications } from '$lib/notificationStore.svelte.js';
+  import { getNotifications } from '#lib/notificationStore.svelte.js';
   import { fly } from 'svelte/transition';
 
   const notifications = getNotifications();

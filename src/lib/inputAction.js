@@ -1,4 +1,4 @@
-import { getRenderer } from '$lib/rendererStore.svelte.js';
+import { getRenderer } from '#lib/rendererStore.svelte.js';
 
 export function createTransformAction() {
   let isMove = false;

@@ -1,13 +1,13 @@
 <script>
-  import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer } from '$lib/rendererStore.svelte.js';
-  import { t, getLocale, setLocale } from '$lib/i18n.svelte.js';
-  import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, selectExportDirectory, getExportDirectory, openImageFile, getAssetUrl } from '$lib/fileManager.js';
-  import { saveSetting, removeSetting } from '$lib/settings.js';
-  import { setWindowSize, getPhysicalWindowSize } from '$lib/windowManager.js';
-  import { getShortcuts, saveShortcuts, resetShortcuts } from '$lib/shortcutKeys.js';
+  import { appState } from '#lib/appState.svelte.js';
+  import { getRenderer } from '#lib/rendererStore.svelte.js';
+  import { t, getLocale, setLocale } from '#lib/i18n.svelte.js';
+  import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, selectExportDirectory, getExportDirectory, openImageFile, getAssetUrl } from '#lib/fileManager.js';
+  import { saveSetting, removeSetting } from '#lib/settings.js';
+  import { setWindowSize, getPhysicalWindowSize } from '#lib/windowManager.js';
+  import { getShortcuts, saveShortcuts, resetShortcuts } from '#lib/shortcutKeys.js';
   import { invoke } from '@tauri-apps/api/core';
-  import { showNotification } from '$lib/notificationStore.svelte.js';
+  import { showNotification } from '#lib/notificationStore.svelte.js';
 
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
   let windowWidth = $state(getPhysicalWindowSize().width);

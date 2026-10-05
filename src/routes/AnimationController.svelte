@@ -1,7 +1,7 @@
 <script>
-  import { appState } from '$lib/appState.svelte.js';
-  import { getRenderer } from '$lib/rendererStore.svelte.js';
-  import { formatFrames } from '$lib/utils.js';
+  import { appState } from '#lib/appState.svelte.js';
+  import { getRenderer } from '#lib/rendererStore.svelte.js';
+  import { formatFrames } from '#lib/utils.js';
 
   let visible = $state(false);
   let seekerValue = $state(0);
