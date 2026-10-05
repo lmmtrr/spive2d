@@ -111,7 +111,7 @@ async function rebakeBitmapAlpha(texture, premultiply) {
   if (typeof image?.__spive2dPremultiplied !== 'boolean' || image.__spive2dPremultiplied === premultiply) return;
   try {
     const converted = await createImageBitmap(image, { premultiplyAlpha: premultiply ? 'premultiply' : 'none' });
-    converted.__spive2dPremultiplied = premultiply;
+    /** @type {any} */ (converted).__spive2dPremultiplied = premultiply;
     texture._image = converted;
     image.close?.();
   } catch (e) {

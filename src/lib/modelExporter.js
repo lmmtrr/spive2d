@@ -418,7 +418,7 @@ export async function exportModelFiles(sceneText) {
     }
     exportQueue.updateStatus(taskId, 'completed');
     showNotification(`${t('exportModelSuccess')}: ${name}`, 'success');
-    if (exported?.warning) showNotification(t(exported.warning), 'info', 6000);
+    if (typeof exported === 'object' && exported.warning) showNotification(t(exported.warning), 'info', 6000);
   } catch (err) {
     console.error('Failed to export model files:', err);
     exportQueue.updateStatus(taskId, 'error');

@@ -21,7 +21,7 @@ class PreloadManager {
     this.clear();
     const loadId = ++this.#currentLoadId;
     const renderer = createRenderer(nextScene);
-    if (typeof renderer.setAlphaMode === 'function') {
+    if ('setAlphaMode' in renderer) {
       renderer.setAlphaMode(appState.alphaMode);
     }
     if (typeof renderer.setTextureFilter === 'function') {
