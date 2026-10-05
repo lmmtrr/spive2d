@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.54] - 2026-10-05
+
+### Added
+
+- Add fullscreen toggle
+- Allow changing the export directory
+
+### Fixed
+
+- Use physical pixels for window size in export settings
+- Detect UNPACK if any atlas page has straight alpha
+
 ## [0.1.53] - 2026-10-02
 
 ### Added
