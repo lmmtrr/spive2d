@@ -40,6 +40,7 @@ let exportBase = $state(loadSetting('spive2d_export_base', 'window') === 'origin
 let exportScale = $state(loadNumberSetting('spive2d_export_scale', 100, 10, 1000));
 let exportMarginX = $state(loadNumberSetting('spive2d_export_margin_x', 0, -1000, 1000));
 let exportMarginY = $state(loadNumberSetting('spive2d_export_margin_y', 0, -1000, 1000));
+let exportDir = $state(loadSetting('spive2d_export_dir', ''));
 let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
 let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let skipUnity = $state(loadSetting('spive2d_skip_unity', 'false') === 'true');
@@ -73,6 +74,8 @@ export const appState = {
   set exportMarginX(v) { exportMarginX = v; if (Number.isFinite(v)) saveSetting('spive2d_export_margin_x', v); },
   get exportMarginY() { return exportMarginY; },
   set exportMarginY(v) { exportMarginY = v; if (Number.isFinite(v)) saveSetting('spive2d_export_margin_y', v); },
+  get exportDir() { return exportDir; },
+  set exportDir(v) { exportDir = v || ''; saveSetting('spive2d_export_dir', exportDir); },
   get alphaMode() { return alphaMode; },
   set alphaMode(v) { alphaMode = v; },
   get textureFilter() { return textureFilter; },

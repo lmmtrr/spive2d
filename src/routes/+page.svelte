@@ -5,7 +5,7 @@
   import { createRenderer } from '$lib/renderer/createRenderer.js';
   import { preloadManager } from '$lib/renderer/preloadManager.js';
   import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '$lib/utils.js';
-  import { getAssetUrl } from '$lib/fileManager.js';
+  import { getAssetUrl, getExportDirectory } from '$lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '$lib/exporter.js';
   import { exportModelFiles } from '$lib/modelExporter.js';
   import { createTransformAction } from '$lib/inputAction.js';
@@ -20,7 +20,7 @@
   import ExportQueue from './ExportQueue.svelte';
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
-  import { downloadDir, join } from '@tauri-apps/api/path';
+  import { join } from '@tauri-apps/api/path';
   import { mkdir } from '@tauri-apps/plugin-fs';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -473,7 +473,7 @@
     else if (e.key === shortcuts.exportModel) { doExportModel(); }
     else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
     else if (e.key === shortcuts.addToList) {
-      invoke('append_to_list', { text: getSceneText() }).then(() => {
+      invoke('append_to_list', { text: getSceneText(), customDir: appState.exportDir || null }).then(() => {
         showNotification(t('addedToList'), 'success');
       });
     }
@@ -542,8 +542,7 @@
     const animText = sidebar?.getSelectedAnimationText() || '';
     const animValue = sidebar?.getSelectedAnimation?.() || '';
     const safeName = animText ? animText.split('.')[0] : 'sequence';
-    const baseDir = await downloadDir();
-    const exportBaseDir = await join(baseDir, 'spive2d_export');
+    const exportBaseDir = await getExportDirectory();
     const folderName = `${sceneText}_${safeName}`;
     const targetDir = await join(exportBaseDir, folderName);
     try {

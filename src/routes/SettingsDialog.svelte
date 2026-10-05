@@ -2,7 +2,7 @@
   import { appState } from '$lib/appState.svelte.js';
   import { getRenderer } from '$lib/rendererStore.svelte.js';
   import { t, getLocale, setLocale } from '$lib/i18n.svelte.js';
-  import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, openImageFile, getAssetUrl } from '$lib/fileManager.js';
+  import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, selectExportDirectory, getExportDirectory, openImageFile, getAssetUrl } from '$lib/fileManager.js';
   import { saveSetting, removeSetting } from '$lib/settings.js';
   import { setWindowSize, getPhysicalWindowSize } from '$lib/windowManager.js';
   import { getShortcuts, saveShortcuts, resetShortcuts } from '$lib/shortcutKeys.js';
@@ -20,6 +20,7 @@
   let urlInput = $state('');
   let dialogEl;
   let activeTab = $state('general');
+  let exportDirPath = $state('');
   let shortcuts = $state(getShortcuts());
   let editingKey = $state(null);
 
@@ -72,6 +73,10 @@
       dialogEl.close();
       editingKey = null;
     }
+  });
+
+  $effect(() => {
+    if (open && activeTab === 'export') refreshExportDirPath();
   });
 
   $effect(() => {
@@ -137,6 +142,26 @@
 
   async function handleOpenExportDir() {
     await openExportDirectory();
+  }
+
+  async function refreshExportDirPath() {
+    try {
+      exportDirPath = await getExportDirectory();
+    } catch (e) {
+      showNotification(String(e), 'error');
+    }
+  }
+
+  async function handleChangeExportDir() {
+    const path = await selectExportDirectory();
+    if (!path) return;
+    appState.exportDir = path;
+    await refreshExportDirPath();
+  }
+
+  async function handleResetExportDir() {
+    appState.exportDir = '';
+    await refreshExportDirPath();
   }
 
   async function handleOpenImage() {
@@ -677,6 +702,14 @@
         <div class="button-group" style="justify-content: flex-start; gap: 10px;">
           <button onclick={handleResetState} style="width: auto; padding: 0 15px;">{t('resetState')}</button>
           <button onclick={handleOpenExportDir} style="width: auto; padding: 0 15px;">{t('openExportDirectory')}</button>
+        </div>
+        <div class="input-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px;">
+          <span>{t('exportDirectory')}</span>
+          <input type="text" readonly value={exportDirPath} title={exportDirPath}>
+          <div class="button-group" style="justify-content: flex-start; gap: 10px;">
+            <button onclick={handleChangeExportDir} style="width: auto; padding: 0 15px;">{t('changeExportDirectory')}</button>
+            <button onclick={handleResetExportDir} disabled={!appState.exportDir} style="width: auto; padding: 0 15px;">{t('resetExportDirectory')}</button>
+          </div>
         </div>
         <div class="input-row radio-group" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px;">
           <span>{t('exportSizeBase')}</span>

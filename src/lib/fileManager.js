@@ -1,8 +1,9 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { open as tauriOpen } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
-import { downloadDir, join, dirname } from '@tauri-apps/api/path';
-import { mkdir } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
+import { join, dirname } from '@tauri-apps/api/path';
+import { appState } from './appState.svelte.js';
 
 export async function openDirectory() {
   return await tauriOpen({ multiple: false, directory: true }) || null;
@@ -27,15 +28,16 @@ export async function openCurrentDirectory(dirPath, sceneId) {
   else await openPath(dir);
 }
 
+export async function getExportDirectory() {
+  return await invoke('get_export_dir', { customDir: appState.exportDir || null });
+}
+
 export async function openExportDirectory() {
-  const isWindows = navigator.userAgent.includes('Windows');
-  const dir = await downloadDir();
-  const exportDir = await join(dir, 'spive2d_export');
-  try {
-    await mkdir(exportDir, { recursive: true });
-  } catch (e) { }
-  if (isWindows) await openPath(exportDir.replace(/\//g, '\\'));
-  else await openPath(exportDir);
+  await invoke('open_export_dir', { customDir: appState.exportDir || null });
+}
+
+export async function selectExportDirectory() {
+  return await tauriOpen({ multiple: false, directory: true, defaultPath: await getExportDirectory() }) || null;
 }
 
 export async function openImageFile() {

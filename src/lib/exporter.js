@@ -4,8 +4,9 @@ import { getRenderer } from './rendererStore.svelte.js';
 import { SpineVersionManager } from './renderer/SpineVersionManager.js';
 import { showNotification } from './notificationStore.svelte.js';
 import { t } from './i18n.svelte.js';
-import { writeFile, mkdir, exists } from '@tauri-apps/plugin-fs';
-import { join, downloadDir } from '@tauri-apps/api/path';
+import { writeFile, exists } from '@tauri-apps/plugin-fs';
+import { join } from '@tauri-apps/api/path';
+import { getExportDirectory } from './fileManager.js';
 import { exportQueue } from './exportQueue.svelte.js';
 import {
   getFinalExportSize,
@@ -71,9 +72,7 @@ async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
   const safeName = animationName ? `_${sanitizeFilename(animationName.split('.')[0])}` : '';
   const baseFilename = `${sanitizeFilename(sceneText)}${safeName}${suffix}`;
   try {
-    const baseDir = await downloadDir();
-    const exportBaseDir = await join(baseDir, 'spive2d_export');
-    await mkdir(exportBaseDir, { recursive: true });
+    const exportBaseDir = await getExportDirectory();
     let finalFilename = `${baseFilename}.png`;
     let filePath = await join(exportBaseDir, finalFilename);
     let counter = 2;
@@ -204,9 +203,7 @@ async function prepareExportContext(taskId, baseFilename, WorkerClass) {
 }
 
 async function saveExportedFile(baseFilename, extension, buffer) {
-  const baseDir = await downloadDir();
-  const exportBaseDir = await join(baseDir, 'spive2d_export');
-  await mkdir(exportBaseDir, { recursive: true });
+  const exportBaseDir = await getExportDirectory();
   let finalOutputFilename = `${baseFilename}.${extension}`;
   let filePath = await join(exportBaseDir, finalOutputFilename);
   let counter = 2;

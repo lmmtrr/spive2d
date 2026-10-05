@@ -6,7 +6,8 @@ import { t } from './i18n.svelte.js';
 import { sanitizeFilename } from './utils.js';
 import { resolveLive2DSettings } from './renderer/Live2DCommon.js';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { downloadDir, join } from '@tauri-apps/api/path';
+import { join } from '@tauri-apps/api/path';
+import { getExportDirectory } from './fileManager.js';
 import { writeFile, mkdir, exists } from '@tauri-apps/plugin-fs';
 
 const EXPRESSION_NAME = 'spive2d';
@@ -92,8 +93,7 @@ function writeExportJson(targetDir, relPath, value) {
 }
 
 async function createTargetDir(baseName) {
-  const exportRoot = await join(await downloadDir(), 'spive2d_export');
-  await mkdir(exportRoot, { recursive: true });
+  const exportRoot = await getExportDirectory();
   let name = baseName;
   let dir = await join(exportRoot, name);
   let counter = 2;

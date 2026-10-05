@@ -1,9 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_fs::FsExt;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Default)]
 struct AppState {
@@ -1079,11 +1081,45 @@ fn get_subdir_files(
     Ok(dir_files_map)
 }
 
-#[tauri::command]
-fn append_to_list(app_handle: AppHandle, text: String) -> Result<(), String> {
-    let download_dir = app_handle.path().download_dir().map_err(|e| e.to_string())?;
-    let export_dir = download_dir.join("spive2d_export");
+fn prepare_export_dir(app_handle: &AppHandle, custom_dir: Option<String>) -> Result<PathBuf, String> {
+    let export_dir = match custom_dir.filter(|d| !d.trim().is_empty()) {
+        Some(dir) => PathBuf::from(dir),
+        None => app_handle
+            .path()
+            .download_dir()
+            .map_err(|e| e.to_string())?
+            .join("spive2d_export"),
+    };
     fs::create_dir_all(&export_dir).map_err(|e| e.to_string())?;
+    app_handle
+        .fs_scope()
+        .allow_directory(&export_dir, true)
+        .map_err(|e| e.to_string())?;
+    Ok(export_dir)
+}
+
+#[tauri::command]
+fn get_export_dir(app_handle: AppHandle, custom_dir: Option<String>) -> Result<String, String> {
+    let export_dir = prepare_export_dir(&app_handle, custom_dir)?;
+    Ok(export_dir.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn open_export_dir(app_handle: AppHandle, custom_dir: Option<String>) -> Result<(), String> {
+    let export_dir = prepare_export_dir(&app_handle, custom_dir)?;
+    app_handle
+        .opener()
+        .open_path(export_dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn append_to_list(
+    app_handle: AppHandle,
+    text: String,
+    custom_dir: Option<String>,
+) -> Result<(), String> {
+    let export_dir = prepare_export_dir(&app_handle, custom_dir)?;
     let file_path = export_dir.join("spive2d_list.txt");
     let mut file = OpenOptions::new()
         .create(true)
@@ -1965,6 +2001,8 @@ pub fn run() {
             handle_unity_bytes,
             handle_urls,
             append_to_list,
+            get_export_dir,
+            open_export_dir,
             clear_cache,
             fetch_url_bytes,
             list_dir_files
