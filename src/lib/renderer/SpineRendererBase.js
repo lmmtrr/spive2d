@@ -16,6 +16,7 @@ import {
   updateAtlasRegions,
   parseAtlasDeclaredSizes,
   detectAtlasAlphaMode,
+  hasMismatchedBitmapAlpha,
   reuploadAtlasTextures,
   normalizeAtlasText,
   createCanvas,
@@ -127,7 +128,8 @@ export class SpineRendererBase extends BaseRenderer {
     if (this._alphaMode === 'npm') return;
     const atlases = this._sceneAtlases();
     const detected = detectAtlasAlphaMode(atlases);
-    if (!detected || detected === this._alphaMode) return;
+    if (!detected) return;
+    if (detected === this._alphaMode && !hasMismatchedBitmapAlpha(atlases, this._effectiveAlphaMode)) return;
     this._setAlphaMode(detected);
     await reuploadAtlasTextures(this._ctx.gl, atlases, this._effectiveAlphaMode);
   }

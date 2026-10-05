@@ -68,6 +68,7 @@ export function detectStraightAlphaImage(image) {
 }
 
 export function detectAtlasAlphaMode(atlases) {
+  let sawPremultiplied = false;
   for (const atlas of atlases) {
     for (const page of atlas?.pages || []) {
       let image = null;
@@ -77,14 +78,32 @@ export function detectAtlasAlphaMode(atlases) {
         image = null;
       }
       if (!image) continue;
-      const straight = '__spive2dStraightAlpha' in image
-        ? image.__spive2dStraightAlpha
-        : detectStraightAlphaImage(image);
-      if (straight === null) continue;
-      return straight ? 'unpack' : 'pma';
+      if (!('__spive2dStraightAlpha' in image)) {
+        try {
+          image.__spive2dStraightAlpha = detectStraightAlphaImage(image);
+        } catch (e) {
+          continue;
+        }
+      }
+      const straight = image.__spive2dStraightAlpha;
+      if (straight === true) return 'unpack';
+      if (straight === false) sawPremultiplied = true;
     }
   }
-  return null;
+  return sawPremultiplied ? 'pma' : null;
+}
+
+export function hasMismatchedBitmapAlpha(atlases, alphaMode) {
+  const premultiply = alphaMode === 'unpack';
+  return atlases.some(atlas => (atlas?.pages || []).some(page => {
+    let image = null;
+    try {
+      image = page.texture?.getImage?.();
+    } catch (e) {
+      return false;
+    }
+    return typeof image?.__spive2dPremultiplied === 'boolean' && image.__spive2dPremultiplied !== premultiply;
+  }));
 }
 
 async function rebakeBitmapAlpha(texture, premultiply) {
