@@ -29,6 +29,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | 🦴 Export Model Files    | `R`                        |
 | ⚙️ Open/Close Settings   | `F`                        |
 | 📝 Append to List        | `V`                        |
+| 🖥️ Toggle Fullscreen    | `F11`                      |
 | ❌ Exit                  | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.

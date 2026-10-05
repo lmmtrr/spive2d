@@ -13,6 +13,7 @@ const DEFAULT_SHORTCUTS = {
   exportModel: 'r',
   toggleDialog: 'f',
   addToList: 'v',
+  toggleFullscreen: 'F11',
 };
 
 export function getDefaultShortcuts() {

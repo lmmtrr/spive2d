@@ -68,6 +68,7 @@
   "exportImageSeq": "連番画像エクスポート",
   "shortcutToggleDialog": "設定の切替",
   "shortcutAddToList": "リストに追加",
+  "shortcutToggleFullscreen": "フルスクリーンの切替",
   "shortcutResetDefaults": "デフォルトに戻す",
   "pressKey": "キーを押してください...",
   "invalidUrl": "無効なURL形式です",

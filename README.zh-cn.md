@@ -29,6 +29,7 @@ https://github.com/user-attachments/assets/c20288f2-75a5-4f1f-b8df-4532e65a2f7b
 | 🦴 导出模型文件  | `R`                        |
 | ⚙️ 打开/关闭设置 | `F`                        |
 | 📝 添加到列表    | `V`                        |
+| 🖥️ 切换全屏     | `F11`                      |
 | ❌ 退出          | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **添加到列表**: 将当前场景文本保存到列表中。请参考 [`py/copy_by_list.py`](py/copy_by_list.py) 来处理导出的列表。

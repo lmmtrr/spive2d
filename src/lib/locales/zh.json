@@ -68,6 +68,7 @@
   "exportImageSeq": "导出图像序列帧",
   "shortcutToggleDialog": "切换设置",
   "shortcutAddToList": "添加到列表",
+  "shortcutToggleFullscreen": "切换全屏",
   "shortcutResetDefaults": "恢复默认",
   "pressKey": "请按一个键...",
   "invalidUrl": "URL格式无效",

@@ -68,6 +68,7 @@
   "exportImageSeq": "연속 이미지 내보내기",
   "shortcutToggleDialog": "설정 토글",
   "shortcutAddToList": "목록에 추가",
+  "shortcutToggleFullscreen": "전체 화면 토글",
   "shortcutResetDefaults": "기본값으로 초기화",
   "pressKey": "키를 누르세요...",
   "invalidUrl": "잘못된 URL 형식입니다",

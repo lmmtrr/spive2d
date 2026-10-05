@@ -45,7 +45,7 @@
     'prevDir', 'nextDir', 'prevScene', 'nextScene',
     'prevAnim', 'nextAnim', 
     'exportImage', 'exportImageSeq', 'exportAnim', 'exportModel',
-    'toggleDialog', 'addToList',
+    'toggleDialog', 'addToList', 'toggleFullscreen',
   ];
 
   const shortcutLabelKeys = {
@@ -61,6 +61,7 @@
     exportAnim: 'shortcutExportAnim',
     exportModel: 'shortcutExportModel',
     addToList: 'shortcutAddToList',
+    toggleFullscreen: 'shortcutToggleFullscreen',
   };
 
   $effect(() => {

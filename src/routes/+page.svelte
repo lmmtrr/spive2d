@@ -23,6 +23,7 @@
   import { join } from '@tauri-apps/api/path';
   import { mkdir } from '@tauri-apps/plugin-fs';
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { toggleFullscreen, exitFullscreen } from '$lib/windowManager.js';
 
   if (typeof window !== 'undefined') {
     window.__TAURI__ = window.__TAURI__ || {};
@@ -458,6 +459,15 @@
     if ((key === 'w' || key === 'q') && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       getCurrentWindow().close();
+      return;
+    }
+    if (e.key === shortcuts.toggleFullscreen) {
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+    if (e.key === 'Escape' && !dialogOpen) {
+      exitFullscreen();
       return;
     }
     if (e.key !== shortcuts.toggleDialog && !appState.initialized) return;

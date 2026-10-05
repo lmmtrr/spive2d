@@ -18,3 +18,25 @@ export async function setWindowSize(width, height) {
     }
   }
 }
+
+export async function toggleFullscreen() {
+  if (typeof window !== 'undefined' && window.__TAURI__) {
+    try {
+      const win = getCurrentWindow();
+      await win.setFullscreen(!(await win.isFullscreen()));
+    } catch (e) {
+      console.error('Failed to toggle fullscreen', e);
+    }
+  }
+}
+
+export async function exitFullscreen() {
+  if (typeof window !== 'undefined' && window.__TAURI__) {
+    try {
+      const win = getCurrentWindow();
+      if (await win.isFullscreen()) await win.setFullscreen(false);
+    } catch (e) {
+      console.error('Failed to exit fullscreen', e);
+    }
+  }
+}
