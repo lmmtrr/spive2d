@@ -4,14 +4,14 @@
   import { t, getLocale, setLocale } from '$lib/i18n.svelte.js';
   import { openDirectory, openArchiveFile, openCurrentDirectory, openExportDirectory, openImageFile, getAssetUrl } from '$lib/fileManager.js';
   import { saveSetting, removeSetting } from '$lib/settings.js';
-  import { setWindowSize } from '$lib/windowManager.js';
+  import { setWindowSize, getPhysicalWindowSize } from '$lib/windowManager.js';
   import { getShortcuts, saveShortcuts, resetShortcuts } from '$lib/shortcutKeys.js';
   import { invoke } from '@tauri-apps/api/core';
   import { showNotification } from '$lib/notificationStore.svelte.js';
 
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
-  let windowWidth = $state(window.innerWidth);
-  let windowHeight = $state(window.innerHeight);
+  let windowWidth = $state(getPhysicalWindowSize().width);
+  let windowHeight = $state(getPhysicalWindowSize().height);
   let originalWidth = $state(0);
   let originalHeight = $state(0);
   let mainOriginalWidth = $state(0);
@@ -66,8 +66,7 @@
     if (open && dialogEl && !dialogEl.open) {
       dialogEl.showModal();
       updateOriginalSize();
-      windowWidth = window.innerWidth;
-      windowHeight = window.innerHeight;
+      ({ width: windowWidth, height: windowHeight } = getPhysicalWindowSize());
       shortcuts = getShortcuts();
     } else if (!open && dialogEl?.open) {
       dialogEl.close();
@@ -421,8 +420,8 @@
         h: originalHeight + (2 * mY / eS)
       };
     } else {
-      const vw = windowWidth;
-      const vh = windowHeight;
+      const vw = windowWidth / dpr;
+      const vh = windowHeight / dpr;
       const bs = Math.min(vw / mainOriginalWidth, vh / mainOriginalHeight);
       const us = appState.transform.scale;
       const S = bs * us;
@@ -570,8 +569,7 @@
 
   function handleResize() {
     if (open && dialogEl?.open) {
-      windowWidth = window.innerWidth;
-      windowHeight = window.innerHeight;
+      ({ width: windowWidth, height: windowHeight } = getPhysicalWindowSize());
     }
   }
 </script>
