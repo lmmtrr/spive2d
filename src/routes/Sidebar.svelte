@@ -287,13 +287,23 @@
 </script>
 
 <div id="sidebar" class:hidden={!sidebarVisible}>
-  <input
-    type="text"
-    id="sceneFilterBox"
-    placeholder={t('filter')}
-    autocomplete="off"
-    bind:value={appState.directories.sceneFilter}
-  />
+  <div class="filter-wrapper">
+    <input
+      type="text"
+      id="sceneFilterBox"
+      placeholder={t('filter')}
+      autocomplete="off"
+      bind:value={appState.directories.sceneFilter}
+    />
+    {#if appState.directories.sceneFilter}
+      <!-- svelte-ignore a11y_consider_explicit_label -->
+      <button class="filter-clear-btn" onclick={() => appState.directories.sceneFilter = ''}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    {/if}
+  </div>
 
   <select id="sceneSelector" value={String(appState.directories.selectedScene)} onchange={onSceneChange}>
     {#each sceneOptionIndices as i (i)}
@@ -357,13 +367,23 @@
     </select>
   {/if}
 
-  <input
-    type="text"
-    id="filterBox"
-    placeholder={t('filter')}
-    autocomplete="off"
-    bind:value={filterText}
-  />
+  <div class="filter-wrapper">
+    <input
+      type="text"
+      id="filterBox"
+      placeholder={t('filter')}
+      autocomplete="off"
+      bind:value={filterText}
+    />
+    {#if filterText}
+      <!-- svelte-ignore a11y_consider_explicit_label -->
+      <button class="filter-clear-btn" onclick={() => filterText = ''}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    {/if}
+  </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -438,10 +458,46 @@
     border: var(--border-color);
     font-size: 15px;
     background-color: var(--sidebar-color);
+    box-sizing: border-box;
+    padding-right: 30px;
   }
 
-  #sceneFilterBox + select {
+  .filter-wrapper {
+    position: relative;
+  }
+
+  .filter-wrapper:has(#sceneFilterBox) + select {
     border-top: 0;
+  }
+
+  .filter-clear-btn {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #ccc;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  .filter-clear-btn:hover {
+    background-color: #555;
+    color: #fff;
+  }
+
+  .filter-clear-btn svg {
+    width: 14px;
+    height: 14px;
   }
 
   #property {
