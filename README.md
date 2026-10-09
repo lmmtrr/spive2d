@@ -17,17 +17,15 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 | Action                   | Shortcuts                  |
 | ------------------------ | -------------------------- |
-| 📂 Previous Directory    | `Q`                        |
-| 📁 Next Directory        | `W`                        |
-| ⏮️ Previous Scene        | `A`                        |
-| ⏭️ Next Scene            | `S`                        |
-| ◀️ Previous Animation    | `Z`                        |
-| ▶️ Next Animation        | `X`                        |
-| 📷 Export Image          | `E`                        |
-| 🖼️ Export Image Sequence | `D`                        |
-| 💾 Export Animation      | `C`                        |
-| 🦴 Export Model Files    | `R`                        |
-| ⚙️ Open/Close Settings   | `F`                        |
+| ⏮️ Previous Scene        | `Q`                        |
+| ⏭️ Next Scene            | `W`                        |
+| ◀️ Previous Animation    | `A`                        |
+| ▶️ Next Animation        | `S`                        |
+| 📷 Export Image          | `X`                        |
+| 🖼️ Export Image Sequence | `E`                        |
+| 💾 Export Animation      | `D`                        |
+| 🦴 Export Model Files    | `C`                        |
+| ⚙️ Open/Close Settings   | `Z`                        |
 | 📝 Append to List        | `V`                        |
 | 🖥️ Toggle Fullscreen    | `F11`                      |
 | ❌ Exit                  | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |

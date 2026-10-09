@@ -1,15 +1,15 @@
 const STORAGE_KEY = 'spive2d_shortcuts';
 
 const DEFAULT_SHORTCUTS = {
-  prevScene: 'a',
-  nextScene: 's',
-  prevAnim: 'z',
-  nextAnim: 'x',
-  exportImage: 'e',
-  exportImageSeq: 'd',
-  exportAnim: 'c',
-  exportModel: 'r',
-  toggleDialog: 'f',
+  prevScene: 'q',
+  nextScene: 'w',
+  prevAnim: 'a',
+  nextAnim: 's',
+  toggleDialog: 'z',
+  exportImage: 'x',
+  exportImageSeq: 'e',
+  exportAnim: 'd',
+  exportModel: 'c',
   addToList: 'v',
   toggleFullscreen: 'F11',
 };
