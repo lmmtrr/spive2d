@@ -29,6 +29,7 @@ let directories = $state({
   files: null,
   selectedDir: '',
   selectedScene: 0,
+  sceneFilter: '',
 });
 let background = $state({
   color: loadSetting('spive2d_bg_color', ''),

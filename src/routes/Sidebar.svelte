@@ -3,9 +3,17 @@
   import { getRenderer } from '#lib/rendererStore.svelte.js';
   import { t } from '#lib/i18n.svelte.js';
   import { saveSetting } from '#lib/settings.js';
+  import { filterSceneIndices } from '#lib/utils.js';
 
   let { onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick } = $props();
   let filterText = $state('');
+  let scenes = $derived(appState.directories.files?.[appState.directories.selectedDir] || []);
+  let sceneOptionIndices = $derived.by(() => {
+    const indices = filterSceneIndices(scenes, appState.directories.sceneFilter);
+    const selected = appState.directories.selectedScene;
+    if (selected >= scenes.length || indices.includes(selected)) return indices;
+    return [...indices, selected].sort((a, b) => a - b);
+  });
   let sidebarVisible = $state(false);
   let propertyItems = $state([]);
   let animations = $state([]);
@@ -279,12 +287,18 @@
 </script>
 
 <div id="sidebar" class:hidden={!sidebarVisible}>
-  <select id="sceneSelector" value={appState.directories.files?.[appState.directories.selectedDir]?.[appState.directories.selectedScene]?.name || ''} onchange={onSceneChange}>
-    {#if appState.directories.files && appState.directories.selectedDir}
-      {#each appState.directories.files[appState.directories.selectedDir] || [] as scene}
-        <option value={scene.name}>{scene.name.replace(/^\u200B/, '')}</option>
-      {/each}
-    {/if}
+  <input
+    type="text"
+    id="sceneFilterBox"
+    placeholder={t('filter')}
+    autocomplete="off"
+    bind:value={appState.directories.sceneFilter}
+  />
+
+  <select id="sceneSelector" value={String(appState.directories.selectedScene)} onchange={onSceneChange}>
+    {#each sceneOptionIndices as i (i)}
+      <option value={String(i)}>{scenes[i].name.replace(/^\u200B/, '')}</option>
+    {/each}
   </select>
 
   <div class="animation-header">
@@ -413,7 +427,8 @@
     visibility: hidden;
   }
 
-  #filterBox {
+  #filterBox,
+  #sceneFilterBox {
     text-indent: 6px;
     border-radius: 6px;
     height: 30px;
@@ -423,6 +438,10 @@
     border: var(--border-color);
     font-size: 15px;
     background-color: var(--sidebar-color);
+  }
+
+  #sceneFilterBox + select {
+    border-top: 0;
   }
 
   #property {

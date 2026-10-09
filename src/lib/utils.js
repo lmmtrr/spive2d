@@ -19,6 +19,15 @@ export function createSorter(keyExtractor) {
   };
 }
 
+export function filterSceneIndices(scenes, filterText) {
+  const query = String(filterText || '').trim().toLowerCase();
+  const indices = [];
+  scenes.forEach((scene, i) => {
+    if (!query || scene.name.toLowerCase().includes(query)) indices.push(i);
+  });
+  return indices;
+}
+
 export function parseBackgroundImageUrl(style) {
   if (!style || !style.startsWith('url')) return null;
   const match = style.match(/^url\(["']?(.+?)["']?\)$/);

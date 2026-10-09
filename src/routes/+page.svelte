@@ -4,7 +4,7 @@
   import { getRenderer, setRenderer } from '#lib/rendererStore.svelte.js';
   import { createRenderer } from '#lib/renderer/createRenderer.js';
   import { preloadManager } from '#lib/renderer/preloadManager.js';
-  import { sanitizeInputUrl } from '#lib/utils.js';
+  import { filterSceneIndices, sanitizeInputUrl } from '#lib/utils.js';
   import { getAssetUrl, getExportDirectory } from '#lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '#lib/exporter.js';
   import { exportModelFiles } from '#lib/modelExporter.js';
@@ -230,6 +230,7 @@
         files: dirFiles,
         selectedDir: rootDir,
         selectedScene: 0,
+        sceneFilter: '',
       };
       const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
       disposeModel();
@@ -413,8 +414,7 @@
   }
 
   function handleSceneChange(e) {
-    const idx = e.target.selectedIndex;
-    appState.directories.selectedScene = idx;
+    appState.directories.selectedScene = Number(e.target.value);
     const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
     disposeModel(false);
     initModel(previousSkins);
@@ -473,10 +473,20 @@
   }
 
   function navigateScene(delta) {
-    const ops = appState.directories.files[appState.directories.selectedDir] || [];
-    if(ops.length <= 1) return;
-    const newIndex = (appState.directories.selectedScene + delta + ops.length) % ops.length;
-    handleSceneChange({ target: { selectedIndex: newIndex }});
+    const { files, selectedDir, selectedScene, sceneFilter } = appState.directories;
+    const indices = filterSceneIndices(files[selectedDir] || [], sceneFilter);
+    const pos = indices.indexOf(selectedScene);
+    if (indices.length === 0 || (pos !== -1 && indices.length === 1)) return;
+    let newPos;
+    if (pos !== -1) {
+      newPos = (pos + delta + indices.length) % indices.length;
+    } else if (delta > 0) {
+      newPos = Math.max(0, indices.findIndex(i => i > selectedScene));
+    } else {
+      newPos = indices.findLastIndex(i => i < selectedScene);
+      if (newPos === -1) newPos = indices.length - 1;
+    }
+    handleSceneChange({ target: { value: indices[newPos] }});
   }
 
   function toggleDialog() {
