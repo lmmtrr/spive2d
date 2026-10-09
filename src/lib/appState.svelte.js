@@ -27,7 +27,6 @@ let animation = $state({
 });
 let directories = $state({
   files: null,
-  entries: [],
   selectedDir: '',
   selectedScene: 0,
 });

@@ -1061,9 +1061,17 @@ fn get_subdir_files(
         app_handle.emit("progress", false).unwrap();
         return Ok(dir_files_map);
     }
-    match process_directory_with_subdirs(root_path, root_path, merge_sequential) {
-        Ok(subdir_map) => {
-            dir_files_map.extend(subdir_map);
+    match process_directory(root_path, root_path, merge_sequential) {
+        Ok(scenes) => {
+            if !scenes.is_empty() {
+                let mut normalized_path = root_path
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/");
+                if !normalized_path.ends_with('/') {
+                    normalized_path.push('/');
+                }
+                dir_files_map.insert(normalized_path, scenes);
+            }
         }
         Err(e) => {
             app_handle.emit("progress", false).unwrap();
@@ -1264,42 +1272,6 @@ fn compare_natural(a: &str, b: &str) -> std::cmp::Ordering {
             (_, None) => return std::cmp::Ordering::Greater,
         }
     }
-}
-
-fn process_directory_with_subdirs(
-    dir_path: &Path,
-    base_path: &Path,
-    merge_sequential: bool,
-) -> Result<HashMap<String, Vec<SceneData>>, String> {
-    let mut dir_files_map = HashMap::new();
-    let current_file_groups = process_files(dir_path, base_path, merge_sequential)?;
-    if !current_file_groups.is_empty() {
-        let mut normalized_path = dir_path
-            .to_string_lossy()
-            .replace(std::path::MAIN_SEPARATOR, "/");
-        if !normalized_path.ends_with('/') {
-            normalized_path.push('/');
-        }
-        dir_files_map.insert(normalized_path, current_file_groups);
-    }
-    for entry in fs::read_dir(dir_path).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let entry_path = entry.path();
-        if entry_path.is_dir() {
-            if skip_dir(&entry_path) { continue }
-            let subdir_file_groups = process_directory(&entry_path, base_path, merge_sequential)?;
-            if !subdir_file_groups.is_empty() {
-                let mut normalized_subdir_path = entry_path
-                    .to_string_lossy()
-                    .replace(std::path::MAIN_SEPARATOR, "/");
-                if !normalized_subdir_path.ends_with('/') {
-                    normalized_subdir_path.push('/');
-                }
-                dir_files_map.insert(normalized_subdir_path, subdir_file_groups);
-            }
-        }
-    }
-    Ok(dir_files_map)
 }
 
 fn is_live2d_texture_name(name: &str) -> bool {
@@ -1644,6 +1616,13 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     let mut moc_files = Vec::new();
     let mut meta_json_files = Vec::new();
     let mut has_meta_json = false;
+    let dir_prefix = dir_path
+        .strip_prefix(base_path)
+        .ok()
+        .map(|p| p.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/"))
+        .filter(|p| !p.is_empty())
+        .map(|p| format!("{}/", p))
+        .unwrap_or_default();
     let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -1687,11 +1666,6 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     }
     for (filename, relative_path) in moc3_files {
         let filename_lower = filename.to_lowercase();
-        let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
-            &relative_path[slash_pos + 1..]
-        } else {
-            &relative_path
-        };
         if filename_lower.ends_with(".moc3") {
             let moc3_len = 5;
             let moc_stem = &filename[..filename.len() - moc3_len];
@@ -1700,7 +1674,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 let _ = auto_generate_model3_json(dir_path, &filename, moc_stem, &dir_files);
             }
             let base_name_part =
-                &adjusted_path[..adjusted_path.len() - moc3_len];
+                &relative_path[..relative_path.len() - moc3_len];
             file_groups.push(SceneData {
                 name: base_name_part.to_string(),
                 main_ext: ".moc3".to_string(),
@@ -1713,11 +1687,6 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     }
     for (filename, relative_path) in moc_files {
         let filename_lower = filename.to_lowercase();
-        let adjusted_path = if let Some(slash_pos) = relative_path.find('/') {
-            &relative_path[slash_pos + 1..]
-        } else {
-            &relative_path
-        };
         if filename_lower.ends_with(".moc") {
             let moc_len = 4;
             let moc_stem = &filename[..filename.len() - moc_len];
@@ -1743,7 +1712,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 find_relative_files_by_ext(dir_path, "mtn")
             };
             let base_name_part =
-                &adjusted_path[..adjusted_path.len() - moc_len];
+                &relative_path[..relative_path.len() - moc_len];
             file_groups.push(SceneData {
                 name: base_name_part.to_string(),
                 main_ext: ".moc".to_string(),
@@ -1756,7 +1725,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     }
     if has_meta_json {
         file_groups.push(SceneData {
-            name: "meta".to_string(),
+            name: format!("{}meta", dir_prefix),
             main_ext: ".json".to_string(),
             atlas_ext: "".to_string(),
             files: Vec::new(),
@@ -1769,7 +1738,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             .or_else(|| meta_filename.strip_suffix(".META.JSON"))
             .unwrap_or(&meta_filename);
         file_groups.push(SceneData {
-            name: stem.to_string(),
+            name: format!("{}{}", dir_prefix, stem),
             main_ext: ".meta.json".to_string(),
             atlas_ext: "".to_string(),
             files: Vec::new(),
@@ -1857,16 +1826,11 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         }
         if let Some((main_path, main_extension, _file_type)) = main_file_info {
             let base_name_for_group = main_path.trim_end_matches(&main_extension).to_string();
-            let adjusted_base_name = if let Some(slash_pos) = base_name_for_group.find('/') {
-                &base_name_for_group[slash_pos + 1..]
-            } else {
-                &base_name_for_group
-            };
             let mut bg_files = find_extra_files(&base_lower, "_bg", &file_paths, &main_extension);
             let fg_files = find_extra_files(&base_lower, "_fg", &file_paths, &main_extension);
             bg_files.extend(fg_files);
             file_groups.push(SceneData {
-                name: adjusted_base_name.to_string(),
+                name: base_name_for_group,
                 main_ext: main_extension,
                 atlas_ext: atlas_extension,
                 files: bg_files,
@@ -1912,7 +1876,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                         .to_string()
                 });
             return Ok(vec![SceneData {
-                name: folder_name,
+                name: format!("{}{}", dir_prefix, folder_name),
                 main_ext,
                 atlas_ext,
                 files: all_bases,

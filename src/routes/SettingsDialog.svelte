@@ -42,15 +42,13 @@
   );
 
   const shortcutActions = [
-    'prevDir', 'nextDir', 'prevScene', 'nextScene',
+    'prevScene', 'nextScene',
     'prevAnim', 'nextAnim', 
     'exportImage', 'exportImageSeq', 'exportAnim', 'exportModel',
     'toggleDialog', 'addToList', 'toggleFullscreen',
   ];
 
   const shortcutLabelKeys = {
-    prevDir: 'shortcutPrevDir',
-    nextDir: 'shortcutNextDir',
     prevScene: 'shortcutPrevScene',
     nextScene: 'shortcutNextScene',
     prevAnim: 'shortcutPrevAnim',

@@ -37,6 +37,11 @@ export class LayeredSpriteRenderer extends BaseRenderer {
 
   async load(dirName, scene) {
     try {
+      const slash = scene.name.lastIndexOf('/');
+      if (slash >= 0) {
+        dirName = `${dirName}${scene.name.substring(0, slash + 1)}`;
+        scene = { ...scene, name: scene.name.substring(slash + 1) };
+      }
       this.dispose();
       this.canvas.style.display = 'block';
       const rawUrl = `${dirName}${scene.name}${scene.mainExt}`;

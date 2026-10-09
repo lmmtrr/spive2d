@@ -9,12 +9,6 @@ export function formatFrames(seconds, duration, fps) {
   return `${currentFrame} / ${totalFrames}`;
 }
 
-export function findMaxNumber(str) {
-  const numbers = str.match(/\d+/g);
-  if (!numbers) return null;
-  return Math.max(...numbers.map(Number));
-}
-
 export function createSorter(keyExtractor) {
   return (a, b) => {
     const keyA = getSortableKey(keyExtractor(a));

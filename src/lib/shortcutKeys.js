@@ -1,8 +1,6 @@
 const STORAGE_KEY = 'spive2d_shortcuts';
 
 const DEFAULT_SHORTCUTS = {
-  prevDir: 'q',
-  nextDir: 'w',
   prevScene: 'a',
   nextScene: 's',
   prevAnim: 'z',

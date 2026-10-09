@@ -338,7 +338,9 @@ function isValidLive2DSettings(json) {
 }
 
 export async function resolveLive2DSettings(dirName, scene) {
-  const sceneName = scene.name;
+  const slash = scene.name.lastIndexOf('/');
+  const prefix = scene.name.substring(0, slash + 1);
+  const sceneName = scene.name.substring(slash + 1);
   const mainExt = scene.mainExt || '';
   let candidates = [];
   if (sceneName === 'model') {
@@ -384,7 +386,9 @@ export async function resolveLive2DSettings(dirName, scene) {
       'model.json',
     ];
   }
-  candidates = [...new Set(candidates)].filter(c => c && !c.endsWith('.model.model.json') && !c.endsWith('.model3.model3.json'));
+  candidates = [...new Set(candidates)]
+    .filter(c => c && !c.endsWith('.model.model.json') && !c.endsWith('.model3.model3.json'))
+    .map(c => `${prefix}${c}`);
   for (const candidate of candidates) {
     const rawUrl = `${dirName}${candidate}`;
     const url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
@@ -405,7 +409,7 @@ export async function resolveLive2DSettings(dirName, scene) {
   let ext = '.model3.json';
   if (mainExt.includes('.moc3')) ext = sceneName === 'model3' ? '.json' : '.model3.json';
   else if (mainExt.includes('.moc')) ext = sceneName === 'model' ? '.json' : '.model.json';
-  const fallbackFile = `${sceneName}${ext}`;
+  const fallbackFile = `${prefix}${sceneName}${ext}`;
   const fallbackRaw = `${dirName}${fallbackFile}`;
   const fallbackUrl = (fallbackRaw.startsWith('http://') || fallbackRaw.startsWith('https://'))
     ? fallbackRaw

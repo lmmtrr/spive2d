@@ -4,7 +4,7 @@
   import { getRenderer, setRenderer } from '#lib/rendererStore.svelte.js';
   import { createRenderer } from '#lib/renderer/createRenderer.js';
   import { preloadManager } from '#lib/renderer/preloadManager.js';
-  import { getSortableKey, findMaxNumber, sanitizeInputUrl } from '#lib/utils.js';
+  import { sanitizeInputUrl } from '#lib/utils.js';
   import { getAssetUrl, getExportDirectory } from '#lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '#lib/exporter.js';
   import { exportModelFiles } from '#lib/modelExporter.js';
@@ -159,7 +159,7 @@
             return;
           }
         } else {
-          dirFiles = {};
+          const urlScenes = [];
           for (const path of paths) {
             let url;
             try {
@@ -197,37 +197,38 @@
             } else {
               continue;
             }
-            if (!dirFiles[dirName]) {
-              dirFiles[dirName] = [];
-            }
-            if (!dirFiles[dirName].some(item => item.name === baseName)) {
-              dirFiles[dirName].push({ name: baseName, mainExt: ext1, atlasExt: ext2, files: [], isMerged: false });
-            }
+            urlScenes.push({ dirName, scene: { name: baseName, mainExt: ext1, atlasExt: ext2, files: [], isMerged: false } });
           }
-          if (Object.keys(dirFiles).length === 0) {
+          if (urlScenes.length === 0) {
             appState.initialized = wasInitialized;
             showNotification(t('invalidUrl'));
             return;
           }
+          let rootDir = urlScenes[0].dirName;
+          for (const { dirName } of urlScenes) {
+            while (!dirName.startsWith(rootDir)) {
+              rootDir = rootDir.substring(0, rootDir.lastIndexOf('/', rootDir.length - 2) + 1);
+            }
+          }
+          const scenes = [];
+          for (const { dirName, scene } of urlScenes) {
+            scene.name = dirName.substring(rootDir.length) + scene.name;
+            if (!scenes.some(item => item.name === scene.name)) scenes.push(scene);
+          }
+          dirFiles = { [rootDir]: scenes };
         }
       } else {
         dirFiles = await invoke('handle_dropped_paths', { paths, mergeSequential: appState.mergeSequential, skipUnity: appState.skipUnity });
       }
-      const dirs = Object.keys(dirFiles);
-      dirs.sort((a, b) => {
-        const keyA = getSortableKey(a);
-        const keyB = getSortableKey(b);
-        return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
-      });
-      if (dirs.length === 0) {
+      const rootDir = Object.keys(dirFiles)[0];
+      if (!rootDir) {
         appState.initialized = wasInitialized;
         showNotification(t('noFilesFound'));
         return;
       }
       appState.directories = {
         files: dirFiles,
-        entries: dirs,
-        selectedDir: dirs[0],
+        selectedDir: rootDir,
         selectedScene: 0,
       };
       const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
@@ -411,24 +412,6 @@
     loadingRenderers = [];
   }
 
-  function handleDirChange(e) {
-    const newDir = e.target.value;
-    const oldDir = appState.directories.selectedDir;
-    const oldScenes = appState.directories.files[oldDir] || [];
-    const currentSceneStr = oldScenes.length > 0 && appState.directories.selectedScene >= 0 && appState.directories.selectedScene < oldScenes.length ? oldScenes[appState.directories.selectedScene].name : '';
-    const maxNumber = findMaxNumber(currentSceneStr || '');
-    appState.directories.selectedDir = newDir;
-    const scenes = appState.directories.files[newDir] || [];    
-    let index = -1;
-    if (maxNumber !== null) {
-      index = scenes.findIndex(item => String(item.name).includes(String(maxNumber)));
-    }
-    appState.directories.selectedScene = index === -1 ? 0 : index;
-    const previousSkins = getRenderer()?.getPropertyItems?.('skins')?.filter(item => item.checked).map(item => item.name) || [];
-    disposeModel(true);
-    initModel(previousSkins);
-  }
-
   function handleSceneChange(e) {
     const idx = e.target.selectedIndex;
     appState.directories.selectedScene = idx;
@@ -471,10 +454,8 @@
       return;
     }
     if (e.key !== shortcuts.toggleDialog && !appState.initialized) return;
-    if (e.key === shortcuts.prevDir) { navigateSelector('dirSelector', -1, handleDirChange); }
-    else if (e.key === shortcuts.nextDir) { navigateSelector('dirSelector', 1, handleDirChange); }
-    else if (e.key === shortcuts.prevScene) { navigateSelector('sceneSelector', -1, handleSceneChange); }
-    else if (e.key === shortcuts.nextScene) { navigateSelector('sceneSelector', 1, handleSceneChange); }
+    if (e.key === shortcuts.prevScene) { navigateScene(-1); }
+    else if (e.key === shortcuts.nextScene) { navigateScene(1); }
     else if (e.key === shortcuts.prevAnim) { sidebar?.navigateAnimation(-1); }
     else if (e.key === shortcuts.nextAnim) { sidebar?.navigateAnimation(1); }
     else if (e.key === shortcuts.exportImage) { doExportImage(); }
@@ -491,19 +472,11 @@
     focusBody();
   }
 
-  function navigateSelector(selectorId, delta, handler) {
-    if(selectorId === 'sceneSelector') {
-      const ops = appState.directories.files[appState.directories.selectedDir] || [];
-      if(ops.length <= 1) return;
-      const newIndex = (appState.directories.selectedScene + delta + ops.length) % ops.length;
-      handler({ target: { selectedIndex: newIndex }});
-    } else if (selectorId === 'dirSelector') {
-       const ops = appState.directories.entries || [];
-       if(ops.length <= 1) return;
-       const currentIndex = ops.indexOf(appState.directories.selectedDir);
-       const newIndex = (currentIndex + delta + ops.length) % ops.length;
-       handler({ target: { value: ops[newIndex] }});
-    }
+  function navigateScene(delta) {
+    const ops = appState.directories.files[appState.directories.selectedDir] || [];
+    if(ops.length <= 1) return;
+    const newIndex = (appState.directories.selectedScene + delta + ops.length) % ops.length;
+    handleSceneChange({ target: { selectedIndex: newIndex }});
   }
 
   function toggleDialog() {
@@ -606,7 +579,6 @@
   <SettingsDialog bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
   <Sidebar
     bind:this={sidebar}
-    onDirChange={handleDirChange}
     onSceneChange={handleSceneChange}
     onAnimationChange={handleAnimationChange}
     onExpressionChange={handleExpressionChange}

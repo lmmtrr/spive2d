@@ -4,7 +4,7 @@
   import { t } from '#lib/i18n.svelte.js';
   import { saveSetting } from '#lib/settings.js';
 
-  let { onDirChange, onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick } = $props();
+  let { onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick } = $props();
   let filterText = $state('');
   let sidebarVisible = $state(false);
   let propertyItems = $state([]);
@@ -279,16 +279,10 @@
 </script>
 
 <div id="sidebar" class:hidden={!sidebarVisible}>
-  <select id="dirSelector" value={appState.directories.selectedDir} onchange={onDirChange}>
-    {#each appState.directories.entries as dir}
-      <option value={dir}>{dir.split('/').filter(Boolean).pop()}</option>
-    {/each}
-  </select>
-
   <select id="sceneSelector" value={appState.directories.files?.[appState.directories.selectedDir]?.[appState.directories.selectedScene]?.name || ''} onchange={onSceneChange}>
     {#if appState.directories.files && appState.directories.selectedDir}
       {#each appState.directories.files[appState.directories.selectedDir] || [] as scene}
-        <option value={scene.name}>{scene.name.split('/').filter(Boolean).pop().replace(/^\u200B/, '')}</option>
+        <option value={scene.name}>{scene.name.replace(/^\u200B/, '')}</option>
       {/each}
     {/if}
   </select>
