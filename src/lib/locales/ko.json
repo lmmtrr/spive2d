@@ -30,6 +30,7 @@
   "mergeSequential": "[Spine] 연번 파일을 하나로 합성하여 불러오기",
   "enableIdleAndBreathing": "[Live2D] 자동 대기 및 호흡 모션 활성화",
   "enableMouseTracking": "[Live2D] 마우스 트래킹 활성화",
+  "sceneThumbnails": "장면 썸네일",
   "resetAnimation": "애니메이션 비활성화",
   "clearCache": "캐시 삭제",
   "resetState": "상태 초기화",

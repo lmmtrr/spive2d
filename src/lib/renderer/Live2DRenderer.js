@@ -430,6 +430,8 @@ export class Live2DRenderer extends BaseRenderer {
     const originalScale = this.#model.scale.clone();
     const originalPosition = this.#model.position.clone();
     const originalRotation = this.#model.rotation;
+    const originalVisible = this.#model.visible;
+    this.#model.visible = true;
     const marginX = options.marginX || 0;
     const marginY = options.marginY || 0;
     if (options.ignoreTransform) {
@@ -469,6 +471,7 @@ export class Live2DRenderer extends BaseRenderer {
     this.#model.scale.copyFrom(originalScale);
     this.#model.position.copyFrom(originalPosition);
     this.#model.rotation = originalRotation;
+    this.#model.visible = originalVisible;
     return canvas;
   }
 

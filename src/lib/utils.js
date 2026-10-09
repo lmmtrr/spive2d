@@ -28,6 +28,18 @@ export function filterSceneIndices(scenes, filterText) {
   return indices;
 }
 
+export function findIdleAnimation(animations) {
+  const byValue = animations.find(a => {
+    const val = a.value || '';
+    return val.startsWith('Idle,') || val.startsWith('idle,');
+  });
+  if (byValue) return byValue;
+  return animations.find(a => {
+    const base = (a.name || '').split('.')[0].toLowerCase();
+    return base.startsWith('idle') || base.startsWith('wait') || base.endsWith('_idle') || base.endsWith('_wait');
+  }) || null;
+}
+
 export function parseBackgroundImageUrl(style) {
   if (!style || !style.startsWith('url')) return null;
   const match = style.match(/^url\(["']?(.+?)["']?\)$/);

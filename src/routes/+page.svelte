@@ -4,7 +4,7 @@
   import { getRenderer, setRenderer } from '#lib/rendererStore.svelte.js';
   import { createRenderer } from '#lib/renderer/createRenderer.js';
   import { preloadManager } from '#lib/renderer/preloadManager.js';
-  import { filterSceneIndices, sanitizeInputUrl } from '#lib/utils.js';
+  import { filterSceneIndices, findIdleAnimation, sanitizeInputUrl } from '#lib/utils.js';
   import { getAssetUrl, getExportDirectory } from '#lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '#lib/exporter.js';
   import { exportModelFiles } from '#lib/modelExporter.js';
@@ -18,6 +18,8 @@
   import AnimationController from './AnimationController.svelte';
   import Notification from './Notification.svelte';
   import ExportQueue from './ExportQueue.svelte';
+  import SceneThumbnailGrid from './SceneThumbnailGrid.svelte';
+  import { thumbnailManager } from '#lib/thumbnailManager.svelte.js';
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { join } from '@tauri-apps/api/path';
@@ -32,6 +34,7 @@
   }
 
   let dialogOpen = $state(true);
+  let sceneGridOpen = $state(false);
   let showSpinner = $state(false);
   let canvasContainer = $state();
   let sidebar = $state();
@@ -226,6 +229,8 @@
         showNotification(t('noFilesFound'));
         return;
       }
+      sceneGridOpen = false;
+      thumbnailManager.clear();
       appState.directories = {
         files: dirFiles,
         selectedDir: rootDir,
@@ -365,17 +370,7 @@
         }
       }
       if (!foundMatch) {
-        let idleMatch = null;
-        idleMatch = animations.find(a => {
-          const val = a.value || '';
-          return val.startsWith('Idle,') || val.startsWith('idle,');
-        });
-        if (!idleMatch) {
-          idleMatch = animations.find(a => {
-            const base = (a.name || '').split('.')[0].toLowerCase();
-            return base.startsWith('idle') || base.startsWith('wait') || base.endsWith('_idle') || base.endsWith('_wait') ;
-          });
-        }
+        const idleMatch = findIdleAnimation(animations);
         if (idleMatch) {
           targetAnim = idleMatch.value;
         }
@@ -437,6 +432,7 @@
   }
 
   function handleKeyDown(e) {
+    if (sceneGridOpen) return;
     if (document.activeElement?.matches('input, textarea')) return;
     const key = e.key.toLowerCase();    
     if ((key === 'w' || key === 'q') && (e.ctrlKey || e.metaKey)) {
@@ -585,7 +581,7 @@
   </div>
 {/if}
 
-<div use:transformAction={{ appState, sidebar, animController, dialogOpen }}>
+<div use:transformAction={{ appState, sidebar, animController, dialogOpen: dialogOpen || sceneGridOpen }}>
   <SettingsDialog bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
   <Sidebar
     bind:this={sidebar}
@@ -593,7 +589,9 @@
     onAnimationChange={handleAnimationChange}
     onExpressionChange={handleExpressionChange}
     onSettingsClick={() => dialogOpen = true}
+    onSceneGridClick={() => sceneGridOpen = true}
   />
+  <SceneThumbnailGrid bind:open={sceneGridOpen} onSelect={(index) => handleSceneChange({ target: { value: index } })} />
   <div id="canvasContainer" bind:this={canvasContainer}></div>
 </div>
 

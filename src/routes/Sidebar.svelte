@@ -3,9 +3,9 @@
   import { getRenderer } from '#lib/rendererStore.svelte.js';
   import { t } from '#lib/i18n.svelte.js';
   import { saveSetting } from '#lib/settings.js';
-  import { filterSceneIndices } from '#lib/utils.js';
+  import { filterSceneIndices, findIdleAnimation } from '#lib/utils.js';
 
-  let { onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick } = $props();
+  let { onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick, onSceneGridClick } = $props();
   let filterText = $state('');
   let scenes = $derived(appState.directories.files?.[appState.directories.selectedDir] || []);
   let sceneOptionIndices = $derived.by(() => {
@@ -38,16 +38,7 @@
     animations = renderer.getAnimations() ?? [];
     const isValid = animations.some(a => a.value === lastSelectedAnimation);
     if (!isValid && animations.length > 0) {
-      let idleMatch = animations.find(a => {
-        const val = a.value || '';
-        return val.startsWith('Idle,') || val.startsWith('idle,');
-      });
-      if (!idleMatch) {
-        idleMatch = animations.find(a => {
-          const base = (a.name || '').split('.')[0].toLowerCase();
-          return base.startsWith('idle') || base.startsWith('wait') || base.endsWith('_idle') || base.endsWith('_wait') ;
-        });
-      }
+      const idleMatch = findIdleAnimation(animations);
       lastSelectedAnimation = idleMatch ? idleMatch.value : animations[0].value;
     }
     expressions = renderer.getExpressions() ?? null;
@@ -305,11 +296,18 @@
     {/if}
   </div>
 
-  <select id="sceneSelector" value={String(appState.directories.selectedScene)} onchange={onSceneChange}>
-    {#each sceneOptionIndices as i (i)}
-      <option value={String(i)}>{scenes[i].name.replace(/^\u200B/, '')}</option>
-    {/each}
-  </select>
+  <div class="scene-header">
+    <select id="sceneSelector" value={String(appState.directories.selectedScene)} onchange={onSceneChange}>
+      {#each sceneOptionIndices as i (i)}
+        <option value={String(i)}>{scenes[i].name.replace(/^\u200B/, '')}</option>
+      {/each}
+    </select>
+    <button id="sceneGridBtn" onclick={onSceneGridClick} title={t('sceneThumbnails')} disabled={scenes.length === 0}>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/>
+      </svg>
+    </button>
+  </div>
 
   <div class="animation-header">
     <select id="animationSelector" 
@@ -466,7 +464,19 @@
     position: relative;
   }
 
-  .filter-wrapper:has(#sceneFilterBox) + select {
+  .scene-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .scene-header select {
+    flex-grow: 1;
+    min-width: 0;
+  }
+
+  .filter-wrapper:has(#sceneFilterBox) + .scene-header select,
+  .filter-wrapper:has(#sceneFilterBox) + .scene-header button {
     border-top: 0;
   }
 
@@ -615,6 +625,37 @@
   .animation-header select:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  #sceneGridBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--sidebar-color);
+    border: var(--border-color);
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    width: 32px;
+    height: 28px;
+    min-width: 32px;
+    transition: background-color 0.2s, color 0.2s;
+    outline: none;
+  }
+
+  #sceneGridBtn:hover:not(:disabled) {
+    background-color: #555;
+    color: #fff;
+  }
+
+  #sceneGridBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #sceneGridBtn svg {
+    width: 16px;
+    height: 16px;
   }
 
   #resetAnimationBtn {
