@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.55] - 2026-10-09
+
+### Added
+
+- Add scene thumbnail grid
+- Add scene filter input above scene selector
+
+### Changed
+
+- Flatten scene list and remove directory navigation
+- Change default keyboard shortcuts
+- Clear temp files automatically and remove clear cache button
+
 ## [0.1.54] - 2026-10-05
 
 ### Added
