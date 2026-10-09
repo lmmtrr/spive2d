@@ -6,7 +6,6 @@
   import { saveSetting, removeSetting } from '#lib/settings.js';
   import { setWindowSize, getPhysicalWindowSize } from '#lib/windowManager.js';
   import { getShortcuts, saveShortcuts, resetShortcuts } from '#lib/shortcutKeys.js';
-  import { invoke } from '@tauri-apps/api/core';
   import { showNotification } from '#lib/notificationStore.svelte.js';
 
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
@@ -209,15 +208,6 @@
     windowWidth = Math.max(100, Math.min(10000, windowWidth));
     windowHeight = Math.max(100, Math.min(10000, windowHeight));
     setWindowSize(windowWidth, windowHeight);
-  }
-
-  async function handleClearCache() {
-    try {
-      await invoke('clear_cache', { currentPath: appState.directories.selectedDir });
-      showNotification(t('clearCacheSuccess'), 'success');
-    } catch (e) {
-      console.error('Failed to clear cache:', e);
-    }
   }
 
   function handleResetState() {
@@ -687,10 +677,6 @@
           }} style="width: auto; margin: 0;">
           <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableMouseTracking')}</span>
         </label>
-      </div>
-      <hr>
-      <div class="button-group">
-        <button onclick={handleClearCache}>{t('clearCache')}</button>
       </div>
     </div>
   {/if}

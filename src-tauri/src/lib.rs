@@ -3,20 +3,111 @@ use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
 use tauri_plugin_fs::FsExt;
 use tauri_plugin_opener::OpenerExt;
 
-#[derive(Default)]
+const INSTANCE_DIR_PREFIX: &str = "inst_";
+
 struct AppState {
     temp_dirs: Mutex<Vec<tempfile::TempDir>>,
+    instance_dir: PathBuf,
+    instance_lock: Mutex<Option<fs::File>>,
 }
 
 impl AppState {
     fn new() -> Self {
+        let (instance_dir, instance_lock) = match create_instance_dir(&temp_root()) {
+            Ok((dir, lock)) => (dir, Some(lock)),
+            Err(e) => {
+                eprintln!("Failed to create instance temp dir: {}", e);
+                (temp_root(), None)
+            }
+        };
         Self {
             temp_dirs: Mutex::new(Vec::new()),
+            instance_dir,
+            instance_lock: Mutex::new(instance_lock),
         }
+    }
+}
+
+fn temp_root() -> PathBuf {
+    std::env::temp_dir().join("spive2d")
+}
+
+fn lock_path_for(dir: &Path) -> PathBuf {
+    let mut path = dir.as_os_str().to_owned();
+    path.push(".lock");
+    PathBuf::from(path)
+}
+
+fn create_instance_dir(root: &Path) -> std::io::Result<(PathBuf, fs::File)> {
+    fs::create_dir_all(root)?;
+    let pid = std::process::id();
+    for attempt in 0..16u32 {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = root.join(format!("{}{:x}_{:x}{:x}", INSTANCE_DIR_PREFIX, pid, nanos, attempt));
+        let lock = match OpenOptions::new().write(true).create_new(true).open(lock_path_for(&dir)) {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        };
+        if lock.try_lock().is_err() {
+            continue;
+        }
+        fs::create_dir(&dir)?;
+        return Ok((dir, lock));
+    }
+    Err(std::io::Error::other("could not acquire an instance temp dir"))
+}
+
+fn sweep_stale_temp(root: &Path, own_dir: &Path) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    let own_lock = lock_path_for(own_dir);
+    let mut handled = HashSet::new();
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path == own_dir || path == own_lock {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.starts_with(INSTANCE_DIR_PREFIX) {
+            let _ = if path.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
+            continue;
+        }
+        let id = name.strip_suffix(".lock").unwrap_or(&name).to_string();
+        if !handled.insert(id.clone()) {
+            continue;
+        }
+        let dir = root.join(&id);
+        let lock_path = lock_path_for(&dir);
+        let lock = match OpenOptions::new().write(true).open(&lock_path) {
+            Ok(f) => match f.try_lock() {
+                Ok(()) => Some(f),
+                Err(_) => continue,
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => continue,
+        };
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_file(&lock_path);
+        drop(lock);
+    }
+}
+
+fn cleanup_instance_temp(state: &AppState) {
+    state.temp_dirs.lock().unwrap().clear();
+    if let Some(lock) = state.instance_lock.lock().unwrap().take() {
+        let _ = fs::remove_dir_all(&state.instance_dir);
+        let _ = fs::remove_file(lock_path_for(&state.instance_dir));
+        drop(lock);
     }
 }
 
@@ -623,7 +714,7 @@ async fn handle_dropped_path(
             }
         }
         if !unity_bundles.is_empty() {
-            let spive_temp_root = std::env::temp_dir().join("spive2d");
+            let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
             let _ = std::fs::create_dir_all(&spive_temp_root);
             let temp_dir = tempfile::Builder::new()
                 .prefix("model_")
@@ -678,7 +769,7 @@ async fn handle_dropped_path(
             false
         };
         if is_unity {
-            let spive_temp_root = std::env::temp_dir().join("spive2d");
+            let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
             let _ = std::fs::create_dir_all(&spive_temp_root);
             let temp_dir = tempfile::Builder::new()
                 .prefix("model_")
@@ -709,7 +800,7 @@ async fn handle_dropped_path(
             .map(|e| e.to_lowercase())
         {
             Some(ext) if ext == "zip" || ext == "7z" => {
-                let spive_temp_root = std::env::temp_dir().join("spive2d");
+                let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
                 let _ = std::fs::create_dir_all(&spive_temp_root);
                 let temp_dir = tempfile::Builder::new()
                     .prefix("model_")
@@ -760,7 +851,7 @@ fn handle_unity_bytes(
     let header_len = std::cmp::min(bytes.len(), 8);
     let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
     if is_unity && !skip_unity {
-        let spive_temp_root = std::env::temp_dir().join("spive2d");
+        let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
         let _ = std::fs::create_dir_all(&spive_temp_root);
         let mut temp_file = tempfile::Builder::new()
             .prefix("download_")
@@ -811,7 +902,7 @@ async fn handle_urls(
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
-    let spive_temp_root = std::env::temp_dir().join("spive2d");
+    let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
     let _ = std::fs::create_dir_all(&spive_temp_root);
     let temp_dir = tempfile::Builder::new()
         .prefix("model_")
@@ -912,7 +1003,7 @@ async fn handle_dropped_paths(
         let _ = app_handle.emit("progress", false);
         return result;
     }
-    let spive_temp_root = std::env::temp_dir().join("spive2d");
+    let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
     let _ = std::fs::create_dir_all(&spive_temp_root);
     let temp_dir = tempfile::Builder::new()
         .prefix("model_")
@@ -1174,54 +1265,6 @@ fn list_dir_files(dir_path: String) -> Result<Vec<String>, String> {
         }
     }
     Ok(names)
-}
-
-#[tauri::command]
-async fn clear_cache(current_path: Option<String>, app_handle: AppHandle) -> Result<(), String> {
-    for window in app_handle.webview_windows().values() {
-        window.clear_all_browsing_data().map_err(|e: tauri::Error| e.to_string())?;
-    }
-    let state = app_handle.state::<AppState>();
-    let mut current_temp_base = None;
-    let cp_norm = current_path.as_ref().map(|p| {
-        Path::new(p.trim_end_matches(|c| c == '/' || c == '\\')).to_path_buf()
-    });
-    {
-        let mut temp_dirs = state.temp_dirs.lock().unwrap();
-        if let Some(ref cp) = cp_norm {
-            let mut i = 0;
-            while i < temp_dirs.len() {
-                let dir_path = temp_dirs[i].path();
-                if cp.starts_with(dir_path) {
-                    current_temp_base = Some(dir_path.to_path_buf());
-                    i += 1;
-                } else {
-                    temp_dirs.remove(i);
-                }
-            }
-        } else {
-            temp_dirs.clear();
-        }
-    }
-    let spive_temp_root = std::env::temp_dir().join("spive2d");
-    if spive_temp_root.exists() {
-        if let Ok(entries) = fs::read_dir(&spive_temp_root) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if let Some(ref base) = current_temp_base {
-                    if path == *base {
-                        continue;
-                    }
-                }
-                if path.is_dir() {
-                    let _ = fs::remove_dir_all(&path);
-                } else {
-                    let _ = fs::remove_file(&path);
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 fn compare_natural(a: &str, b: &str) -> std::cmp::Ordering {
@@ -1944,20 +1987,17 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
-        .setup(|_app| {
+        .setup(|app| {
             #[cfg(debug_assertions)]
-            _app.get_webview_window("main").unwrap().open_devtools();
+            app.get_webview_window("main").unwrap().open_devtools();
+            let state = app.state::<AppState>();
+            if state.instance_lock.lock().unwrap().is_some() {
+                let own_dir = state.instance_dir.clone();
+                std::thread::spawn(move || sweep_stale_temp(&temp_root(), &own_dir));
+            }
             Ok(())
         })
         .manage(AppState::new())
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let app_handle = window.app_handle();
-                let state = app_handle.state::<AppState>();
-                let mut temp_dirs = state.temp_dirs.lock().unwrap();
-                temp_dirs.clear();
-            }
-        })
         .invoke_handler(tauri::generate_handler![
             get_subdir_files,
             handle_dropped_path,
@@ -1967,11 +2007,15 @@ pub fn run() {
             append_to_list,
             get_export_dir,
             open_export_dir,
-            clear_cache,
             fetch_url_bytes,
             list_dir_files
         ])
         .plugin(tauri_plugin_dialog::init())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let RunEvent::Exit = event {
+                cleanup_instance_temp(&app_handle.state::<AppState>());
+            }
+        });
 }
