@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.56] - 2026-10-12
+
+### Added
+
+- Cache scene thumbnails in IndexedDB
+- Add keyboard shortcut to toggle scene thumbnail grid
+- Speed up scene thumbnail generation
+
+### Changed
+
+- Remap default export keyboard shortcuts
+
+### Fixed
+
+- Match Spine skeleton files by exact base name
+
 ## [0.1.55] - 2026-10-09
 
 ### Added
