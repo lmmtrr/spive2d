@@ -1267,6 +1267,22 @@ fn list_dir_files(dir_path: String) -> Result<Vec<String>, String> {
     Ok(names)
 }
 
+#[tauri::command]
+fn get_file_stamp(path: String) -> Option<String> {
+    let path = Path::new(&path);
+    if path.starts_with(temp_root()) {
+        return None;
+    }
+    let metadata = fs::metadata(path).ok()?;
+    let modified = metadata
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    Some(format!("{}-{}", modified, metadata.len()))
+}
+
 fn compare_natural(a: &str, b: &str) -> std::cmp::Ordering {
     let mut a_chars = a.chars().peekable();
     let mut b_chars = b.chars().peekable();
@@ -2008,7 +2024,8 @@ pub fn run() {
             get_export_dir,
             open_export_dir,
             fetch_url_bytes,
-            list_dir_files
+            list_dir_files,
+            get_file_stamp
         ])
         .plugin(tauri_plugin_dialog::init())
         .build(tauri::generate_context!())

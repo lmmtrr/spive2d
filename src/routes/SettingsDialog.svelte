@@ -7,6 +7,8 @@
   import { setWindowSize, getPhysicalWindowSize } from '#lib/windowManager.js';
   import { getShortcuts, saveShortcuts, resetShortcuts } from '#lib/shortcutKeys.js';
   import { showNotification } from '#lib/notificationStore.svelte.js';
+  import { thumbnailCache } from '#lib/thumbnailCache.js';
+  import { thumbnailManager } from '#lib/thumbnailManager.svelte.js';
 
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
   let windowWidth = $state(getPhysicalWindowSize().width);
@@ -208,6 +210,17 @@
     windowWidth = Math.max(100, Math.min(10000, windowWidth));
     windowHeight = Math.max(100, Math.min(10000, windowHeight));
     setWindowSize(windowWidth, windowHeight);
+  }
+
+  async function handleClearThumbnailCache() {
+    try {
+      await thumbnailCache.clear();
+      thumbnailManager.clear();
+      showNotification(t('clearThumbnailCacheSuccess'), 'success');
+    } catch (e) {
+      console.error('Failed to clear thumbnail cache:', e);
+      showNotification(String(e), 'error');
+    }
   }
 
   function handleResetState() {
@@ -677,6 +690,10 @@
           }} style="width: auto; margin: 0;">
           <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableMouseTracking')}</span>
         </label>
+      </div>
+      <hr>
+      <div class="button-group">
+        <button onclick={handleClearThumbnailCache}>{t('clearThumbnailCache')}</button>
       </div>
     </div>
   {/if}

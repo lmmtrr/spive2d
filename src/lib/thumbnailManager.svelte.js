@@ -1,10 +1,13 @@
+import { invoke } from '@tauri-apps/api/core';
 import { createRenderer, getRendererType } from './renderer/createRenderer.js';
 import { SpineRenderer } from './renderer/SpineRenderer.js';
 import { appState } from './appState.svelte.js';
 import { findIdleAnimation } from './utils.js';
+import { thumbnailCache } from './thumbnailCache.js';
 
 const THUMBNAIL_SIZE = 256;
 const SAMPLE_PROGRESS = 0.5;
+const CACHE_VERSION = 1;
 
 let spineRenderer = null;
 let thumbnails = $state({});
@@ -18,10 +21,26 @@ function getKey(dirName, scene) {
   return `${dirName}::${scene.name}`;
 }
 
-function canvasToObjectUrl(canvas) {
+function canvasToBlob(canvas) {
   return new Promise((resolve) => {
-    canvas.toBlob(blob => resolve(blob ? URL.createObjectURL(blob) : null), 'image/webp', 0.9);
+    canvas.toBlob(resolve, 'image/webp', 0.9);
   });
+}
+
+async function getCacheKey(dirName, scene) {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(dirName)) return null;
+  const baseName = scene.isMerged ? scene.files[0] : scene.name;
+  if (!baseName) return null;
+  const dir = dirName.endsWith('/') ? dirName : `${dirName}/`;
+  const path = `${dir}${baseName}${scene.mainExt}`;
+  try {
+    const stamp = await invoke('get_file_stamp', { path });
+    if (!stamp) return null;
+    const files = scene.isMerged ? scene.files.join(',') : '';
+    return [CACHE_VERSION, appState.alphaMode, appState.textureFilter, path, stamp, files].join('|');
+  } catch (err) {
+    return null;
+  }
 }
 
 function releaseSpineRenderer() {
@@ -65,19 +84,17 @@ async function captureFrame(renderer) {
   return renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
 }
 
-function storeThumbnail(key, canvas, currentGeneration) {
+function storeThumbnail(key, canvas, cacheKey, currentGeneration) {
   if (!canvas) {
     thumbnails[key] = null;
     return;
   }
   encoding.add(key);
-  canvasToObjectUrl(canvas).then((url) => {
-    if (currentGeneration !== generation) {
-      if (url) URL.revokeObjectURL(url);
-      return;
-    }
+  canvasToBlob(canvas).then((blob) => {
+    if (blob && cacheKey) thumbnailCache.put(cacheKey, blob);
+    if (currentGeneration !== generation) return;
     encoding.delete(key);
-    thumbnails[key] = url;
+    thumbnails[key] = blob ? URL.createObjectURL(blob) : null;
   });
 }
 
@@ -90,6 +107,13 @@ async function processQueue() {
       const { key, dirName, scene } = queue.shift();
       queued.delete(key);
       if (key in thumbnails || encoding.has(key)) continue;
+      const cacheKey = await getCacheKey(dirName, scene);
+      const cached = cacheKey ? await thumbnailCache.get(cacheKey) : null;
+      if (currentGeneration !== generation) break;
+      if (cached) {
+        thumbnails[key] = URL.createObjectURL(cached);
+        continue;
+      }
       let canvas = null;
       try {
         canvas = await captureThumbnail(dirName, scene);
@@ -97,7 +121,7 @@ async function processQueue() {
         console.warn('[ThumbnailManager] Failed to generate thumbnail:', err);
       }
       if (currentGeneration !== generation) break;
-      storeThumbnail(key, canvas, currentGeneration);
+      storeThumbnail(key, canvas, cacheKey, currentGeneration);
     }
   } finally {
     releaseSpineRenderer();
