@@ -14,6 +14,8 @@ let thumbnails = $state({});
 let queue = [];
 let queued = new Set();
 let encoding = new Set();
+let prefetchDir = null;
+let prefetchList = [];
 let processing = false;
 let generation = 0;
 
@@ -98,14 +100,37 @@ function storeThumbnail(key, canvas, cacheKey, currentGeneration) {
   });
 }
 
+function isPending(key) {
+  return key in thumbnails || queued.has(key) || encoding.has(key);
+}
+
+function nextItem() {
+  if (queue.length > 0) {
+    const item = queue.shift();
+    queued.delete(item.key);
+    return item;
+  }
+  while (prefetchList.length > 0) {
+    const scene = prefetchList.shift();
+    const key = getKey(prefetchDir, scene);
+    if (!isPending(key)) return { key, dirName: prefetchDir, scene };
+  }
+  return null;
+}
+
+function hasWork() {
+  return queue.length > 0 || prefetchList.length > 0;
+}
+
 async function processQueue() {
   if (processing) return;
   processing = true;
   const currentGeneration = generation;
   try {
-    while (queue.length > 0 && currentGeneration === generation) {
-      const { key, dirName, scene } = queue.shift();
-      queued.delete(key);
+    while (currentGeneration === generation) {
+      const item = nextItem();
+      if (!item) break;
+      const { key, dirName, scene } = item;
       if (key in thumbnails || encoding.has(key)) continue;
       const cacheKey = await getCacheKey(dirName, scene);
       const cached = cacheKey ? await thumbnailCache.get(cacheKey) : null;
@@ -127,7 +152,7 @@ async function processQueue() {
     releaseSpineRenderer();
     processing = false;
   }
-  if (currentGeneration !== generation && queue.length > 0) processQueue();
+  if (currentGeneration !== generation && hasWork()) processQueue();
 }
 
 export const thumbnailManager = {
@@ -141,7 +166,7 @@ export const thumbnailManager = {
 
   request(dirName, scene) {
     const key = getKey(dirName, scene);
-    if (key in thumbnails || queued.has(key) || encoding.has(key)) return;
+    if (isPending(key)) return;
     queued.add(key);
     queue.push({ key, dirName, scene });
     processQueue();
@@ -153,9 +178,16 @@ export const thumbnailManager = {
     queue = queue.filter(item => item.key !== key);
   },
 
+  prefetch(dirName, scenes) {
+    prefetchDir = dirName;
+    prefetchList = [...scenes];
+    if (prefetchList.length > 0) processQueue();
+  },
+
   cancelAll() {
     queue = [];
     queued.clear();
+    prefetchList = [];
   },
 
   clear() {

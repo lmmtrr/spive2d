@@ -12,6 +12,8 @@
   let scenes = $derived(appState.directories.files?.[dirName] || []);
   let sceneIndices = $derived(filterSceneIndices(scenes, appState.directories.sceneFilter));
   let savedScroll = null;
+  let visibleScenes = new Set();
+  let prefetchScheduled = false;
 
   $effect(() => {
     if (open && dialogEl && !dialogEl.open) {
@@ -29,6 +31,36 @@
       dialogEl.close();
     }
   });
+
+  $effect(() => {
+    sceneIndices;
+    if (open) schedulePrefetch();
+  });
+
+  function schedulePrefetch() {
+    if (prefetchScheduled) return;
+    prefetchScheduled = true;
+    queueMicrotask(() => {
+      prefetchScheduled = false;
+      updatePrefetch();
+    });
+  }
+
+  function updatePrefetch() {
+    if (!open) return;
+    const ordered = sceneIndices.map(i => scenes[i]);
+    let first = -1;
+    let last = -1;
+    ordered.forEach((scene, pos) => {
+      if (!visibleScenes.has(scene)) return;
+      if (first === -1) first = pos;
+      last = pos;
+    });
+    if (last === -1) return;
+    const ahead = ordered.slice(last + 1);
+    const behind = ordered.slice(0, first).reverse();
+    thumbnailManager.prefetch(dirName, [...ahead, ...behind]);
+  }
 
   function handleScroll() {
     if (open && dialogEl?.open) savedScroll = { dirName, top: gridEl.scrollTop };
@@ -52,14 +84,21 @@
     const dir = dirName;
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
-        if (entry.isIntersecting) thumbnailManager.request(dir, scene);
-        else thumbnailManager.cancel(dir, scene);
+        if (entry.isIntersecting) {
+          visibleScenes.add(scene);
+          thumbnailManager.request(dir, scene);
+        } else {
+          visibleScenes.delete(scene);
+          thumbnailManager.cancel(dir, scene);
+        }
       }
+      schedulePrefetch();
     }, { root: gridEl, rootMargin: '200px' });
     observer.observe(node);
     return {
       destroy() {
         observer.disconnect();
+        visibleScenes.delete(scene);
         thumbnailManager.cancel(dir, scene);
       }
     };
