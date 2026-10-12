@@ -88,6 +88,7 @@ export class SpineRendererBase extends BaseRenderer {
   _maskShader = null;
   _maskShaderFailed = false;
   _siblingFilesCache = null;
+  _thumbnail = false;
 
   constructor(canvas, spineLib, isExport = false) {
     super(isExport);
@@ -268,6 +269,8 @@ export class SpineRendererBase extends BaseRenderer {
       const check = () => {
         if (!this._assetManager || this._assetManager.isLoadingComplete()) {
           resolve(undefined);
+        } else if (this._thumbnail) {
+          setTimeout(check, 4);
         } else {
           requestAnimationFrame(check);
         }
@@ -340,7 +343,7 @@ export class SpineRendererBase extends BaseRenderer {
     }
     this._invalidatePrimary();
     this._hideMaskMosaicAttachments();
-    this._scheduleFitBounds();
+    if (!this._thumbnail) this._scheduleFitBounds();
   }
 
   _getSlotSkeleton(slot) {
@@ -1059,7 +1062,9 @@ export class SpineRendererBase extends BaseRenderer {
       }
     }
     const { skeleton, state, initialSkinNames } = initializeSkeleton(this._spine, atlas, this._assetManager.get(makePath(fileName, sceneInfo.mainExt)), this._isFileJson);
-    neutralizeGlowTextureAlpha(this._spine, this._ctx.gl, skeleton.data, this._effectiveAlphaMode);
+    if (!this._thumbnail) {
+      neutralizeGlowTextureAlpha(this._spine, this._ctx.gl, skeleton.data, this._effectiveAlphaMode);
+    }
     if (!this._activeSkins) this._activeSkins = new Set(initialSkinNames);
     this._animationStates.push(state);
     const designRect = {
@@ -1075,7 +1080,9 @@ export class SpineRendererBase extends BaseRenderer {
     }
     const animations = skeleton.data.animations;
     if (animations.length > 0) state.setAnimation(0, animations[0].name, true);
-    const mask = await this._loadMask(atlas, designRect, skeleton.data, fileName, normalizedDirName, isWebUrl);
+    const mask = this._thumbnail
+      ? null
+      : await this._loadMask(atlas, designRect, skeleton.data, fileName, normalizedDirName, isWebUrl);
     return { skeleton, state, bounds, name: fileName, mask, designRect, atlas };
   }
 
@@ -1426,6 +1433,24 @@ export class SpineRendererBase extends BaseRenderer {
     }
   }
 
+  _releaseScene() {
+    this._cancelFit();
+    this._disposeMasks();
+    this._assetManager?.dispose();
+    this._assetManager = null;
+    this._dirName = '';
+    this._fileNames = null;
+    this._loadedAtlases = [];
+    this._atlasPaths = [];
+    this._attachmentsCache = {};
+    this._activeSkins = null;
+    this._skeletons = {};
+    this._animationStates = [];
+    this._primaryCache = null;
+    if (this._evidenceCache) this._evidenceCache.clear();
+    if (this._skelProfiles) this._skelProfiles.clear();
+  }
+
   dispose() {
     if (this._ctx) {
       this._disposeMasks();
@@ -1506,7 +1531,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._moveX = oldMoveX;
     this._moveY = oldMoveY;
     this._rotate = oldRotate;
-    if (!this.isExport) {
+    if (!this.isExport && !this._thumbnail) {
       this.render(0, { ...renderOptions, dpr: options.dpr || 1 });
     }
     return captureCanvas;

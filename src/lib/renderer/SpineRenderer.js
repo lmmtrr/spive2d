@@ -23,23 +23,44 @@ export class SpineRenderer extends SpineRendererBase {
   }
 
   async load(dirName, scene, options = {}) {
-    this.dispose();
+    const reuseContext = typeof options === 'boolean' ? false : !!options?.reuseContext;
+    if (reuseContext && this._ctx) {
+      this.#cancelRenderLoop();
+      this._releaseScene();
+    } else {
+      this.dispose();
+    }
     this.#isPreload = typeof options === 'boolean' ? false : !!options?.isPreload;
+    this._thumbnail = typeof options === 'boolean' ? false : !!options?.thumbnail;
     this._canvas.style.display = this.#isPreload ? 'none' : 'block';
     await SpineVersionManager.init();
     const { version, isJson } = await SpineVersionManager.detectVersion(dirName, scene);
-    this._spine = SpineVersionManager.getLib(version);
-    if (!this._spine) {
+    const spine = SpineVersionManager.getLib(version);
+    if (!spine) {
       const msg = `Spine library for version ${version} not loaded.`;
       showNotification(msg, 'error');
       throw new Error(msg);
     }
-    const dpr = window.devicePixelRatio || 1;
-    this._canvas.width = Math.round(window.innerWidth * dpr);
-    this._canvas.height = Math.round(window.innerHeight * dpr);
-    this._canvas.style.width = `${window.innerWidth}px`;
-    this._canvas.style.height = `${window.innerHeight}px`;
-    await this.initCtx(this._alphaMode);
+    if (this._ctx && this._spine !== spine) this.dispose();
+    this._spine = spine;
+    const canvasSize = typeof options === 'boolean' ? undefined : options?.canvasSize;
+    if (canvasSize) {
+      this._canvas.width = canvasSize;
+      this._canvas.height = canvasSize;
+    } else {
+      const dpr = window.devicePixelRatio || 1;
+      this._canvas.width = Math.round(window.innerWidth * dpr);
+      this._canvas.height = Math.round(window.innerHeight * dpr);
+      this._canvas.style.width = `${window.innerWidth}px`;
+      this._canvas.style.height = `${window.innerHeight}px`;
+    }
+    if (this._ctx) {
+      this._setAlphaMode(this._alphaMode);
+      const gl = this._ctx.gl;
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this._effectiveAlphaMode === 'unpack');
+    } else {
+      await this.initCtx(this._alphaMode);
+    }
     this._detectAlphaOnLoad = typeof options === 'boolean' ? options : !!options?.detectAlpha;
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
@@ -124,7 +145,7 @@ export class SpineRenderer extends SpineRendererBase {
 
   seekAnimation(progress) {
     super.seekAnimation(progress);
-    this.render(0, { dpr: window.devicePixelRatio || 1 });
+    if (!this._thumbnail) this.render(0, { dpr: window.devicePixelRatio || 1 });
   }
 
   setPaused(paused) {
@@ -155,11 +176,15 @@ export class SpineRenderer extends SpineRendererBase {
     }
   }
 
-  dispose() {
+  #cancelRenderLoop() {
     if (this.#requestId) {
       cancelAnimationFrame(this.#requestId);
       this.#requestId = undefined;
     }
+  }
+
+  dispose() {
+    this.#cancelRenderLoop();
     super.dispose();
   }
 }

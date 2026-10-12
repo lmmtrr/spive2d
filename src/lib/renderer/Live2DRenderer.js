@@ -18,7 +18,7 @@ import {
   ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
-import { createSorter } from '../utils.js';
+import { createSorter, findIdleAnimation } from '../utils.js';
 import { showNotification } from '../notificationStore.svelte.js';
 import { appState } from '../appState.svelte.js';
 
@@ -211,7 +211,9 @@ export class Live2DRenderer extends BaseRenderer {
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.addChild(model);
       }
-      const animations = await this.#filterAnimations();
+      const animations = options?.thumbnail
+        ? await this.#findThumbnailAnimation()
+        : await this.#filterAnimations();
       if (this.#disposed || !this.#model) return;
       this.#animations = animations;
       if (animations.length > 0) {
@@ -502,6 +504,31 @@ export class Live2DRenderer extends BaseRenderer {
       }
     }
     return result.sort(sortByText);
+  }
+
+  async #findThumbnailAnimation() {
+    if (!this.#model) return [];
+    const motions = this.#model.internalModel.motionManager.definitions;
+    if (!motions) return [];
+    let candidates = Object.entries(motions)
+      .flatMap(([groupName, anims]) => anims.map((anim, i) => ({
+        name: (anim.file || anim.File || '').split('/').pop(),
+        value: `${groupName},${i}`,
+      })))
+      .sort(sortByText);
+    while (candidates.length > 0) {
+      const candidate = findIdleAnimation(candidates) || candidates[0];
+      candidates = candidates.filter(item => item !== candidate);
+      const [groupName, index] = candidate.value.split(',');
+      try {
+        const motion = await this.#model.internalModel.motionManager.loadMotion(groupName, Number(index));
+        if (this.#disposed || !this.#model || !this.#model.internalModel) return [];
+        if (getLive2DMotionDuration(motion) > 0) return [candidate];
+      } catch (e) {
+        console.error(`Failed to load motion ${groupName},${index}:`, e);
+      }
+    }
+    return [];
   }
 
   async setAnimation(value) {

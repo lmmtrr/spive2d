@@ -1,15 +1,16 @@
-import { createRenderer } from './renderer/createRenderer.js';
+import { createRenderer, getRendererType } from './renderer/createRenderer.js';
+import { SpineRenderer } from './renderer/SpineRenderer.js';
 import { appState } from './appState.svelte.js';
 import { findIdleAnimation } from './utils.js';
 
 const THUMBNAIL_SIZE = 256;
-const SCORE_SIZE = 48;
-const SAMPLE_PROGRESS = [0.25, 0.5, 0.75];
+const SAMPLE_PROGRESS = 0.5;
 
-let scoreCtx = null;
+let spineRenderer = null;
 let thumbnails = $state({});
 let queue = [];
 let queued = new Set();
+let encoding = new Set();
 let processing = false;
 let generation = 0;
 
@@ -23,8 +24,14 @@ function canvasToObjectUrl(canvas) {
   });
 }
 
-async function generateThumbnail(dirName, scene) {
-  const renderer = createRenderer(scene);
+function releaseSpineRenderer() {
+  spineRenderer?.dispose();
+  spineRenderer = null;
+}
+
+async function captureThumbnail(dirName, scene) {
+  const reuseContext = getRendererType(scene) === 'spine';
+  const renderer = reuseContext ? (spineRenderer ??= new SpineRenderer()) : createRenderer(scene);
   try {
     if ('setAlphaMode' in renderer) {
       renderer.setAlphaMode(appState.alphaMode);
@@ -32,56 +39,46 @@ async function generateThumbnail(dirName, scene) {
     if (typeof renderer.setTextureFilter === 'function') {
       renderer.setTextureFilter(appState.textureFilter);
     }
-    await renderer.load(dirName, scene, { isPreload: true });
-    const canvas = await captureBestFrame(renderer);
-    return canvas ? await canvasToObjectUrl(canvas) : null;
+    await renderer.load(dirName, scene, {
+      isPreload: true,
+      thumbnail: true,
+      reuseContext,
+      canvasSize: THUMBNAIL_SIZE,
+    });
+    return await captureFrame(renderer);
+  } catch (err) {
+    if (reuseContext) releaseSpineRenderer();
+    throw err;
   } finally {
-    renderer.dispose();
+    if (!reuseContext) renderer.dispose();
+    else spineRenderer?._releaseScene();
   }
 }
 
-async function captureBestFrame(renderer) {
+async function captureFrame(renderer) {
   const animations = renderer.getAnimations() ?? [];
   const animation = findIdleAnimation(animations) || animations[0];
-  if (!animation) return renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
-  await renderer.setAnimation(animation.value);
-  let best = null;
-  let bestScore = -1;
-  for (const progress of SAMPLE_PROGRESS) {
-    renderer.seekAnimation(progress);
-    const canvas = renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
-    if (!canvas) continue;
-    const score = scoreFrame(canvas);
-    if (score > bestScore) {
-      best = canvas;
-      bestScore = score;
-    }
+  if (animation) {
+    await renderer.setAnimation(animation.value);
+    renderer.seekAnimation(SAMPLE_PROGRESS);
   }
-  return best;
+  return renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
 }
 
-function scoreFrame(canvas) {
-  if (!scoreCtx) {
-    const scoreCanvas = document.createElement('canvas');
-    scoreCanvas.width = SCORE_SIZE;
-    scoreCanvas.height = SCORE_SIZE;
-    scoreCtx = scoreCanvas.getContext('2d', { willReadFrequently: true });
+function storeThumbnail(key, canvas, currentGeneration) {
+  if (!canvas) {
+    thumbnails[key] = null;
+    return;
   }
-  scoreCtx.clearRect(0, 0, SCORE_SIZE, SCORE_SIZE);
-  scoreCtx.drawImage(canvas, 0, 0, SCORE_SIZE, SCORE_SIZE);
-  const { data } = scoreCtx.getImageData(0, 0, SCORE_SIZE, SCORE_SIZE);
-  let sum = 0;
-  let sumSq = 0;
-  const count = data.length / 4;
-  for (let i = 0; i < data.length; i += 4) {
-    const a = data[i + 3] / 255;
-    const lum = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
-    const v = lum * a + 0.5 * (1 - a);
-    sum += v;
-    sumSq += v * v;
-  }
-  const mean = sum / count;
-  return Math.sqrt(Math.max(0, sumSq / count - mean * mean));
+  encoding.add(key);
+  canvasToObjectUrl(canvas).then((url) => {
+    if (currentGeneration !== generation) {
+      if (url) URL.revokeObjectURL(url);
+      return;
+    }
+    encoding.delete(key);
+    thumbnails[key] = url;
+  });
 }
 
 async function processQueue() {
@@ -92,20 +89,18 @@ async function processQueue() {
     while (queue.length > 0 && currentGeneration === generation) {
       const { key, dirName, scene } = queue.shift();
       queued.delete(key);
-      if (key in thumbnails) continue;
-      let url = null;
+      if (key in thumbnails || encoding.has(key)) continue;
+      let canvas = null;
       try {
-        url = await generateThumbnail(dirName, scene);
+        canvas = await captureThumbnail(dirName, scene);
       } catch (err) {
         console.warn('[ThumbnailManager] Failed to generate thumbnail:', err);
       }
-      if (currentGeneration !== generation) {
-        if (url) URL.revokeObjectURL(url);
-        break;
-      }
-      thumbnails[key] = url;
+      if (currentGeneration !== generation) break;
+      storeThumbnail(key, canvas, currentGeneration);
     }
   } finally {
+    releaseSpineRenderer();
     processing = false;
   }
   if (currentGeneration !== generation && queue.length > 0) processQueue();
@@ -122,7 +117,7 @@ export const thumbnailManager = {
 
   request(dirName, scene) {
     const key = getKey(dirName, scene);
-    if (key in thumbnails || queued.has(key)) return;
+    if (key in thumbnails || queued.has(key) || encoding.has(key)) return;
     queued.add(key);
     queue.push({ key, dirName, scene });
     processQueue();
@@ -142,6 +137,7 @@ export const thumbnailManager = {
   clear() {
     generation++;
     this.cancelAll();
+    encoding.clear();
     for (const url of Object.values(thumbnails)) {
       if (url) URL.revokeObjectURL(url);
     }
