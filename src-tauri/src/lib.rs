@@ -1826,9 +1826,9 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         let mut main_file_info: Option<(String, String, &str)> = None;
         let target_pattern_skel = format!("{}.skel", base_lower);
         for (filename_lower, rp) in &file_paths {
-            if let Some(pos) = filename_lower.find(&target_pattern_skel) {
+            if filename_lower.starts_with(&target_pattern_skel) {
                 if let Some(original_fn) = Path::new(rp).file_name().and_then(|f| f.to_str()) {
-                    let ext_start = pos + base_lower.len();
+                    let ext_start = base_lower.len();
                     if ext_start <= original_fn.len() {
                         let ext_part = &original_fn[ext_start..];
                         main_file_info = Some((rp.clone(), ext_part.to_string(), "skel"));
@@ -1840,9 +1840,9 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         if main_file_info.is_none() {
             let target_pattern_json = format!("{}.json", base_lower);
             for (filename_lower, rp) in &file_paths {
-                if let Some(pos) = filename_lower.find(&target_pattern_json) {
+                if filename_lower.starts_with(&target_pattern_json) {
                     if let Some(original_fn) = Path::new(rp).file_name().and_then(|f| f.to_str()) {
-                        let ext_start = pos + base_lower.len();
+                        let ext_start = base_lower.len();
                         if ext_start <= original_fn.len() {
                             let ext_part = &original_fn[ext_start..];
                             main_file_info = Some((rp.clone(), ext_part.to_string(), "json"));
@@ -1855,9 +1855,9 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         if main_file_info.is_none() {
             let target_pattern_asset = format!("{}.asset", base_lower);
             for (filename_lower, rp) in &file_paths {
-                if let Some(pos) = filename_lower.find(&target_pattern_asset) {
+                if filename_lower.starts_with(&target_pattern_asset) {
                     if let Some(original_fn) = Path::new(rp).file_name().and_then(|f| f.to_str()) {
-                        let ext_start = pos + base_lower.len();
+                        let ext_start = base_lower.len();
                         if ext_start <= original_fn.len() {
                             let ext_part = &original_fn[ext_start..];
                             main_file_info = Some((rp.clone(), ext_part.to_string(), "asset"));
