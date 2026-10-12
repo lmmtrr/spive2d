@@ -11,17 +11,27 @@
   let dirName = $derived(appState.directories.selectedDir);
   let scenes = $derived(appState.directories.files?.[dirName] || []);
   let sceneIndices = $derived(filterSceneIndices(scenes, appState.directories.sceneFilter));
+  let savedScroll = null;
 
   $effect(() => {
     if (open && dialogEl && !dialogEl.open) {
       dialogEl.showModal();
       tick().then(() => {
-        gridEl?.querySelector('.thumbnail-item.selected')?.scrollIntoView({ block: 'center' });
+        if (!gridEl) return;
+        if (savedScroll?.dirName === dirName) {
+          gridEl.scrollTop = savedScroll.top;
+        } else {
+          gridEl.querySelector('.thumbnail-item.selected')?.scrollIntoView({ block: 'center' });
+        }
       });
     } else if (!open && dialogEl?.open) {
       dialogEl.close();
     }
   });
+
+  function handleScroll() {
+    if (open && dialogEl?.open) savedScroll = { dirName, top: gridEl.scrollTop };
+  }
 
   function handleClose() {
     open = false;
@@ -84,7 +94,7 @@
     </button>
   </div>
 
-  <div class="thumbnail-grid" bind:this={gridEl}>
+  <div class="thumbnail-grid" bind:this={gridEl} onscroll={handleScroll}>
     {#if open}
       {#each sceneIndices as i (dirName + '::' + scenes[i].name)}
         {@const scene = scenes[i]}
