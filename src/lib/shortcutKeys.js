@@ -6,10 +6,11 @@ const DEFAULT_SHORTCUTS = {
   prevAnim: 'a',
   nextAnim: 's',
   toggleDialog: 'z',
-  exportImage: 'x',
-  exportImageSeq: 'e',
-  exportAnim: 'd',
-  exportModel: 'c',
+  toggleSceneGrid: 'x',
+  exportImage: 'e',
+  exportImageSeq: 'd',
+  exportAnim: 'c',
+  exportModel: 'r',
   addToList: 'v',
   toggleFullscreen: 'F11',
 };
@@ -24,7 +25,13 @@ export function getShortcuts() {
   if (!saved) return getDefaultShortcuts();
   try {
     const parsed = JSON.parse(saved);
-    return { ...DEFAULT_SHORTCUTS, ...parsed };
+    const used = new Set(Object.values(parsed));
+    const added = Object.fromEntries(
+      Object.entries(DEFAULT_SHORTCUTS)
+        .filter(([action]) => !(action in parsed))
+        .map(([action, key]) => [action, used.has(key) ? '' : key])
+    );
+    return { ...parsed, ...added };
   } catch {
     return getDefaultShortcuts();
   }

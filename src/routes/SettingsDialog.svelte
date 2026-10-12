@@ -46,7 +46,7 @@
     'prevScene', 'nextScene',
     'prevAnim', 'nextAnim', 
     'exportImage', 'exportImageSeq', 'exportAnim', 'exportModel',
-    'toggleDialog', 'addToList', 'toggleFullscreen',
+    'toggleDialog', 'toggleSceneGrid', 'addToList', 'toggleFullscreen',
   ];
 
   const shortcutLabelKeys = {
@@ -55,6 +55,7 @@
     prevAnim: 'shortcutPrevAnim',
     nextAnim: 'shortcutNextAnim',
     toggleDialog: 'shortcutToggleDialog',
+    toggleSceneGrid: 'shortcutToggleSceneGrid',
     exportImage: 'shortcutExportImage',
     exportImageSeq: 'shortcutExportImageSeq',
     exportAnim: 'shortcutExportAnim',

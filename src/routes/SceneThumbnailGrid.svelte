@@ -16,6 +16,7 @@
   $effect(() => {
     if (open && dialogEl && !dialogEl.open) {
       dialogEl.showModal();
+      gridEl?.focus({ preventScroll: true });
       tick().then(() => {
         if (!gridEl) return;
         if (savedScroll?.dirName === dirName) {
@@ -94,7 +95,7 @@
     </button>
   </div>
 
-  <div class="thumbnail-grid" bind:this={gridEl} onscroll={handleScroll}>
+  <div class="thumbnail-grid" bind:this={gridEl} onscroll={handleScroll} tabindex="-1">
     {#if open}
       {#each sceneIndices as i (dirName + '::' + scenes[i].name)}
         {@const scene = scenes[i]}
@@ -233,6 +234,7 @@
     grid-auto-rows: max-content;
     gap: 10px;
     padding: 10px;
+    outline: none;
   }
 
   .thumbnail-item {

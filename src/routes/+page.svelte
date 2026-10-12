@@ -432,8 +432,14 @@
   }
 
   function handleKeyDown(e) {
-    if (sceneGridOpen) return;
     if (document.activeElement?.matches('input, textarea')) return;
+    if (sceneGridOpen) {
+      if (e.key === shortcuts.toggleSceneGrid) {
+        e.preventDefault();
+        sceneGridOpen = false;
+      }
+      return;
+    }
     const key = e.key.toLowerCase();    
     if ((key === 'w' || key === 'q') && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -459,6 +465,7 @@
     else if (e.key === shortcuts.exportAnim) { doExportAnimation(); }
     else if (e.key === shortcuts.exportModel) { doExportModel(); }
     else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
+    else if (e.key === shortcuts.toggleSceneGrid) { e.preventDefault(); openSceneGrid(); }
     else if (e.key === shortcuts.addToList) {
       invoke('append_to_list', { text: getSceneText(), customDir: appState.exportDir || null }).then(() => {
         showNotification(t('addedToList'), 'success');
@@ -488,6 +495,13 @@
   function toggleDialog() {
     if (showSpinner) return;
     dialogOpen = !dialogOpen;
+  }
+
+  function openSceneGrid() {
+    if (showSpinner || dialogOpen) return;
+    const { files, selectedDir } = appState.directories;
+    if (!files?.[selectedDir]?.length) return;
+    sceneGridOpen = true;
   }
 
   function focusBody() {

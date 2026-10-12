@@ -21,13 +21,14 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | ⏭️ Next Scene            | `W`                        |
 | ◀️ Previous Animation    | `A`                        |
 | ▶️ Next Animation        | `S`                        |
-| 📷 Export Image          | `X`                        |
-| 🖼️ Export Image Sequence | `E`                        |
-| 💾 Export Animation      | `D`                        |
-| 🦴 Export Model Files    | `C`                        |
 | ⚙️ Open/Close Settings   | `Z`                        |
+| 🗂️ Open/Close Thumbnails | `X`                        |
+| 📷 Export Image          | `E`                        |
+| 🖼️ Export Image Sequence | `D`                        |
+| 💾 Export Animation      | `C`                        |
+| 🦴 Export Model Files    | `R`                        |
 | 📝 Append to List        | `V`                        |
-| 🖥️ Toggle Fullscreen    | `F11`                      |
+| 🖥️ Toggle Fullscreen     | `F11`                      |
 | ❌ Exit                  | `Ctrl/Cmd+W`, `Ctrl/Cmd+Q` |
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
