@@ -17,12 +17,12 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 | Action                   | Shortcuts                  |
 | ------------------------ | -------------------------- |
-| ⏮️ Previous Scene        | `Q`                        |
-| ⏭️ Next Scene            | `W`                        |
-| ◀️ Previous Animation    | `A`                        |
-| ▶️ Next Animation        | `S`                        |
-| ⚙️ Open/Close Settings   | `Z`                        |
-| 🗂️ Open/Close Thumbnails | `X`                        |
+| ⚙️ Open/Close Settings   | `Q`                        |
+| 🗂️ Open/Close Thumbnails | `W`                        |
+| ⏮️ Previous Scene        | `A`                        |
+| ⏭️ Next Scene            | `S`                        |
+| ◀️ Previous Animation    | `Z`                        |
+| ▶️ Next Animation        | `X`                        |
 | 📷 Export Image          | `E`                        |
 | 🖼️ Export Image Sequence | `D`                        |
 | 💾 Export Animation      | `C`                        |
