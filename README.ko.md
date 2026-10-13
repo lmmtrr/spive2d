@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md) | 한국어 | [中文](README.zh-cn.md)
 
-https://github.com/user-attachments/assets/d7b172e9-bc5d-4a14-886f-caac5ba38ac5
+https://github.com/user-attachments/assets/202c20b2-de3a-4e9c-9d11-a058b256510b
 
 Spine 스켈레탈 애니메이션과 Live2D 모델을 확인하고 조작할 수 있는 Tauri 기반 데스크톱 애플리케이션입니다.
 
