@@ -11,7 +11,6 @@
   let dirName = $derived(appState.directories.selectedDir);
   let scenes = $derived(appState.directories.files?.[dirName] || []);
   let sceneIndices = $derived(filterSceneIndices(scenes, appState.directories.sceneFilter));
-  let savedScroll = null;
   let visibleScenes = new Set();
   let prefetchScheduled = false;
 
@@ -21,10 +20,11 @@
       gridEl?.focus({ preventScroll: true });
       tick().then(() => {
         if (!gridEl) return;
-        if (savedScroll?.dirName === dirName) {
-          gridEl.scrollTop = savedScroll.top;
+        const selected = gridEl.querySelector('.thumbnail-item.selected');
+        if (selected) {
+          selected.scrollIntoView({ block: 'center' });
         } else {
-          gridEl.querySelector('.thumbnail-item.selected')?.scrollIntoView({ block: 'center' });
+          gridEl.scrollTop = 0;
         }
       });
     } else if (!open && dialogEl?.open) {
@@ -60,10 +60,6 @@
     const ahead = ordered.slice(last + 1);
     const behind = ordered.slice(0, first).reverse();
     thumbnailManager.prefetch(dirName, [...ahead, ...behind]);
-  }
-
-  function handleScroll() {
-    if (open && dialogEl?.open) savedScroll = { dirName, top: gridEl.scrollTop };
   }
 
   function handleClose() {
@@ -134,7 +130,7 @@
     </button>
   </div>
 
-  <div class="thumbnail-grid" bind:this={gridEl} onscroll={handleScroll} tabindex="-1">
+  <div class="thumbnail-grid" bind:this={gridEl} tabindex="-1">
     {#if open}
       {#each sceneIndices as i (dirName + '::' + scenes[i].name)}
         {@const scene = scenes[i]}
