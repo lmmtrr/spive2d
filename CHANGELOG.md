@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.57] - 2026-10-13
+
+### Changed
+
+- Change default keyboard shortcuts
+
+### Fixed
+
+- Always center selected scene in thumbnail grid
+
 ## [0.1.56] - 2026-10-12
 
 ### Added
