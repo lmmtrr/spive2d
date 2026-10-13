@@ -2,7 +2,7 @@
 
 [English](README.md) | 日本語 | [한국어](README.ko.md) | [中文](README.zh-cn.md)
 
-https://github.com/user-attachments/assets/d7b172e9-bc5d-4a14-886f-caac5ba38ac5
+https://github.com/user-attachments/assets/202c20b2-de3a-4e9c-9d11-a058b256510b
 
 Spine スケルタルアニメーションと Live2D モデルを表示・操作するための Tauri 製デスクトップアプリケーションです。
 
