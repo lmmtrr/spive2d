@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.58] - 2026-10-17
+
+### Fixed
+
+- Prevent the WebView data folder from growing on every launch
+
 ## [0.1.57] - 2026-10-13
 
 ### Changed
