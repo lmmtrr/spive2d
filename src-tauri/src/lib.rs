@@ -9,6 +9,8 @@ use tauri_plugin_fs::FsExt;
 use tauri_plugin_opener::OpenerExt;
 
 const INSTANCE_DIR_PREFIX: &str = "inst_";
+const SETTINGS_FILE: &str = "settings.json";
+const THUMBNAIL_DIR: &str = "thumbnails";
 
 struct AppState {
     temp_dirs: Mutex<Vec<tempfile::TempDir>>,
@@ -1283,6 +1285,113 @@ fn get_file_stamp(path: String) -> Option<String> {
     Some(format!("{}-{}", modified, metadata.len()))
 }
 
+fn settings_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app_handle.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join(SETTINGS_FILE))
+}
+
+fn load_settings(app_handle: &AppHandle) -> Option<serde_json::Value> {
+    let path = settings_path(app_handle).ok()?;
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .filter(|v| v.is_object())
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    fs::write(&tmp, bytes)?;
+    fs::rename(&tmp, path)
+}
+
+#[tauri::command]
+fn save_settings(
+    app_handle: AppHandle,
+    settings: serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    let path = settings_path(&app_handle)?;
+    let bytes = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
+    write_atomic(&path, &bytes).map_err(|e| e.to_string())
+}
+
+fn thumbnail_dir(app_handle: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app_handle.path().app_cache_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join(THUMBNAIL_DIR))
+}
+
+fn thumbnail_path(app_handle: &AppHandle, key: &str) -> Result<PathBuf, String> {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in key.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    Ok(thumbnail_dir(app_handle)?.join(format!("{:016x}.webp", hash)))
+}
+
+#[tauri::command]
+fn thumbnail_get(app_handle: AppHandle, key: String) -> Result<tauri::ipc::Response, String> {
+    let path = thumbnail_path(&app_handle, &key)?;
+    let bytes = fs::read(&path).unwrap_or_default();
+    if !bytes.is_empty() {
+        if let Ok(f) = OpenOptions::new().write(true).open(&path) {
+            let _ = f.set_modified(SystemTime::now());
+        }
+    }
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+fn thumbnail_put(app_handle: AppHandle, request: tauri::ipc::Request) -> Result<(), String> {
+    let key = request
+        .headers()
+        .get("x-thumbnail-key")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("Missing thumbnail key")?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Expected raw thumbnail bytes".to_string());
+    };
+    let path = thumbnail_path(&app_handle, key)?;
+    write_atomic(&path, bytes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn thumbnail_prune(app_handle: AppHandle, max_entries: usize) -> Result<(), String> {
+    let dir = thumbnail_dir(&app_handle)?;
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Ok(());
+    };
+    let mut files: Vec<(SystemTime, PathBuf)> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let modified = e.metadata().ok()?.modified().ok()?;
+            Some((modified, e.path()))
+        })
+        .collect();
+    if files.len() <= max_entries {
+        return Ok(());
+    }
+    files.sort_unstable_by_key(|(modified, _)| *modified);
+    let excess = files.len() - max_entries;
+    for (_, path) in files.into_iter().take(excess) {
+        let _ = fs::remove_file(path);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn thumbnail_clear(app_handle: AppHandle) -> Result<(), String> {
+    let dir = thumbnail_dir(&app_handle)?;
+    match fs::remove_dir_all(&dir) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+        _ => Ok(()),
+    }
+}
+
 fn compare_natural(a: &str, b: &str) -> std::cmp::Ordering {
     let mut a_chars = a.chars().peekable();
     let mut b_chars = b.chars().peekable();
@@ -2004,8 +2113,27 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
+            let settings = load_settings(app.handle());
+            let script = format!(
+                "window.__SPIVE2D_SETTINGS__ = {};",
+                settings.clone().unwrap_or(serde_json::Value::Null)
+            );
+            let config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .ok_or("Missing main window config")?;
+            let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?
+                .initialization_script(&script)
+                .build()?;
+            if settings.is_some() {
+                let _ = window.clear_all_browsing_data();
+            }
             #[cfg(debug_assertions)]
-            app.get_webview_window("main").unwrap().open_devtools();
+            window.open_devtools();
             let state = app.state::<AppState>();
             if state.instance_lock.lock().unwrap().is_some() {
                 let own_dir = state.instance_dir.clone();
@@ -2025,7 +2153,12 @@ pub fn run() {
             open_export_dir,
             fetch_url_bytes,
             list_dir_files,
-            get_file_stamp
+            get_file_stamp,
+            save_settings,
+            thumbnail_get,
+            thumbnail_put,
+            thumbnail_prune,
+            thumbnail_clear
         ])
         .plugin(tauri_plugin_dialog::init())
         .build(tauri::generate_context!())

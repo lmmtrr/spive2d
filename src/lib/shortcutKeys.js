@@ -1,3 +1,5 @@
+import { storage } from './storage.js';
+
 const STORAGE_KEY = 'spive2d_shortcuts';
 
 const DEFAULT_SHORTCUTS = {
@@ -20,8 +22,7 @@ export function getDefaultShortcuts() {
 }
 
 export function getShortcuts() {
-  if (typeof localStorage === 'undefined') return getDefaultShortcuts();
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const saved = storage.getItem(STORAGE_KEY);
   if (!saved) return getDefaultShortcuts();
   try {
     const parsed = JSON.parse(saved);
@@ -38,14 +39,10 @@ export function getShortcuts() {
 }
 
 export function saveShortcuts(shortcuts) {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(shortcuts));
-  }
+  storage.setItem(STORAGE_KEY, JSON.stringify(shortcuts));
 }
 
 export function resetShortcuts() {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(STORAGE_KEY);
-  }
+  storage.removeItem(STORAGE_KEY);
   return getDefaultShortcuts();
 }

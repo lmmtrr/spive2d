@@ -1,24 +1,17 @@
+import { storage } from './storage.js';
+
 export function saveSetting(key, value) {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(key, value);
-  }
+  storage.setItem(key, value);
 }
 
 export function loadSetting(key, defaultValue = null) {
-  if (typeof localStorage !== 'undefined') {
-    return localStorage.getItem(key) || defaultValue;
-  }
-  return defaultValue;
+  return storage.getItem(key) || defaultValue;
 }
 
 export function removeSetting(key) {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(key);
-  }
+  storage.removeItem(key);
 }
 
 export function clearAllSettings() {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.clear();
-  }
+  storage.clear();
 }
