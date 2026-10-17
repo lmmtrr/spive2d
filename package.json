@@ -18,18 +18,18 @@
       "#lib/*": "./src/lib/*"
    },
    "dependencies": {
-      "@tauri-apps/api": "^2.12.3",
-      "@tauri-apps/plugin-dialog": "^2.8.2",
-      "@tauri-apps/plugin-fs": "^2.7.0",
-      "@tauri-apps/plugin-opener": "^2.7.1",
+      "@tauri-apps/api": "^2.12.4",
+      "@tauri-apps/plugin-dialog": "^2.8.3",
+      "@tauri-apps/plugin-fs": "^2.7.1",
+      "@tauri-apps/plugin-opener": "^2.7.2",
       "@tauri-apps/plugin-window-state": "^2.5.0",
-      "mediabunny": "^1.61.3"
+      "mediabunny": "^1.61.5"
    },
    "devDependencies": {
       "@sveltejs/adapter-static": "^4.0.0",
-      "@sveltejs/kit": "^3.0.1",
+      "@sveltejs/kit": "^3.1.0",
       "@sveltejs/vite-plugin-svelte": "^7.3.1",
-      "@tauri-apps/cli": "^2.12.2",
+      "@tauri-apps/cli": "^2.12.3",
       "@typescript/native": "npm:typescript@^7.0.2",
       "svelte": "^5.57.2",
       "svelte-check": "^4.7.6",
