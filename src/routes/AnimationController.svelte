@@ -55,13 +55,14 @@
       const duration = renderer.getAnimationDuration();
       const currentTime = renderer.getCurrentTime();
       if (duration > 0) {
-        seekerValue = (currentTime / duration) * 100;
-        const fps = renderer.getFPS();
-        timeDisplay = formatFrames(currentTime, duration, fps);
+        if (visible) {
+          seekerValue = (currentTime / duration) * 100;
+          timeDisplay = formatFrames(currentTime, duration, renderer.getFPS());
+        }
         if (!appState.animation.paused) {
           appState.animation.seekProgress = currentTime / duration;
         }
-      } else {
+      } else if (visible) {
         timeDisplay = '0 / 0';
       }
     }
