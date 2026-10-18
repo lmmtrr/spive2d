@@ -71,32 +71,28 @@ const encoderPool = new WorkerPool(PngEncoderWorker, encoderPoolSize);
 async function downloadCanvas(canvas, sceneText, animationName, suffix = '') {
   const safeName = animationName ? `_${sanitizeFilename(animationName.split('.')[0])}` : '';
   const baseFilename = `${sanitizeFilename(sceneText)}${safeName}${suffix}`;
-  try {
-    const exportBaseDir = await getExportDirectory();
-    let finalFilename = `${baseFilename}.png`;
-    let filePath = await join(exportBaseDir, finalFilename);
-    let counter = 2;
-    while (await exists(filePath)) {
-      finalFilename = `${baseFilename} (${counter}).png`;
-      filePath = await join(exportBaseDir, finalFilename);
-      counter++;
-    }
-    let buffer;
-    if (canvas.convertToBlob) {
-      const blob = await canvas.convertToBlob({ type: 'image/png' });
-      buffer = await blob.arrayBuffer();
-    } else if (canvas.toBlob) {
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      buffer = await blob.arrayBuffer();
-    } else {
-      const dataUrl = canvas.toDataURL('image/png');
-      const res = await fetch(dataUrl);
-      buffer = await res.arrayBuffer();
-    }
-    await writeFile(filePath, new Uint8Array(buffer));
-  } catch (err) {
-    showNotification(`${t('exportError') || 'Export error'}: ${err.message || err}`, 'error');
+  const exportBaseDir = await getExportDirectory();
+  let finalFilename = `${baseFilename}.png`;
+  let filePath = await join(exportBaseDir, finalFilename);
+  let counter = 2;
+  while (await exists(filePath)) {
+    finalFilename = `${baseFilename} (${counter}).png`;
+    filePath = await join(exportBaseDir, finalFilename);
+    counter++;
   }
+  let buffer;
+  if (canvas.convertToBlob) {
+    const blob = await canvas.convertToBlob({ type: 'image/png' });
+    buffer = await blob.arrayBuffer();
+  } else if (canvas.toBlob) {
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    buffer = await blob.arrayBuffer();
+  } else {
+    const dataUrl = canvas.toDataURL('image/png');
+    const res = await fetch(dataUrl);
+    buffer = await res.arrayBuffer();
+  }
+  await writeFile(filePath, new Uint8Array(buffer));
 }
 
 export async function exportImage(sceneText, animationName) {
@@ -144,62 +140,71 @@ export async function exportImage(sceneText, animationName) {
     exportQueue.updateStatus(taskId, 'completed');
   } catch (err) {
     console.error('Failed to export image:', err);
+    showNotification(`${t('exportError')}: ${err?.message || err}`, 'error');
     exportQueue.updateStatus(taskId, 'error');
   }
 }
 
 async function prepareExportContext(taskId, baseFilename, WorkerClass) {
-  const modelInfo = await resolveModelInfo();
-  if (!modelInfo) {
+  let worker = null;
+  try {
+    const modelInfo = await resolveModelInfo();
+    if (!modelInfo) {
+      exportQueue.updateStatus(taskId, 'error');
+      return null;
+    }
+    worker = new WorkerClass();
+    exportQueue.updateWorker(taskId, worker);
+    let backgroundImageToRender = null;
+    const backgroundColor = document.body.style.backgroundColor;
+    const backgroundImage = document.body.style.backgroundImage;
+    const imageUrl = parseBackgroundImageUrl(backgroundImage);
+    if (imageUrl) {
+      backgroundImageToRender = await loadImage(imageUrl);
+    }
+    const activeRenderer = getRenderer();
+    const originalSize = activeRenderer?.getOriginalSize() || { width: 1, height: 1 };
+    let spineVersion = null;
+    let isFileJson = false;
+    if (modelInfo.rendererType === 'spine') {
+      const v = await SpineVersionManager.detectVersion(modelInfo.selectedDir, modelInfo.fileNames);
+      spineVersion = v.version;
+      isFileJson = v.isJson;
+    }
+    const frameSize = activeRenderer?.getFrameSize?.() || originalSize;
+    const mainSize = activeRenderer?.getMainOriginalSize?.() || originalSize;
+    const screenBaseScale = modelInfo.rendererType === 'spine'
+      ? Math.max(mainSize.width / window.innerWidth, mainSize.height / window.innerHeight)
+      : Math.min(window.innerWidth / frameSize.width, window.innerHeight / frameSize.height);
+    const transform = {
+      scale: activeRenderer?._scale || 1,
+      x: activeRenderer?._moveX || 0,
+      y: activeRenderer?._moveY || 0,
+      rotation: activeRenderer?._rotate || 0,
+      originalWidth: originalSize.width,
+      originalHeight: originalSize.height,
+      screenBaseScale,
+      ignoreTransform: appState.exportBase === 'original'
+    };
+    return {
+      ...modelInfo,
+      worker,
+      backgroundImageToRender,
+      backgroundColor,
+      activeRenderer,
+      transform,
+      syncState: activeRenderer?.getSyncState() || null,
+      spineVersion,
+      isFileJson,
+      alphaMode: activeRenderer?.getEffectiveAlphaMode?.() || appState.alphaMode
+    };
+  } catch (err) {
+    console.error('Failed to prepare export:', err);
+    worker?.terminate();
+    showNotification(`${t('exportError')}: ${err?.message || err}`, 'error');
     exportQueue.updateStatus(taskId, 'error');
     return null;
   }
-  const worker = new WorkerClass();
-  exportQueue.updateWorker(taskId, worker);
-  let backgroundImageToRender = null;
-  const backgroundColor = document.body.style.backgroundColor;
-  const backgroundImage = document.body.style.backgroundImage;
-  const imageUrl = parseBackgroundImageUrl(backgroundImage);
-  if (imageUrl) {
-    backgroundImageToRender = await loadImage(imageUrl);
-  }
-  const activeRenderer = getRenderer();
-  const originalSize = activeRenderer?.getOriginalSize() || { width: 1, height: 1 };
-  let spineVersion = null;
-  let isFileJson = false;
-  if (modelInfo.rendererType === 'spine') {
-    const v = await SpineVersionManager.detectVersion(modelInfo.selectedDir, modelInfo.fileNames);
-    spineVersion = v.version;
-    isFileJson = v.isJson;
-  }
-  const frameSize = activeRenderer?.getFrameSize?.() || originalSize;
-  const mainSize = activeRenderer?.getMainOriginalSize?.() || originalSize;
-  const screenBaseScale = modelInfo.rendererType === 'spine'
-    ? Math.max(mainSize.width / window.innerWidth, mainSize.height / window.innerHeight)
-    : Math.min(window.innerWidth / frameSize.width, window.innerHeight / frameSize.height);
-  const transform = {
-    scale: activeRenderer?._scale || 1,
-    x: activeRenderer?._moveX || 0,
-    y: activeRenderer?._moveY || 0,
-    rotation: activeRenderer?._rotate || 0,
-    originalWidth: originalSize.width,
-    originalHeight: originalSize.height,
-    screenBaseScale,
-    ignoreTransform: appState.exportBase === 'original'
-  };
-
-  return {
-    ...modelInfo,
-    worker,
-    backgroundImageToRender,
-    backgroundColor,
-    activeRenderer,
-    transform,
-    syncState: activeRenderer?.getSyncState() || null,
-    spineVersion,
-    isFileJson,
-    alphaMode: activeRenderer?.getEffectiveAlphaMode?.() || appState.alphaMode
-  };
 }
 
 async function saveExportedFile(baseFilename, extension, buffer) {
@@ -391,7 +396,7 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
   }
   const onWorkerMessage = async (data) => {
     const item = exportQueue.items.find(i => i.id === taskId);
-    if (!item || item.status === 'cancelled') {
+    if (!item || item.status !== 'processing') {
       worker.terminate();
       return;
     }
@@ -409,30 +414,36 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
           .catch(err => onWorkerMessage({ type: 'ERROR', error: err }));
         break;
       case 'FRAME_PNG_DONE':
-        framesInFlight--;
-        const bytes = new Uint8Array(buffer);
-        const frameStr = String(frameIndex).padStart(4, '0');
-        const filename = `${sanitizeFilename(sceneText)}_${sanitizeFilename(safeName)}_${frameStr}.png`;
-        const p = join(targetDir, filename).then(filePath => writeFile(filePath, bytes));
-        writePromises.push(p);
-        framesProcessed++;
-        exportQueue.updateProgress(taskId, (framesProcessed / totalFrames) * 100);
-        if (writePromises.length >= 50) {
-          const currentPromises = [...writePromises];
-          writePromises.length = 0;
-          await Promise.all(currentPromises);
-        }
-        if (framesProcessed >= totalFrames) {
-          if (writePromises.length > 0) await Promise.all(writePromises);
-          exportQueue.updateProgress(taskId, 100);
-          exportQueue.updateStatus(taskId, 'completed');
-          worker.postMessage({ type: 'FINISH_PNG_SEQUENCE', id: taskId });
-          worker.terminate();
-        } else {
-          await processNextFrames();
+        try {
+          framesInFlight--;
+          const bytes = new Uint8Array(buffer);
+          const frameStr = String(frameIndex).padStart(4, '0');
+          const filename = `${sanitizeFilename(sceneText)}_${sanitizeFilename(safeName)}_${frameStr}.png`;
+          const p = join(targetDir, filename).then(filePath => writeFile(filePath, bytes));
+          writePromises.push(p);
+          framesProcessed++;
+          exportQueue.updateProgress(taskId, (framesProcessed / totalFrames) * 100);
+          if (writePromises.length >= 50) {
+            const currentPromises = [...writePromises];
+            writePromises.length = 0;
+            await Promise.all(currentPromises);
+          }
+          if (framesProcessed >= totalFrames) {
+            if (writePromises.length > 0) await Promise.all(writePromises);
+            exportQueue.updateProgress(taskId, 100);
+            exportQueue.updateStatus(taskId, 'completed');
+            worker.postMessage({ type: 'FINISH_PNG_SEQUENCE', id: taskId });
+            worker.terminate();
+          } else {
+            await processNextFrames();
+          }
+        } catch (err) {
+          onWorkerMessage({ type: 'ERROR', error: err?.message || String(err) });
         }
         break;
       case 'ERROR':
+        console.error('Export error:', data.error);
+        showNotification(`${t('exportError')}: ${data.error}`, 'error');
         exportQueue.updateStatus(taskId, 'error');
         worker.terminate();
         break;
