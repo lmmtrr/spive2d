@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.59] - 2026-10-18
+
+### Added
+
+- Speed up scene loading and thumbnail generation
+
+### Changed
+
+- Match background checkerboard colors to the export preview
+
+### Fixed
+
+- Reset Live2D expression to default instead of a random one
+- Report export failures instead of leaving tasks stuck
+- Fix export of Spine models whose paths contain special characters
+- Sanitize image sequence folder names
+- Match keyboard shortcuts case-insensitively
+- Keep model drag active when the cursor crosses UI elements
+- Stop moving Live2D textures and motions into subfolders
+- Load `_bg`/`_fg` skeletons with multi-part extensions
+- Group dropped Unity bundles of the same model into one directory
+- Avoid duplicate downloads when dropping URLs
+- Fix loading remote Live2D models blocked by CORS
+- Fix a crash on certain non-ASCII file names
+
 ## [0.1.58] - 2026-10-17
 
 ### Fixed
