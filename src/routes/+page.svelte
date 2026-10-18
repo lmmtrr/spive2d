@@ -118,18 +118,9 @@
       );
       if (inputPath.startsWith('https://')) {
         let unityRes = null;
-        let isUnity = false;
         let shouldInvokeBackend = false;
         try {
           showSpinner = true;
-          let bytes;
-          const fetched = await invoke('fetch_url_bytes', { url: inputPath });
-          bytes = new Uint8Array(fetched);
-          const header = String.fromCharCode(...bytes.slice(0, 8));
-          isUnity = header.startsWith("UnityFS") || header.startsWith("UnityWeb") || header.startsWith("UnityRaw");
-          if (isUnity && appState.skipUnity) {
-            throw new Error('Unsupported file type');
-          }
           let hasArchive = false;
           for (const p of paths) {
             try {
@@ -140,6 +131,10 @@
                 break;
               }
             } catch {}
+          }
+          const isUnity = !hasArchive && await invoke('probe_unity_url', { url: inputPath });
+          if (isUnity && appState.skipUnity) {
+            throw new Error('Unsupported file type');
           }
           shouldInvokeBackend = isUnity || hasArchive;
           if (shouldInvokeBackend) {

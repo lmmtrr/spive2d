@@ -370,10 +370,7 @@ fn get_model_group_key(path: &Path) -> String {
     }
 }
 
-fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::path::Path) -> Result<bool, String> {
-    unityfs::extract_unity_assets_from_path(bundle_path, out_dir)
-        .map_err(|e| format!("Failed to extract assets via unityfs: {:?}", e))?;
-    let bytes = std::fs::read(bundle_path).map_err(|e| e.to_string())?;
+fn write_layered_sprite_meta(bytes: Vec<u8>, bundle_path: &Path, out_dir: &Path) -> Result<bool, String> {
     let mut reader = unityfs::Reader::new(bytes, unityfs::unity_version::UnityVersion::default());
     let bundle = unityfs::Bundle::read(&mut reader).map_err(|e| format!("Failed to read bundle: {:?}", e))?;
     let mut asset_manager = unityfs::assets::AssetManager::new();
@@ -659,24 +656,28 @@ fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::p
             faces_meta.insert(name_lower, meta);
         }
     }
-    let mut atlas_name = String::new();
-    if let Ok(entries) = std::fs::read_dir(out_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(ext) = path.extension() {
-                if ext == "png" {
-                    let name = path.file_name().unwrap().to_string_lossy();
-                    if !name.contains("Silhouette") && !name.contains("silhouette") {
-                        atlas_name = name.into_owned();
-                        break;
-                    }
-                }
-            }
-        }
-    }
     if body_sprite_rect.is_none() && faces_meta.is_empty() {
         return Ok(false);
     }
+    let mut pngs: Vec<String> = fs::read_dir(out_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| e.path().is_file())
+                .filter_map(|e| e.file_name().to_str().map(|n| n.to_string()))
+                .filter(|n| n.to_ascii_lowercase().ends_with(".png") && !n.to_ascii_lowercase().contains("silhouette"))
+                .collect()
+        })
+        .unwrap_or_default();
+    pngs.sort_unstable_by(|a, b| compare_natural(a, b));
+    let atlas_name = body_sprite_rect
+        .as_ref()
+        .map(|b| b.texture.clone())
+        .into_iter()
+        .chain(faces_meta.values().map(|f| f.texture.clone()))
+        .find(|t| !t.is_empty() && pngs.contains(t))
+        .or_else(|| pngs.first().cloned())
+        .unwrap_or_default();
     let final_json = serde_json::json!({
         "atlas": atlas_name,
         "bodyRect": body_rect,
@@ -691,6 +692,133 @@ fn extract_layered_sprite_native(bundle_path: &std::path::Path, out_dir: &std::p
     Ok(true)
 }
 
+fn is_unity_file(path: &Path) -> bool {
+    let Ok(mut f) = fs::File::open(path) else {
+        return false;
+    };
+    let mut header = [0u8; 8];
+    match f.read(&mut header) {
+        Ok(n) => unityfs::is_unity_bundle(&header[..n]),
+        Err(_) => false,
+    }
+}
+
+fn find_unity_bundles(files: &[PathBuf]) -> HashSet<PathBuf> {
+    files
+        .iter()
+        .filter(|p| !is_definitely_not_unity_bundle(p) && is_unity_file(p))
+        .cloned()
+        .collect()
+}
+
+fn extract_unity_bundle(bundle_path: &Path, out_dir: &Path) -> bool {
+    let bytes = match fs::read(bundle_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Failed to read bundle {:?}: {}", bundle_path, e);
+            return false;
+        }
+    };
+    extract_unity_bytes(bytes, bundle_path, out_dir)
+}
+
+fn extract_unity_bytes(bytes: Vec<u8>, name_path: &Path, out_dir: &Path) -> bool {
+    if let Err(e) = unityfs::extract_unity_assets(&bytes, out_dir) {
+        eprintln!("Failed to extract Unity assets from {:?}: {}", name_path, e);
+        return false;
+    }
+    if let Err(e) = write_layered_sprite_meta(bytes, name_path, out_dir) {
+        eprintln!("Failed to read layered sprite data from {:?}: {}", name_path, e);
+    }
+    true
+}
+
+fn has_model_files(files: &[PathBuf]) -> bool {
+    files.iter().any(|p| {
+        let name = p
+            .file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        name.contains(".atlas") || name.contains(".moc") || name.ends_with("meta.json")
+    })
+}
+
+fn copy_relative(src_root: &Path, files: &[PathBuf], dest_root: &Path) -> bool {
+    let mut copied = false;
+    for file_path in files {
+        let Ok(rel_path) = file_path.strip_prefix(src_root) else {
+            continue;
+        };
+        let dest_path = dest_root.join(rel_path);
+        if let Some(parent) = dest_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if fs::copy(file_path, &dest_path).is_ok() {
+            copied = true;
+        }
+    }
+    copied
+}
+
+fn stage_directory(dir: &Path, files: Vec<PathBuf>, bundles: &HashSet<PathBuf>, dest: &Path) -> bool {
+    let mut added = false;
+    for bundle_path in bundles {
+        if extract_unity_bundle(bundle_path, &dest.join(get_model_group_key(bundle_path))) {
+            added = true;
+        }
+    }
+    let rest: Vec<PathBuf> = files.into_iter().filter(|f| !bundles.contains(f)).collect();
+    if bundles.is_empty() || has_model_files(&rest) {
+        added |= copy_relative(dir, &rest, dest);
+    }
+    added
+}
+
+fn unique_child(root: &Path, name: &str) -> PathBuf {
+    let name = if name.is_empty() { "model" } else { name };
+    let mut candidate = root.join(name);
+    let mut counter = 2;
+    while candidate.exists() {
+        candidate = root.join(format!("{}_{}", name, counter));
+        counter += 1;
+    }
+    candidate
+}
+
+fn create_model_temp_dir(app_handle: &AppHandle) -> Result<tempfile::TempDir, String> {
+    let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
+    let _ = fs::create_dir_all(&spive_temp_root);
+    tempfile::Builder::new()
+        .prefix("model_")
+        .tempdir_in(spive_temp_root)
+        .map_err(|e| format!("Failed to create temp dir: {}", e))
+}
+
+fn keep_temp_dir(app_handle: &AppHandle, temp_dir: tempfile::TempDir) {
+    let state = app_handle.state::<AppState>();
+    let mut temp_dirs = state.temp_dirs.lock().unwrap();
+    temp_dirs.push(temp_dir);
+    if temp_dirs.len() > 2 {
+        temp_dirs.remove(0);
+    }
+}
+
+fn archive_ext(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .filter(|e| e == "zip" || e == "7z")
+}
+
+fn curl_command(url: &str) -> std::process::Command {
+    let mut cmd = create_command("curl");
+    cmd.arg("-sL")
+        .arg("-A")
+        .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
+        .arg(url);
+    cmd
+}
+
 #[tauri::command]
 async fn handle_dropped_path(
     path: String,
@@ -701,116 +829,31 @@ async fn handle_dropped_path(
     app_handle.emit("progress", true).unwrap();
     let path_obj = Path::new(&path);
     if path_obj.is_dir() {
-        let mut unity_bundles = Vec::new();
-        if !skip_unity {
-            let all_files = find_all_files(&path_obj);
-            for file_path in &all_files {
-                if is_definitely_not_unity_bundle(file_path) {
-                    continue;
-                }
-                if let Ok(mut f) = fs::File::open(file_path) {
-                    let mut header = [0u8; 8];
-                    if let Ok(n) = f.read(&mut header) {
-                        if unityfs::is_unity_bundle(&header[..n]) {
-                            unity_bundles.push(file_path.clone());
-                        }
-                    }
-                }
-            }
+        let files = find_all_files(path_obj);
+        let bundles = if skip_unity { HashSet::new() } else { find_unity_bundles(&files) };
+        if bundles.is_empty() {
+            return get_subdir_files(path, merge_sequential, app_handle);
         }
-        if !unity_bundles.is_empty() {
-            let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
-            let _ = std::fs::create_dir_all(&spive_temp_root);
-            let temp_dir = tempfile::Builder::new()
-                .prefix("model_")
-                .tempdir_in(spive_temp_root)
-                .map_err(|e| format!("Failed to create temp dir: {}", e))?;
-            let temp_path = temp_dir.path().to_string_lossy().into_owned();
-            let mut extracted_any = false;
-            for bundle_path in unity_bundles {
-                let group_key = get_model_group_key(&bundle_path);
-                let bundle_out_dir = temp_dir.path().join(group_key);
-                let mut success = false;
-                let _ = std::fs::create_dir_all(&bundle_out_dir);
-                match extract_layered_sprite_native(&bundle_path, &bundle_out_dir) {
-                    Ok(_) => {
-                        success = true;
-                    }
-                    _ => {
-                        if let Ok(_) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
-                            success = true;
-                        }
-                    }
-                }
-                if success {
-                    extracted_any = true;
-                }
-            }
-            if !extracted_any {
-                return Err("Failed to extract any Unity bundles in directory".to_string());
-            }
-            let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
-            let state = app_handle.state::<AppState>();
-            let mut temp_dirs = state.temp_dirs.lock().unwrap();
-            temp_dirs.push(temp_dir);
-            if temp_dirs.len() > 2 {
-                temp_dirs.remove(0);
-            }
-            return result;
-        } else {
-            get_subdir_files(path, merge_sequential, app_handle)
+        let temp_dir = create_model_temp_dir(&app_handle)?;
+        if !stage_directory(path_obj, files, &bundles, temp_dir.path()) {
+            return Err("Failed to extract any Unity bundles in directory".to_string());
         }
+        let temp_path = temp_dir.path().to_string_lossy().into_owned();
+        let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
+        keep_temp_dir(&app_handle, temp_dir);
+        result
     } else if path_obj.is_file() {
-        let is_unity = if skip_unity {
-            false
-        } else if let Ok(mut f) = fs::File::open(&path_obj) {
-            let mut header = [0u8; 8];
-            if let Ok(n) = f.read(&mut header) {
-                unityfs::is_unity_bundle(&header[..n])
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-        if is_unity {
-            let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
-            let _ = std::fs::create_dir_all(&spive_temp_root);
-            let temp_dir = tempfile::Builder::new()
-                .prefix("model_")
-                .tempdir_in(spive_temp_root)
-                .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        if !skip_unity && is_unity_file(path_obj) {
+            let temp_dir = create_model_temp_dir(&app_handle)?;
+            extract_unity_bundle(path_obj, &temp_dir.path().join(get_model_group_key(path_obj)));
             let temp_path = temp_dir.path().to_string_lossy().into_owned();
-            let group_key = get_model_group_key(&path_obj);
-            let bundle_out_dir = temp_dir.path().join(&group_key);
-            let _ = std::fs::create_dir_all(&bundle_out_dir);
-            match extract_layered_sprite_native(&path_obj, &bundle_out_dir) {
-                Ok(_) => {}
-                _ => {
-                    let _ = unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir);
-                }
-            }
             let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
-            let state = app_handle.state::<AppState>();
-            let mut temp_dirs = state.temp_dirs.lock().unwrap();
-            temp_dirs.push(temp_dir);
-            if temp_dirs.len() > 2 {
-                temp_dirs.remove(0);
-            }
+            keep_temp_dir(&app_handle, temp_dir);
             return result;
         }
-        match path_obj
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
-        {
-            Some(ext) if ext == "zip" || ext == "7z" => {
-                let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
-                let _ = std::fs::create_dir_all(&spive_temp_root);
-                let temp_dir = tempfile::Builder::new()
-                    .prefix("model_")
-                    .tempdir_in(spive_temp_root)
-                    .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        match archive_ext(path_obj) {
+            Some(ext) => {
+                let temp_dir = create_model_temp_dir(&app_handle)?;
                 let temp_path = temp_dir.path().to_string_lossy().into_owned();
                 extract_archive(&path, temp_dir.path(), &ext)?;
                 let mut final_path = temp_path.clone();
@@ -826,15 +869,10 @@ async fn handle_dropped_path(
                     }
                 }
                 let result = get_subdir_files(final_path, merge_sequential, app_handle.clone());
-                let state = app_handle.state::<AppState>();
-                let mut temp_dirs = state.temp_dirs.lock().unwrap();
-                temp_dirs.push(temp_dir);
-                if temp_dirs.len() > 2 {
-                    temp_dirs.remove(0);
-                }
+                keep_temp_dir(&app_handle, temp_dir);
                 result
             }
-            _ => {
+            None => {
                 app_handle.emit("progress", false).unwrap();
                 Err("Unsupported file type".to_string())
             }
@@ -846,60 +884,6 @@ async fn handle_dropped_path(
 }
 
 #[tauri::command]
-fn handle_unity_bytes(
-    bytes: Vec<u8>,
-    merge_sequential: bool,
-    skip_unity: bool,
-    app_handle: AppHandle,
-) -> Result<Option<HashMap<String, Vec<SceneData>>>, String> {
-    app_handle.emit("progress", true).unwrap();
-    let header_len = std::cmp::min(bytes.len(), 8);
-    let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
-    if is_unity && !skip_unity {
-        let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
-        let _ = std::fs::create_dir_all(&spive_temp_root);
-        let mut temp_file = tempfile::Builder::new()
-            .prefix("download_")
-            .suffix(".tmp")
-            .tempfile_in(&spive_temp_root)
-            .map_err(|e| {
-                let _ = app_handle.emit("progress", false);
-                format!("Failed to create download temp file: {}", e)
-            })?;
-        temp_file.write_all(&bytes).map_err(|e| {
-            let _ = app_handle.emit("progress", false);
-            format!("Failed to write downloaded bytes: {}", e)
-        })?;
-        let temp_file_path = temp_file.path().to_path_buf();
-        let temp_dir = tempfile::Builder::new()
-            .prefix("model_")
-            .tempdir_in(&spive_temp_root)
-            .map_err(|e| {
-                let _ = app_handle.emit("progress", false);
-                format!("Failed to create temp dir: {}", e)
-            })?;
-        let temp_path = temp_dir.path().to_string_lossy().into_owned();
-        unityfs::extract_unity_assets_from_path(&temp_file_path, temp_dir.path())
-            .map_err(|e| {
-                let _ = app_handle.emit("progress", false);
-                format!("Failed to extract Unity assets: {}", e)
-            })?;
-        let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
-        let state = app_handle.state::<AppState>();
-        let mut temp_dirs = state.temp_dirs.lock().unwrap();
-        temp_dirs.push(temp_dir);
-        if temp_dirs.len() > 2 {
-            temp_dirs.remove(0);
-        }
-        let _ = app_handle.emit("progress", false);
-        result.map(Some)
-    } else {
-        let _ = app_handle.emit("progress", false);
-        Ok(None)
-    }
-}
-
-#[tauri::command]
 async fn handle_urls(
     urls: Vec<String>,
     merge_sequential: bool,
@@ -907,25 +891,14 @@ async fn handle_urls(
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
-    let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
-    let _ = std::fs::create_dir_all(&spive_temp_root);
-    let temp_dir = tempfile::Builder::new()
-        .prefix("model_")
-        .tempdir_in(&spive_temp_root)
-        .map_err(|e| {
-            let _ = app_handle.emit("progress", false);
-            format!("Failed to create temp dir: {}", e)
-        })?;
+    let temp_dir = create_model_temp_dir(&app_handle).map_err(|e| {
+        let _ = app_handle.emit("progress", false);
+        e
+    })?;
     let temp_path = temp_dir.path().to_string_lossy().into_owned();
     let mut downloaded_any = false;
     for url in urls {
-        let output = create_command("curl")
-            .arg("-sL")
-            .arg("-A")
-            .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
-            .arg(&url)
-            .output();
-        let output = match output {
+        let output = match curl_command(&url).output() {
             Ok(o) => o,
             Err(e) => {
                 eprintln!("Failed to execute curl for url {}: {}", url, e);
@@ -942,39 +915,27 @@ async fn handle_urls(
         }
         let header_len = std::cmp::min(bytes.len(), 8);
         let is_unity = unityfs::is_unity_bundle(&bytes[..header_len]);
+        let url_without_query = url.split('?').next().unwrap_or(&url);
+        let filename = url_without_query.rsplit('/').next().unwrap_or(url_without_query);
         if is_unity {
             if skip_unity {
                 continue;
             }
-            let url_without_query = url.split('?').next().unwrap_or(&url);
-            let filename = url_without_query.rsplit('/').next().unwrap_or(url_without_query);
-            let group_key = get_model_group_key(Path::new(filename));
-            let bundle_out_dir = temp_dir.path().join(group_key);
-            if let Err(e) = unityfs::extract_unity_assets(&bytes, &bundle_out_dir) {
-                eprintln!("Failed to extract Unity assets from url {}: {}", url, e);
-            } else {
+            let name_path = Path::new(filename);
+            let bundle_out_dir = temp_dir.path().join(get_model_group_key(name_path));
+            if extract_unity_bytes(bytes, name_path, &bundle_out_dir) {
                 downloaded_any = true;
             }
-        } else {
-            let url_without_query = url.split('?').next().unwrap_or(&url);
-            let filename = url_without_query.rsplit('/').next().unwrap_or(url_without_query);
-            if !filename.is_empty() {
-                let dest_path = temp_dir.path().join(filename);
-                if let Err(e) = std::fs::write(&dest_path, &bytes) {
-                    eprintln!("Failed to write downloaded file to {:?}: {}", dest_path, e);
-                } else {
-                    downloaded_any = true;
-                    let ext = Path::new(filename)
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|e| e.to_lowercase());
-                    if let Some(ext_str) = ext {
-                        if ext_str == "zip" || ext_str == "7z" {
-                            let path_str = dest_path.to_string_lossy().into_owned();
-                            if let Err(e) = extract_archive(&path_str, temp_dir.path(), &ext_str) {
-                                eprintln!("Failed to extract archive {:?}: {}", dest_path, e);
-                            }
-                        }
+        } else if !filename.is_empty() {
+            let dest_path = temp_dir.path().join(filename);
+            if let Err(e) = std::fs::write(&dest_path, &bytes) {
+                eprintln!("Failed to write downloaded file to {:?}: {}", dest_path, e);
+            } else {
+                downloaded_any = true;
+                if let Some(ext_str) = archive_ext(Path::new(filename)) {
+                    let path_str = dest_path.to_string_lossy().into_owned();
+                    if let Err(e) = extract_archive(&path_str, temp_dir.path(), &ext_str) {
+                        eprintln!("Failed to extract archive {:?}: {}", dest_path, e);
                     }
                 }
             }
@@ -985,12 +946,7 @@ async fn handle_urls(
         return Err("Failed to download or extract any files from the provided URLs".to_string());
     }
     let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
-    let state = app_handle.state::<AppState>();
-    let mut temp_dirs = state.temp_dirs.lock().unwrap();
-    temp_dirs.push(temp_dir);
-    if temp_dirs.len() > 2 {
-        temp_dirs.remove(0);
-    }
+    keep_temp_dir(&app_handle, temp_dir);
     let _ = app_handle.emit("progress", false);
     result
 }
@@ -1008,106 +964,46 @@ async fn handle_dropped_paths(
         let _ = app_handle.emit("progress", false);
         return result;
     }
-    let spive_temp_root = app_handle.state::<AppState>().instance_dir.clone();
-    let _ = std::fs::create_dir_all(&spive_temp_root);
-    let temp_dir = tempfile::Builder::new()
-        .prefix("model_")
-        .tempdir_in(&spive_temp_root)
-        .map_err(|e| {
-            let _ = app_handle.emit("progress", false);
-            format!("Failed to create temp dir: {}", e)
-        })?;
+    let temp_dir = create_model_temp_dir(&app_handle).map_err(|e| {
+        let _ = app_handle.emit("progress", false);
+        e
+    })?;
     let temp_path = temp_dir.path().to_string_lossy().into_owned();
     let mut added_any = false;
     for path in paths {
         let path_obj = Path::new(&path);
-        if !path_obj.exists() {
-            continue;
-        }
+        let stem = path_obj
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
         if path_obj.is_dir() {
-            let mut unity_bundles = Vec::new();
-            if !skip_unity {
-                let all_files = find_all_files(&path_obj);
-                for file_path in &all_files {
-                    if is_definitely_not_unity_bundle(file_path) {
-                        continue;
-                    }
-                    if let Ok(mut f) = fs::File::open(file_path) {
-                        let mut header = [0u8; 8];
-                        if let Ok(n) = f.read(&mut header) {
-                            if unityfs::is_unity_bundle(&header[..n]) {
-                                unity_bundles.push(file_path.clone());
-                            }
-                        }
-                    }
-                }
-            }
-            if !unity_bundles.is_empty() {
-                for bundle_path in unity_bundles {
-                    let group_key = get_model_group_key(&bundle_path);
-                    let bundle_out_dir = temp_dir.path().join(group_key);
-                    if let Err(e) = unityfs::extract_unity_assets_from_path(&bundle_path, &bundle_out_dir) {
-                        eprintln!("Failed to extract bundle {:?}: {}", bundle_path, e);
-                    } else {
-                        added_any = true;
-                    }
-                }
-            } else {
-                let all_files = find_all_files(&path_obj);
-                for file_path in all_files {
-                    if let Ok(rel_path) = file_path.strip_prefix(&path_obj) {
-                        let dest_path = temp_dir.path().join(rel_path);
-                        if let Some(parent) = dest_path.parent() {
-                            let _ = fs::create_dir_all(parent);
-                        }
-                        if fs::copy(&file_path, &dest_path).is_ok() {
-                            added_any = true;
-                        }
-                    }
-                }
+            let files = find_all_files(path_obj);
+            let bundles = if skip_unity { HashSet::new() } else { find_unity_bundles(&files) };
+            let name = path_obj
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let dest = unique_child(temp_dir.path(), &name);
+            if stage_directory(path_obj, files, &bundles, &dest) {
+                added_any = true;
             }
         } else if path_obj.is_file() {
-            let is_unity = if skip_unity {
-                false
-            } else if let Ok(mut f) = fs::File::open(&path_obj) {
-                let mut header = [0u8; 8];
-                if let Ok(n) = f.read(&mut header) {
-                    unityfs::is_unity_bundle(&header[..n])
-                } else {
-                    false
+            if !skip_unity && is_unity_file(path_obj) {
+                let bundle_out_dir = unique_child(temp_dir.path(), &get_model_group_key(path_obj));
+                if extract_unity_bundle(path_obj, &bundle_out_dir) {
+                    added_any = true;
                 }
-            } else {
-                false
-            };
-            if is_unity {
-                let group_key = get_model_group_key(&path_obj);
-                let bundle_out_dir = temp_dir.path().join(group_key);
-                if let Err(e) = unityfs::extract_unity_assets_from_path(&path_obj, &bundle_out_dir) {
-                    eprintln!("Failed to extract Unity assets from {:?}: {}", path_obj, e);
+            } else if let Some(ext) = archive_ext(path_obj) {
+                let dest = unique_child(temp_dir.path(), &stem);
+                let _ = fs::create_dir_all(&dest);
+                if let Err(e) = extract_archive(&path, &dest, &ext) {
+                    eprintln!("Failed to extract archive {:?}: {}", path_obj, e);
                 } else {
                     added_any = true;
                 }
-            } else {
-                match path_obj
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.to_lowercase())
-                {
-                    Some(ext) if ext == "zip" || ext == "7z" => {
-                        if let Err(e) = extract_archive(&path, temp_dir.path(), &ext) {
-                            eprintln!("Failed to extract archive {:?}: {}", path_obj, e);
-                        } else {
-                            added_any = true;
-                        }
-                    }
-                    _ => {
-                        if let Some(filename) = path_obj.file_name() {
-                            let dest_path = temp_dir.path().join(filename);
-                            if fs::copy(&path_obj, &dest_path).is_ok() {
-                                added_any = true;
-                            }
-                        }
-                    }
+            } else if let Some(filename) = path_obj.file_name() {
+                if fs::copy(path_obj, temp_dir.path().join(filename)).is_ok() {
+                    added_any = true;
                 }
             }
         }
@@ -1117,12 +1013,7 @@ async fn handle_dropped_paths(
         return Err("No valid files or models found in dropped paths".to_string());
     }
     let result = get_subdir_files(temp_path, merge_sequential, app_handle.clone());
-    let state = app_handle.state::<AppState>();
-    let mut temp_dirs = state.temp_dirs.lock().unwrap();
-    temp_dirs.push(temp_dir);
-    if temp_dirs.len() > 2 {
-        temp_dirs.remove(0);
-    }
+    keep_temp_dir(&app_handle, temp_dir);
     let _ = app_handle.emit("progress", false);
     result
 }
@@ -1235,12 +1126,8 @@ fn append_to_list(
 }
 
 #[tauri::command]
-async fn fetch_url_bytes(url: String) -> Result<Vec<u8>, String> {
-    let output = create_command("curl")
-        .arg("-sL")
-        .arg("-A")
-        .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
-        .arg(&url)
+async fn fetch_url_bytes(url: String) -> Result<tauri::ipc::Response, String> {
+    let output = curl_command(&url)
         .output()
         .map_err(|e| format!("Failed to execute curl: {}", e))?;
     if !output.status.success() {
@@ -1250,7 +1137,35 @@ async fn fetch_url_bytes(url: String) -> Result<Vec<u8>, String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    Ok(output.stdout)
+    Ok(tauri::ipc::Response::new(output.stdout))
+}
+
+#[tauri::command]
+async fn probe_unity_url(url: String) -> Result<bool, String> {
+    let mut child = curl_command(&url)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to execute curl: {}", e))?;
+    let mut header = [0u8; 8];
+    let mut read = 0;
+    if let Some(stdout) = child.stdout.as_mut() {
+        while read < header.len() {
+            match stdout.read(&mut header[read..]) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => read += n,
+            }
+        }
+    }
+    let _ = child.kill();
+    let status = child.wait();
+    if read == 0 {
+        return Err(match status {
+            Ok(s) if !s.success() => format!("curl failed with status: {}", s),
+            _ => "Empty response".to_string(),
+        });
+    }
+    Ok(unityfs::is_unity_bundle(&header[..read]))
 }
 
 #[tauri::command]
@@ -2083,12 +1998,12 @@ pub fn run() {
             get_subdir_files,
             handle_dropped_path,
             handle_dropped_paths,
-            handle_unity_bytes,
             handle_urls,
             append_to_list,
             get_export_dir,
             open_export_dir,
             fetch_url_bytes,
+            probe_unity_url,
             list_dir_files,
             get_file_stamp,
             save_settings,
