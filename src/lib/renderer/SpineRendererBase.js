@@ -1091,7 +1091,7 @@ export class SpineRendererBase extends BaseRenderer {
     }
     const animations = skeleton.data.animations;
     if (animations.length > 0) state.setAnimation(0, animations[0].name, true);
-    const mask = this._thumbnail
+    const mask = this._thumbnail || isWebUrl
       ? null
       : await this._loadMask(atlas, designRect, skeleton.data, fileName, normalizedDirName, isWebUrl);
     return { skeleton, state, bounds, name: fileName, mask, designRect, atlas };
