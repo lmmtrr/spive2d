@@ -134,6 +134,12 @@ struct SceneData {
     motion_files: Vec<String>,
 }
 
+async fn run_blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn create_command(program: &str) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     #[cfg(target_os = "windows")]
@@ -819,8 +825,7 @@ fn curl_command(url: &str) -> std::process::Command {
     cmd
 }
 
-#[tauri::command]
-async fn handle_dropped_path(
+fn handle_dropped_path_blocking(
     path: String,
     merge_sequential: bool,
     skip_unity: bool,
@@ -884,7 +889,16 @@ async fn handle_dropped_path(
 }
 
 #[tauri::command]
-async fn handle_urls(
+async fn handle_dropped_path(
+    path: String,
+    merge_sequential: bool,
+    skip_unity: bool,
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
+    run_blocking(move || handle_dropped_path_blocking(path, merge_sequential, skip_unity, app_handle)).await
+}
+
+fn handle_urls_blocking(
     urls: Vec<String>,
     merge_sequential: bool,
     skip_unity: bool,
@@ -952,7 +966,16 @@ async fn handle_urls(
 }
 
 #[tauri::command]
-async fn handle_dropped_paths(
+async fn handle_urls(
+    urls: Vec<String>,
+    merge_sequential: bool,
+    skip_unity: bool,
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
+    run_blocking(move || handle_urls_blocking(urls, merge_sequential, skip_unity, app_handle)).await
+}
+
+fn handle_dropped_paths_blocking(
     paths: Vec<String>,
     merge_sequential: bool,
     skip_unity: bool,
@@ -960,7 +983,7 @@ async fn handle_dropped_paths(
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
     if paths.len() == 1 {
-        let result = handle_dropped_path(paths[0].clone(), merge_sequential, skip_unity, app_handle.clone()).await;
+        let result = handle_dropped_path_blocking(paths[0].clone(), merge_sequential, skip_unity, app_handle.clone());
         let _ = app_handle.emit("progress", false);
         return result;
     }
@@ -1016,6 +1039,16 @@ async fn handle_dropped_paths(
     keep_temp_dir(&app_handle, temp_dir);
     let _ = app_handle.emit("progress", false);
     result
+}
+
+#[tauri::command]
+async fn handle_dropped_paths(
+    paths: Vec<String>,
+    merge_sequential: bool,
+    skip_unity: bool,
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<SceneData>>, String> {
+    run_blocking(move || handle_dropped_paths_blocking(paths, merge_sequential, skip_unity, app_handle)).await
 }
 
 fn list_files_recursive(dir: &Path) -> Vec<String> {
@@ -1125,8 +1158,7 @@ fn append_to_list(
     Ok(())
 }
 
-#[tauri::command]
-async fn fetch_url_bytes(url: String) -> Result<tauri::ipc::Response, String> {
+fn fetch_url_bytes_blocking(url: String) -> Result<tauri::ipc::Response, String> {
     let output = curl_command(&url)
         .output()
         .map_err(|e| format!("Failed to execute curl: {}", e))?;
@@ -1141,7 +1173,11 @@ async fn fetch_url_bytes(url: String) -> Result<tauri::ipc::Response, String> {
 }
 
 #[tauri::command]
-async fn probe_unity_url(url: String) -> Result<bool, String> {
+async fn fetch_url_bytes(url: String) -> Result<tauri::ipc::Response, String> {
+    run_blocking(move || fetch_url_bytes_blocking(url)).await
+}
+
+fn probe_unity_url_blocking(url: String) -> Result<bool, String> {
     let mut child = curl_command(&url)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -1169,7 +1205,11 @@ async fn probe_unity_url(url: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn list_dir_files(dir_path: String) -> Result<Vec<String>, String> {
+async fn probe_unity_url(url: String) -> Result<bool, String> {
+    run_blocking(move || probe_unity_url_blocking(url)).await
+}
+
+fn list_dir_files_blocking(dir_path: String) -> Result<Vec<String>, String> {
     let dir = Path::new(&dir_path);
     if !dir.is_dir() {
         return Ok(Vec::new());
@@ -1188,7 +1228,11 @@ fn list_dir_files(dir_path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn get_file_stamp(path: String) -> Option<String> {
+async fn list_dir_files(dir_path: String) -> Result<Vec<String>, String> {
+    run_blocking(move || list_dir_files_blocking(dir_path)).await
+}
+
+fn get_file_stamp_blocking(path: String) -> Option<String> {
     let path = Path::new(&path);
     if path.starts_with(temp_root()) {
         return None;
@@ -1201,6 +1245,11 @@ fn get_file_stamp(path: String) -> Option<String> {
         .ok()?
         .as_millis();
     Some(format!("{}-{}", modified, metadata.len()))
+}
+
+#[tauri::command]
+async fn get_file_stamp(path: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || get_file_stamp_blocking(path)).await.ok().flatten()
 }
 
 fn settings_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
@@ -1251,8 +1300,7 @@ fn thumbnail_path(app_handle: &AppHandle, key: &str) -> Result<PathBuf, String> 
     Ok(thumbnail_dir(app_handle)?.join(format!("{:016x}.webp", hash)))
 }
 
-#[tauri::command]
-fn thumbnail_get(app_handle: AppHandle, key: String) -> Result<tauri::ipc::Response, String> {
+fn thumbnail_get_blocking(app_handle: AppHandle, key: String) -> Result<tauri::ipc::Response, String> {
     let path = thumbnail_path(&app_handle, &key)?;
     let bytes = fs::read(&path).unwrap_or_default();
     if !bytes.is_empty() {
@@ -1264,7 +1312,12 @@ fn thumbnail_get(app_handle: AppHandle, key: String) -> Result<tauri::ipc::Respo
 }
 
 #[tauri::command]
-fn thumbnail_put(app_handle: AppHandle, request: tauri::ipc::Request) -> Result<(), String> {
+async fn thumbnail_get(app_handle: AppHandle, key: String) -> Result<tauri::ipc::Response, String> {
+    run_blocking(move || thumbnail_get_blocking(app_handle, key)).await
+}
+
+#[tauri::command]
+async fn thumbnail_put(app_handle: AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), String> {
     let key = request
         .headers()
         .get("x-thumbnail-key")
@@ -1274,11 +1327,11 @@ fn thumbnail_put(app_handle: AppHandle, request: tauri::ipc::Request) -> Result<
         return Err("Expected raw thumbnail bytes".to_string());
     };
     let path = thumbnail_path(&app_handle, key)?;
-    write_atomic(&path, bytes).map_err(|e| e.to_string())
+    let bytes = bytes.clone();
+    run_blocking(move || write_atomic(&path, &bytes).map_err(|e| e.to_string())).await
 }
 
-#[tauri::command]
-async fn thumbnail_prune(app_handle: AppHandle, max_entries: usize) -> Result<(), String> {
+fn thumbnail_prune_blocking(app_handle: AppHandle, max_entries: usize) -> Result<(), String> {
     let dir = thumbnail_dir(&app_handle)?;
     let Ok(entries) = fs::read_dir(&dir) else {
         return Ok(());
@@ -1299,6 +1352,11 @@ async fn thumbnail_prune(app_handle: AppHandle, max_entries: usize) -> Result<()
         let _ = fs::remove_file(path);
     }
     Ok(())
+}
+
+#[tauri::command]
+async fn thumbnail_prune(app_handle: AppHandle, max_entries: usize) -> Result<(), String> {
+    run_blocking(move || thumbnail_prune_blocking(app_handle, max_entries)).await
 }
 
 #[tauri::command]
