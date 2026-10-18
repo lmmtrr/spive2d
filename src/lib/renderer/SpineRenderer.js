@@ -6,8 +6,6 @@ import { showNotification } from '../notificationStore.svelte.js';
 export class SpineRenderer extends SpineRendererBase {
   #requestId = undefined;
   #lastFrameTime = 0;
-  #onFirstRender = null;
-  #firstRender = true;
   #isPreload = false;
   #aborted = false;
 
@@ -103,12 +101,8 @@ export class SpineRenderer extends SpineRendererBase {
   async _waitForAssets() {
     await super._waitForAssets();
     this.#lastFrameTime = Date.now() / 1000;
-    if (!this.isExport && !this._paused) {
-      if (!this.#requestId && !this.#isPreload) {
-        this.#requestId = requestAnimationFrame(() => this.#renderLoop());
-      }
-    } else if (this.isExport) {
-      this.#triggerFirstRender();
+    if (!this.isExport && !this._paused && !this.#requestId && !this.#isPreload) {
+      this.#requestId = requestAnimationFrame(() => this.#renderLoop());
     }
   }
 
@@ -122,9 +116,6 @@ export class SpineRenderer extends SpineRendererBase {
   async setAlphaMode(mode) {
     await super.setAlphaMode(mode);
     this.#lastFrameTime = Date.now() / 1000;
-    if (this.isExport) {
-      this.#triggerFirstRender();
-    }
   }
 
   #renderLoop() {
@@ -137,18 +128,7 @@ export class SpineRenderer extends SpineRendererBase {
     this.#lastFrameTime = now;
     this.render(delta, { dpr: window.devicePixelRatio || 1 });
     if (this._fitRevealReady) this._revealCanvas();
-    if (this.#firstRender) {
-      this.#firstRender = false;
-      this.#triggerFirstRender();
-    }
     this.#requestId = requestAnimationFrame(() => this.#renderLoop());
-  }
-
-  #triggerFirstRender() {
-    if (this.#onFirstRender) {
-      this.#onFirstRender();
-      this.#onFirstRender = null;
-    }
   }
 
   render(delta = 0, options = {}) {

@@ -1069,7 +1069,6 @@ fn list_files_recursive(dir: &Path) -> Vec<String> {
     result
 }
 
-#[tauri::command]
 fn get_subdir_files(
     folder_path: String,
     merge_sequential: bool,
@@ -2053,7 +2052,6 @@ pub fn run() {
         })
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
-            get_subdir_files,
             handle_dropped_path,
             handle_dropped_paths,
             handle_urls,

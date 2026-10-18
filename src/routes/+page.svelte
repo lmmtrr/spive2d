@@ -109,13 +109,6 @@
     try {
       const inputPath = paths[0];
       let dirFiles = {};
-      const isLocalUnixPath = inputPath.startsWith('/') && (
-        inputPath.startsWith('/Users/') || 
-        inputPath.startsWith('/home/') || 
-        inputPath.startsWith('/var/') || 
-        inputPath.startsWith('/tmp/') || 
-        inputPath.startsWith('/private/')
-      );
       if (inputPath.startsWith('https://')) {
         let unityRes = null;
         let shouldInvokeBackend = false;
