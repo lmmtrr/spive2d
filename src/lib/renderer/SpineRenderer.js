@@ -69,6 +69,7 @@ export class SpineRenderer extends SpineRendererBase {
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
     this.#throwIfAborted();
+    if (typeof options === 'object') options?.onAssetsReady?.();
     await this.processLoadedAssets();
     this.#throwIfAborted();
   }

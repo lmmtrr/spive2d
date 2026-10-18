@@ -36,7 +36,7 @@ import { createSorter } from '../utils.js';
 
 const sortByDisplayName = createSorter(item => item.displayName || item.name);
 
-function extraModelName(scene, extraFile) {
+export function extraModelName(scene, extraFile) {
   const mainExt = scene.mainExt || '';
   if (!mainExt || !extraFile.toLowerCase().endsWith(mainExt.toLowerCase())) return null;
   return scene.name + extraFile.slice(0, extraFile.length - mainExt.length);

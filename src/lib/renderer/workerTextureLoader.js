@@ -4,6 +4,7 @@ let worker = null;
 let workerFailed = false;
 let nextId = 0;
 const pending = new Map();
+const prefetched = new Map();
 
 function getWorker() {
   if (worker || workerFailed) return worker;
@@ -51,6 +52,38 @@ function decodeInWorker(url, premultiply, probeAlpha) {
   });
 }
 
+function prefetchKey(url, premultiply) {
+  try {
+    return `${premultiply ? 1 : 0}|${new URL(url, location.href).href}`;
+  } catch (e) {
+    return null;
+  }
+}
+
+function takePrefetched(url, premultiply) {
+  const key = prefetchKey(url, premultiply);
+  const entry = key && prefetched.get(key);
+  if (!entry) return null;
+  prefetched.delete(key);
+  return entry;
+}
+
+export function prefetchTextures(urls, premultiply) {
+  clearTexturePrefetch();
+  if (!getWorker()) return;
+  for (const url of urls) {
+    const key = prefetchKey(url, premultiply);
+    if (key && !prefetched.has(key)) {
+      prefetched.set(key, decodeInWorker(url, premultiply, false).catch(() => null));
+    }
+  }
+}
+
+export function clearTexturePrefetch() {
+  for (const entry of prefetched.values()) entry.then(bitmap => bitmap?.close());
+  prefetched.clear();
+}
+
 function loadImageElement(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -62,6 +95,9 @@ function loadImageElement(src) {
 }
 
 async function loadImage(src, premultiply, probeAlpha) {
+  const entry = probeAlpha ? null : takePrefetched(src, premultiply);
+  const bitmap = entry && await entry;
+  if (bitmap) return bitmap;
   try {
     return await decodeInWorker(src, premultiply, probeAlpha);
   } catch (e) {

@@ -4,6 +4,20 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 const SPINE_VERSIONS = ['3.6', '3.7', '3.8', '4.0', '4.1', '4.2', '4.3'];
 const spineLibs = {};
 let initPromise = null;
+const prefetchedMain = new Map();
+
+function getMainFileUrl(dirName, scene) {
+  const baseName = scene.isMerged && scene.files.length > 0 ? scene.files[0] : scene.name;
+  const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
+  return `${normalizedDirName}${baseName}${scene.mainExt}`;
+}
+
+function takePrefetchedMain(rawUrl) {
+  const entry = prefetchedMain.get(rawUrl);
+  if (!entry) return null;
+  prefetchedMain.delete(rawUrl);
+  return entry;
+}
 
 export function isJsonSpineData(head) {
   const firstIdx = head.findIndex(c => ![32, 9, 10, 13].includes(c));
@@ -42,33 +56,42 @@ export class SpineVersionManager {
     return spineLibs[version];
   }
 
+  static prefetchMainFile(dirName, scene) {
+    const rawUrl = getMainFileUrl(dirName, scene);
+    if (prefetchedMain.has(rawUrl)) return;
+    prefetchedMain.clear();
+    prefetchedMain.set(rawUrl, fetch(convertFileSrc(rawUrl))
+      .then(res => (res.ok ? res.arrayBuffer() : null))
+      .then(buffer => (buffer ? new Uint8Array(buffer) : null))
+      .catch(() => null));
+  }
+
+  static clearPrefetchedMainFile() {
+    prefetchedMain.clear();
+  }
+
   static async detectVersion(dirName, scene) {
-    let baseName = scene.name;
-    if (scene.isMerged && scene.files.length > 0) {
-      baseName = scene.files[0];
-    }
-    const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
-    const rawUrl = `${normalizedDirName}${baseName}${scene.mainExt}`;
+    const rawUrl = getMainFileUrl(dirName, scene);
     const isTauriAsset = (() => {
       try {
         const url = new URL(rawUrl);
         return url.protocol === 'tauri:' ||
-               url.hostname === 'tauri.localhost' ||
-               url.hostname === 'asset.localhost';
+          url.hostname === 'tauri.localhost' ||
+          url.hostname === 'asset.localhost';
       } catch (e) {
         return rawUrl.startsWith('tauri://');
       }
     })();
     const isRemote = /^https?:\/\//.test(rawUrl) && !isTauriAsset;
-    const hasTauriInvoke = typeof window !== 'undefined' && 
-                          ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') || 
-                           (window.__TAURI__?.core?.invoke !== undefined));
+    const hasTauriInvoke = typeof window !== 'undefined' &&
+      ((window.__TAURI_INTERNALS__ !== undefined && typeof window.__TAURI_INTERNALS__.invoke === 'function') ||
+        (window.__TAURI__?.core?.invoke !== undefined));
     try {
-      let data;
-      if (isRemote && hasTauriInvoke) {
+      let data = await takePrefetchedMain(rawUrl);
+      if (!data && isRemote && hasTauriInvoke) {
         const fetched = await invoke('fetch_url_bytes', { url: rawUrl });
         data = new Uint8Array(fetched);
-      } else {
+      } else if (!data) {
         const url = isTauriAsset ? rawUrl : convertFileSrc(rawUrl);
         const response = await fetch(url);
         if (!response.ok) {
