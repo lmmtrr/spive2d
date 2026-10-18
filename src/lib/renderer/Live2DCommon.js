@@ -348,10 +348,12 @@ export async function resolveLive2DSettings(dirName, scene) {
       'model.json',
       'model3.json',
       'model.model.json',
+      'model.model3.json',
     ];
   } else if (sceneName === 'model3') {
     candidates = [
       'model3.json',
+      'model3.model3.json',
       'model.json',
     ];
   } else if (mainExt.includes('.moc3')) {
@@ -407,7 +409,7 @@ export async function resolveLive2DSettings(dirName, scene) {
     }
   }
   let ext = '.model3.json';
-  if (mainExt.includes('.moc3')) ext = sceneName === 'model3' ? '.json' : '.model3.json';
+  if (mainExt.includes('.moc3')) ext = '.model3.json';
   else if (mainExt.includes('.moc')) ext = sceneName === 'model' ? '.json' : '.model.json';
   const fallbackFile = `${prefix}${sceneName}${ext}`;
   const fallbackRaw = `${dirName}${fallbackFile}`;
