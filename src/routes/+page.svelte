@@ -4,7 +4,7 @@
   import { getRenderer, setRenderer } from '#lib/rendererStore.svelte.js';
   import { createRenderer } from '#lib/renderer/createRenderer.js';
   import { preloadManager } from '#lib/renderer/preloadManager.js';
-  import { filterSceneIndices, findIdleAnimation, sanitizeInputUrl } from '#lib/utils.js';
+  import { filterSceneIndices, findIdleAnimation, sanitizeInputUrl, sanitizeFilename } from '#lib/utils.js';
   import { getAssetUrl, getExportDirectory } from '#lib/fileManager.js';
   import { exportImage, exportAnimation, exportImageSequence } from '#lib/exporter.js';
   import { exportModelFiles } from '#lib/modelExporter.js';
@@ -434,7 +434,7 @@
   function handleKeyDown(e) {
     if (document.activeElement?.matches('input, textarea')) return;
     if (sceneGridOpen) {
-      if (e.key === shortcuts.toggleSceneGrid) {
+      if (isShortcut(e, shortcuts.toggleSceneGrid)) {
         e.preventDefault();
         sceneGridOpen = false;
       }
@@ -446,7 +446,7 @@
       getCurrentWindow().close();
       return;
     }
-    if (e.key === shortcuts.toggleFullscreen) {
+    if (isShortcut(e, shortcuts.toggleFullscreen)) {
       e.preventDefault();
       toggleFullscreen();
       return;
@@ -455,24 +455,29 @@
       exitFullscreen();
       return;
     }
-    if (e.key !== shortcuts.toggleDialog && !appState.initialized) return;
-    if (e.key === shortcuts.prevScene) { navigateScene(-1); }
-    else if (e.key === shortcuts.nextScene) { navigateScene(1); }
-    else if (e.key === shortcuts.prevAnim) { sidebar?.navigateAnimation(-1); }
-    else if (e.key === shortcuts.nextAnim) { sidebar?.navigateAnimation(1); }
-    else if (e.key === shortcuts.exportImage) { doExportImage(); }
-    else if (e.key === shortcuts.exportImageSeq) { doExportImageSequence(); }
-    else if (e.key === shortcuts.exportAnim) { doExportAnimation(); }
-    else if (e.key === shortcuts.exportModel) { doExportModel(); }
-    else if (e.key === shortcuts.toggleDialog) { toggleDialog(); }
-    else if (e.key === shortcuts.toggleSceneGrid) { e.preventDefault(); openSceneGrid(); }
-    else if (e.key === shortcuts.addToList) {
+    if (!isShortcut(e, shortcuts.toggleDialog) && !appState.initialized) return;
+    if (isShortcut(e, shortcuts.prevScene)) { navigateScene(-1); }
+    else if (isShortcut(e, shortcuts.nextScene)) { navigateScene(1); }
+    else if (isShortcut(e, shortcuts.prevAnim)) { sidebar?.navigateAnimation(-1); }
+    else if (isShortcut(e, shortcuts.nextAnim)) { sidebar?.navigateAnimation(1); }
+    else if (isShortcut(e, shortcuts.exportImage)) { doExportImage(); }
+    else if (isShortcut(e, shortcuts.exportImageSeq)) { doExportImageSequence(); }
+    else if (isShortcut(e, shortcuts.exportAnim)) { doExportAnimation(); }
+    else if (isShortcut(e, shortcuts.exportModel)) { doExportModel(); }
+    else if (isShortcut(e, shortcuts.toggleDialog)) { toggleDialog(); }
+    else if (isShortcut(e, shortcuts.toggleSceneGrid)) { e.preventDefault(); openSceneGrid(); }
+    else if (isShortcut(e, shortcuts.addToList)) {
       invoke('append_to_list', { text: getSceneText(), customDir: appState.exportDir || null }).then(() => {
         showNotification(t('addedToList'), 'success');
       });
     }
     else { return; }
     focusBody();
+  }
+
+  function isShortcut(e, key) {
+    if (!key) return false;
+    return key.length === 1 ? e.key.toLowerCase() === key.toLowerCase() : e.key === key;
   }
 
   function navigateScene(delta) {
@@ -546,7 +551,7 @@
     const animValue = sidebar?.getSelectedAnimation?.() || '';
     const safeName = animText ? animText.split('.')[0] : 'sequence';
     const exportBaseDir = await getExportDirectory();
-    const folderName = `${sceneText}_${safeName}`;
+    const folderName = `${sanitizeFilename(sceneText)}_${sanitizeFilename(safeName)}`;
     const targetDir = await join(exportBaseDir, folderName);
     try {
       await mkdir(targetDir, { recursive: true });

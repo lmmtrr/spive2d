@@ -562,7 +562,7 @@
     if (!editingKey) return;
     e.preventDefault();
     e.stopPropagation();
-    const key = e.key;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (key === 'Escape') {
       editingKey = null;
       return;
