@@ -6,6 +6,7 @@ import { extraModelName } from './renderer/SpineRendererBase.js';
 import { normalizeAtlasText, toSpineAssetUrl } from './renderer/SpineCommon.js';
 import { prefetchTextures, clearTexturePrefetch } from './renderer/workerTextureLoader.js';
 import { Live2DRenderer } from './renderer/Live2DRenderer.js';
+import { prefetchLive2DTextures, releaseLive2DTexturePrefetch } from './renderer/Live2DCommon.js';
 import { appState } from './appState.svelte.js';
 import { findIdleAnimation } from './utils.js';
 import { thumbnailCache } from './thumbnailCache.js';
@@ -81,6 +82,7 @@ async function captureThumbnail(dirName, scene) {
       renderer.setTextureFilter(appState.textureFilter);
     }
     const startNextPrefetch = type === 'spine' ? prepareNextScene() : null;
+    if (type === 'live2d') prefetchNextLive2DScene();
     await renderer.load(dirName, scene, {
       isPreload: true,
       thumbnail: true,
@@ -198,10 +200,23 @@ function prepareNextScene() {
   };
 }
 
+async function prefetchNextLive2DScene() {
+  const item = peekItem();
+  if (!item || getRendererType(item.scene) !== 'live2d' || isRemoteDir(item.dirName)) return;
+  try {
+    const cacheKey = await getCacheKey(item.dirName, item.scene);
+    if (cacheKey && await thumbnailCache.get(cacheKey)) return;
+    await prefetchLive2DTextures(PIXI, item.dirName, item.scene);
+  } catch (err) {
+    return;
+  }
+}
+
 function cancelScenePrefetch() {
   scenePrefetchToken++;
   SpineVersionManager.clearPrefetchedMainFile();
   clearTexturePrefetch();
+  releaseLive2DTexturePrefetch(PIXI);
 }
 
 function storeThumbnail(key, canvas, cacheKey, currentGeneration) {

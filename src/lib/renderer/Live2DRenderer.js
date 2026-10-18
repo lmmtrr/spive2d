@@ -16,6 +16,10 @@ import {
   patchCoreRenderOrders,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
+  getLive2DTextureUrls,
+  withLive2DTextureLoad,
+  retainLive2DTextures,
+  releaseLive2DTextures,
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
 import { createSorter, findIdleAnimation } from '../utils.js';
@@ -83,6 +87,7 @@ export class Live2DRenderer extends BaseRenderer {
   #appReady;
   #contentBox = null;
   #model = null;
+  #textureUrls = [];
   #hiddenDrawables = new Set();
   #opacities = null;
   #currentMotion = { group: null, index: null };
@@ -142,8 +147,7 @@ export class Live2DRenderer extends BaseRenderer {
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.removeChild(this.#model);
       }
-      this.#model.destroy();
-      this.#model = null;
+      this.#destroyModel();
     }
     this.#lastFrameParameters = null;
     this.#baseParameters = null;
@@ -157,21 +161,25 @@ export class Live2DRenderer extends BaseRenderer {
       await ensureLive2DRuntimeReady(PIXI);
       if (this.#disposed) return;
       PIXI.TextureSource.defaultOptions.scaleMode = resolveScaleMode(appState.textureFilter);
-      const model = await Live2DModel.from(url, {
-        autoHitTest: false,
-        autoFocus: false,
-        autoUpdate: false,
-        ...(appState.enableIdleAndBreathing ? {} : { idleMotionGroup: 'None' })
+      let textureUrls = [];
+      const model = await withLive2DTextureLoad(PIXI, async () => {
+        const loaded = await Live2DModel.from(url, {
+          autoHitTest: false,
+          autoFocus: false,
+          autoUpdate: false,
+          ...(appState.enableIdleAndBreathing ? {} : { idleMotionGroup: 'None' })
+        });
+        textureUrls = getLive2DTextureUrls(loaded);
+        retainLive2DTextures(textureUrls);
+        return loaded;
       });
-      if (this.#disposed) {
+      if (this.#disposed || !this.#app) {
         model.destroy();
-        return;
-      }
-      if (!this.#app) {
-        model.destroy();
+        releaseLive2DTextures(PIXI, textureUrls);
         return;
       }
       this.#model = model;
+      this.#textureUrls = textureUrls;
       registerLive2DMotionFiles(model, scene?.motionFiles);
       if (typeof window !== 'undefined' && window.Live2D && window.Live2D.setGL && this.#app?.renderer?.gl) {
         window.Live2D.setGL(this.#app.renderer.gl);
@@ -335,8 +343,7 @@ export class Live2DRenderer extends BaseRenderer {
       if (!this.#isExport && this.#app && this.#app.stage) {
         this.#app.stage.removeChild(this.#model);
       }
-      this.#model.destroy();
-      this.#model = null;
+      this.#destroyModel();
     }
     this.#lastFrameParameters = null;
     this.#baseParameters = null;
@@ -922,6 +929,13 @@ export class Live2DRenderer extends BaseRenderer {
       this.#applyCubism2Time(this.#cubism2ElapsedMS / 1000);
     }
     model.internalModel.update(stepMS, model.elapsedTime);
+  }
+
+  #destroyModel() {
+    this.#model.destroy();
+    this.#model = null;
+    releaseLive2DTextures(PIXI, this.#textureUrls);
+    this.#textureUrls = [];
   }
 
   #detachBeforeModelUpdate() {

@@ -487,6 +487,76 @@ export async function resolveLive2DModelUrl(dirName, scene) {
   return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
 }
 
+const textureRefs = new Map();
+const prefetchedTextures = new Set();
+const pendingTextureUnloads = new Set();
+let activeTextureLoads = 0;
+
+function flushTextureUnloads(pixi) {
+  if (activeTextureLoads > 0 || pendingTextureUnloads.size === 0) return;
+  const urls = [...pendingTextureUnloads].filter(url => !textureRefs.has(url));
+  pendingTextureUnloads.clear();
+  if (urls.length > 0) pixi.Assets.unload(urls).catch(() => { });
+}
+
+export function getLive2DTextureUrls(model) {
+  const settings = model?.internalModel?.settings;
+  if (!Array.isArray(settings?.textures)) return [];
+  return settings.textures.map(path => settings.resolveURL(path));
+}
+
+export async function withLive2DTextureLoad(pixi, task) {
+  activeTextureLoads++;
+  try {
+    return await task();
+  } finally {
+    activeTextureLoads--;
+    flushTextureUnloads(pixi);
+  }
+}
+
+export function retainLive2DTextures(urls) {
+  for (const url of urls) {
+    prefetchedTextures.delete(url);
+    textureRefs.set(url, (textureRefs.get(url) || 0) + 1);
+  }
+}
+
+export function releaseLive2DTextures(pixi, urls) {
+  for (const url of urls) {
+    const count = (textureRefs.get(url) || 0) - 1;
+    if (count > 0) {
+      textureRefs.set(url, count);
+    } else {
+      textureRefs.delete(url);
+      pendingTextureUnloads.add(url);
+    }
+  }
+  flushTextureUnloads(pixi);
+}
+
+export function releaseLive2DTexturePrefetch(pixi) {
+  for (const url of prefetchedTextures) pendingTextureUnloads.add(url);
+  prefetchedTextures.clear();
+  flushTextureUnloads(pixi);
+}
+
+export async function prefetchLive2DTextures(pixi, dirName, scene) {
+  const settings = await resolveLive2DSettings(dirName, scene);
+  const textures = settings.json?.FileReferences?.Textures;
+  if (!Array.isArray(textures) || isRemoteUrl(settings.url)) return;
+  applyLive2DEnginePatches(pixi);
+  const { ModelSettings } = pixi.live2d;
+  const urls = textures.map(path => ModelSettings.prototype.resolveURL.call({ url: settings.url }, path));
+  for (const url of urls) {
+    if (!textureRefs.has(url)) prefetchedTextures.add(url);
+  }
+  await Promise.all(urls.map(src => pixi.Assets.load({
+    src,
+    data: { autoGenerateMipmaps: true },
+  }).catch(() => null)));
+}
+
 export async function resolveLive2DModelSource(dirName, scene) {
   const settings = await resolveLive2DSettings(dirName, scene);
   const url = settings.url + (settings.url.includes('?') ? '&' : '?') + 't=' + Date.now();
