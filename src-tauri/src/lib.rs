@@ -829,8 +829,18 @@ fn archive_ext(path: &Path) -> Option<String> {
 fn curl_command(url: &str) -> std::process::Command {
     let mut cmd = create_command("curl");
     cmd.arg("-sL")
+        .arg("--fail")
+        .arg("--connect-timeout")
+        .arg("30")
+        .arg("--max-time")
+        .arg("600")
+        .arg("--proto")
+        .arg("=http,https")
+        .arg("--proto-redir")
+        .arg("=http,https")
         .arg("-A")
         .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
+        .arg("--")
         .arg(url);
     cmd
 }
