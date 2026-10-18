@@ -302,10 +302,15 @@ export class SpineRendererBase extends BaseRenderer {
     this._parameterItemsMap = null;
     this._loadedAtlases = [];
     this._atlasPaths = [];
+    this._atlasTexts = new Map();
     const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
     this._installTextureLoader(this._assetManager);
-    setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl, null, this._prefetched);
+    const atlasTexts = this._atlasTexts;
+    const atlasPaths = this._atlasPaths;
+    setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl, null, this._prefetched, (url, text) => {
+      if (atlasPaths.includes(url)) atlasTexts.set(url, text);
+    });
     this._prefetched = null;
     applyTextureAlphaMode(this._assetManager, this._effectiveAlphaMode);
     const mainExt = scene.mainExt;
@@ -1241,11 +1246,14 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   async _alignAtlasPageSizes(atlas, atlasPath, isWebUrl) {
-    let atlasText = null;
-    try {
-      atlasText = await this._fetchAtlasText(atlasPath, isWebUrl);
-    } catch (e) {
-      console.warn('[SpineRendererBase] Could not fetch atlas text for page size check:', e);
+    let atlasText = this._atlasTexts?.get(atlasPath) ?? null;
+    this._atlasTexts?.delete(atlasPath);
+    if (atlasText === null) {
+      try {
+        atlasText = await this._fetchAtlasText(atlasPath, isWebUrl);
+      } catch (e) {
+        console.warn('[SpineRendererBase] Could not fetch atlas text for page size check:', e);
+      }
     }
     if (atlasText) atlasText = normalizeAtlasText(atlasText);
     else return;
@@ -1448,6 +1456,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._fileNames = null;
     this._loadedAtlases = [];
     this._atlasPaths = [];
+    this._atlasTexts = new Map();
     this._attachmentsCache = {};
     this._activeSkins = null;
     this._skeletons = {};

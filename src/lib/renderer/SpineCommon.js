@@ -480,7 +480,7 @@ export function toSpineAssetUrl(url) {
   return typeof convert === 'function' ? convert(url) : url;
 }
 
-export function setupSpineAssetManager(assetManager, spine, gl, onFallback, prefetched = null) {
+export function setupSpineAssetManager(assetManager, spine, gl, onFallback, prefetched = null, onText = null) {
   const target = assetManager.downloader || assetManager;
   const takePrefetched = (url) => {
     if (!prefetched?.data || prefetched.path !== url) return null;
@@ -500,6 +500,7 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback, pref
       if (typeof text === 'string' && isAtlas) {
         text = normalizeAtlasText(text);
       }
+      if (typeof text === 'string') onText?.(url, text);
       success?.(text);
     }, error);
   };
