@@ -179,10 +179,10 @@
   function handleRemoveBackground() {
     document.body.style.backgroundColor = '';
     document.body.style.backgroundImage = `
-      linear-gradient(45deg, #fff 25%, transparent 0),
-      linear-gradient(45deg, transparent 75%, #fff 0),
-      linear-gradient(45deg, #fff 25%, transparent 0),
-      linear-gradient(45deg, transparent 75%, #fff 0)`;
+      linear-gradient(45deg, #333 25%, transparent 0),
+      linear-gradient(45deg, transparent 75%, #333 0),
+      linear-gradient(45deg, #333 25%, transparent 0),
+      linear-gradient(45deg, transparent 75%, #333 0)`;
     document.body.style.backgroundSize = '32px 32px';
     document.body.style.backgroundPosition = '0 0, 16px 16px, 16px 16px, 32px 32px';
     removeSetting('spive2d_bg_image_path');
