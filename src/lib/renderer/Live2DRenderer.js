@@ -221,7 +221,7 @@ export class Live2DRenderer extends BaseRenderer {
       }
       const animations = options?.thumbnail
         ? await this.#findThumbnailAnimation()
-        : await this.#filterAnimations();
+        : await this.#filterAnimations(isPreload ? 1 : Infinity);
       if (this.#disposed || !this.#model) return;
       this.#animations = animations;
       if (animations.length > 0) {
@@ -488,17 +488,22 @@ export class Live2DRenderer extends BaseRenderer {
     return this.#animations;
   }
 
-  async #filterAnimations() {
+  async #filterAnimations(concurrency) {
     if (!this.#model) return [];
     const motions = this.#model.internalModel.motionManager.definitions;
     if (!motions) return [];
+    const motionManager = this.#model.internalModel.motionManager;
+    const entries = Object.entries(motions).flatMap(([groupName, anims]) =>
+      anims.map((anim, i) => ({ groupName, anim, i }))
+    );
     const result = [];
-    for (const [groupName, anims] of Object.entries(motions)) {
-      for (let i = 0; i < anims.length; i++) {
-        const anim = anims[i];
+    let next = 0;
+    const worker = async () => {
+      while (next < entries.length) {
+        if (this.#disposed || !this.#model || !this.#model.internalModel) return;
+        const { groupName, anim, i } = entries[next++];
         try {
-          const motion = await this.#model.internalModel.motionManager.loadMotion(groupName, i);
-          if (this.#disposed || !this.#model || !this.#model.internalModel) return result;
+          const motion = await motionManager.loadMotion(groupName, i);
           if (getLive2DMotionDuration(motion) > 0) {
             result.push({
               name: (anim.file || anim.File || '').split('/').pop(),
@@ -509,7 +514,9 @@ export class Live2DRenderer extends BaseRenderer {
           console.error(`Failed to load motion ${groupName},${i}:`, e);
         }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, entries.length) }, worker));
+    if (this.#disposed || !this.#model || !this.#model.internalModel) return [];
     return result.sort(sortByText);
   }
 
