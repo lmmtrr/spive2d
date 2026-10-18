@@ -348,22 +348,25 @@ fn get_model_group_key(path: &Path) -> String {
                 changed = true;
                 break;
             }
-            if stem.ends_with(suffix) {
-                stem = stem[..stem.len() - suffix.len()].to_string();
-                changed = true;
-                break;
-            }
         }        
         if stem.ends_with('_') || stem.ends_with('.') || stem.ends_with('-') {
             stem.pop();
             changed = true;
         }
     }
-    let sanitized = stem.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "");
-    if sanitized.is_empty() {
+    let sanitize = |s: &str| s.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "");
+    let sanitized = sanitize(&stem);
+    if !sanitized.is_empty() {
+        return sanitized;
+    }
+    let fallback = path
+        .file_stem()
+        .map(|s| sanitize(&s.to_string_lossy().to_lowercase()))
+        .unwrap_or_default();
+    if fallback.is_empty() {
         "bundle".to_string()
     } else {
-        sanitized
+        fallback
     }
 }
 
