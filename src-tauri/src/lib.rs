@@ -1472,26 +1472,10 @@ fn auto_generate_model3_json(
     let mut pose = None;
     let mut expressions = Vec::new();
     let mut motions = HashMap::new();
-    let textures_dir = dir.join("textures");
-    let motions_dir = dir.join("motions");
     for filename in dir_files {
         let filename_lower = filename.to_lowercase();
         if is_live2d_texture_name(filename) {
-            let src_path = dir.join(filename);
-            let dest_path = textures_dir.join(filename);
-            if src_path.exists() {
-                let _ = fs::create_dir_all(&textures_dir);
-                if let Err(e) = fs::rename(&src_path, &dest_path) {
-                    if fs::copy(&src_path, &dest_path).is_ok() {
-                        let _ = fs::remove_file(&src_path);
-                    } else {
-                        eprintln!("Failed to move texture file: {}", e);
-                    }
-                }
-            }
-            if dest_path.exists() || src_path.exists() {
-                textures.push(format!("textures/{}", filename));
-            }
+            textures.push(filename.clone());
         } else if filename_lower.ends_with(".physics3.json") {
             physics = Some(filename.clone());
         } else if filename_lower.ends_with(".cdi3.json") {
@@ -1506,24 +1490,8 @@ fn auto_generate_model3_json(
                 "File": filename.clone()
             }));
         } else if filename_lower.ends_with(".motion3.json") {
-            let src_path = dir.join(filename);
-            let dest_path = motions_dir.join(filename);
-            if src_path.exists() {
-                let _ = fs::create_dir_all(&motions_dir);
-                if let Err(e) = fs::rename(&src_path, &dest_path) {
-                    if fs::copy(&src_path, &dest_path).is_ok() {
-                        let _ = fs::remove_file(&src_path);
-                    } else {
-                        eprintln!("Failed to move motion file: {}", e);
-                    }
-                }
-            }
-            if dest_path.exists() || src_path.exists() {
-                let group = motions.entry("".to_string()).or_insert_with(Vec::new);
-                group.push(serde_json::json!({
-                    "File": format!("motions/{}", filename)
-                }));
-            }
+            let group = motions.entry("".to_string()).or_insert_with(Vec::new);
+            group.push(serde_json::json!({ "File": filename.clone() }));
         }
     }
     if textures.is_empty() {
@@ -1596,25 +1564,10 @@ fn auto_generate_model_v2_json(
     let mut expressions = Vec::new();
     let mut motions = HashMap::new();
     let textures_dir = dir.join("textures");
-    let motions_dir = dir.join("motions");
     for filename in dir_files {
         let filename_lower = filename.to_lowercase();
         if is_live2d_texture_name(filename) || (filename_lower.ends_with(".png") && !filename_lower.contains("preview")) {
-            let src_path = dir.join(filename);
-            let dest_path = textures_dir.join(filename);
-            if src_path.exists() {
-                let _ = fs::create_dir_all(&textures_dir);
-                if let Err(e) = fs::rename(&src_path, &dest_path) {
-                    if fs::copy(&src_path, &dest_path).is_ok() {
-                        let _ = fs::remove_file(&src_path);
-                    } else {
-                        eprintln!("Failed to move texture file: {}", e);
-                    }
-                }
-            }
-            if dest_path.exists() || src_path.exists() {
-                textures.push(format!("textures/{}", filename));
-            }
+            textures.push(filename.clone());
         } else if filename_lower.ends_with(".physics.json") || filename_lower == "physics.json" {
             physics = Some(filename.clone());
         } else if filename_lower.ends_with(".pose.json") || filename_lower == "pose.json" {
@@ -1625,24 +1578,8 @@ fn auto_generate_model_v2_json(
                 "file": filename.clone()
             }));
         } else if filename_lower.ends_with(".mtn") {
-            let src_path = dir.join(filename);
-            let dest_path = motions_dir.join(filename);
-            if src_path.exists() {
-                let _ = fs::create_dir_all(&motions_dir);
-                if let Err(e) = fs::rename(&src_path, &dest_path) {
-                    if fs::copy(&src_path, &dest_path).is_ok() {
-                        let _ = fs::remove_file(&src_path);
-                    } else {
-                        eprintln!("Failed to move motion file: {}", e);
-                    }
-                }
-            }
-            if dest_path.exists() || src_path.exists() {
-                let group = motions.entry("idle".to_string()).or_insert_with(Vec::new);
-                group.push(serde_json::json!({
-                    "file": format!("motions/{}", filename)
-                }));
-            }
+            let group = motions.entry("idle".to_string()).or_insert_with(Vec::new);
+            group.push(serde_json::json!({ "file": filename.clone() }));
         }
     }
     if textures.is_empty() && textures_dir.exists() {
