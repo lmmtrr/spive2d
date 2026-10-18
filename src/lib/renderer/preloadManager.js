@@ -4,6 +4,7 @@ import { appState } from '../appState.svelte.js';
 class PreloadManager {
   #preloaded = null;
   #loadingPromise = null;
+  #loadingKey = '';
   #currentLoadId = 0;
 
   getKey(dirName, scene) {
@@ -49,16 +50,18 @@ class PreloadManager {
       } finally {
         if (this.#currentLoadId === loadId) {
           this.#loadingPromise = null;
+          this.#loadingKey = '';
         }
       }
     })();
     this.#loadingPromise = loadingPromise;
+    this.#loadingKey = key;
   }
 
   async consumePreloaded(dirName, scene) {
     const key = this.getKey(dirName, scene);
     if (!key) return null;
-    if (this.#loadingPromise) {
+    if (this.#loadingPromise && this.#loadingKey === key) {
       await this.#loadingPromise;
     }
     if (this.#preloaded && this.#preloaded.key === key) {
@@ -81,6 +84,7 @@ class PreloadManager {
     }
     this.#preloaded = null;
     this.#loadingPromise = null;
+    this.#loadingKey = '';
   }
 }
 
