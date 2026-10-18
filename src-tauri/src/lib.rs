@@ -1748,7 +1748,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                     .replace(std::path::MAIN_SEPARATOR, "/")
             })
             .unwrap_or_else(|_| filename.to_string());
-        let filename_lower = filename.to_lowercase();
+        let filename_lower = filename.to_ascii_lowercase();
         file_paths.insert(filename_lower.clone(), relative_path.clone());
         if filename_lower.contains(".atlas") {
             let is_image = filename_lower.ends_with(".png") || filename_lower.ends_with(".jpg") || filename_lower.ends_with(".jpeg") || filename_lower.ends_with(".webp");
@@ -1853,7 +1853,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
     }
     let mut potential_extra_atlases = HashSet::new();
     for (base_name, extension) in &all_atlas_info {
-        let base_name_lower = base_name.to_lowercase();
+        let base_name_lower = base_name.to_ascii_lowercase();
         if base_name_lower.contains("_bg") || base_name_lower.contains("_fg") {
             potential_extra_atlases.insert(base_name.clone());
         } else {
@@ -1862,13 +1862,13 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         }
     }
     for extra_base_name in potential_extra_atlases {
-        let extra_base_name_lower = extra_base_name.to_lowercase();
+        let extra_base_name_lower = extra_base_name.to_ascii_lowercase();
         for suffix in ["_bg", "_fg"] {
             if let Some(pos) = extra_base_name_lower.rfind(suffix) {
                 let corresponding_base_name_lower = &extra_base_name_lower[..pos];
                 let has_corresponding_normal_atlas = atlas_bases
                     .iter()
-                    .any(|b| b.to_lowercase() == *corresponding_base_name_lower);
+                    .any(|b| b.to_ascii_lowercase() == *corresponding_base_name_lower);
                 if !has_corresponding_normal_atlas {
                     atlas_bases.insert(extra_base_name.clone());
                     if let Some(extension) = all_atlas_info.get(&extra_base_name) {
@@ -1880,7 +1880,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
         }
     }
     for base_name in &atlas_bases {
-        let base_lower = base_name.to_lowercase();
+        let base_lower = base_name.to_ascii_lowercase();
         let atlas_extension = atlas_original_extensions
             .get(base_name)
             .cloned()
@@ -2001,7 +2001,7 @@ fn find_extra_files(
 ) -> Vec<String> {
     let mut extra_files = Vec::new();
     let prefix_for_match = format!("{}{}", base_name_lower, suffix);
-    let main_model_extension_lower = main_model_extension.to_lowercase();
+    let main_model_extension_lower = main_model_extension.to_ascii_lowercase();
     for (filename_lower, path) in file_paths {
         if filename_lower.starts_with(&prefix_for_match)
             && filename_lower.ends_with(&main_model_extension_lower)
