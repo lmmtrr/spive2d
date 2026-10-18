@@ -5,6 +5,7 @@ class PreloadManager {
   #preloaded = null;
   #loadingPromise = null;
   #loadingKey = '';
+  #loadingRenderer = null;
   #currentLoadId = 0;
 
   getKey(dirName, scene) {
@@ -45,17 +46,21 @@ class PreloadManager {
           renderer.dispose();
         }
       } catch (err) {
-        console.warn('[PreloadManager] Failed to preload next scene:', err);
+        if (this.#currentLoadId === loadId) {
+          console.warn('[PreloadManager] Failed to preload next scene:', err);
+        }
         renderer.dispose();
       } finally {
         if (this.#currentLoadId === loadId) {
           this.#loadingPromise = null;
           this.#loadingKey = '';
+          this.#loadingRenderer = null;
         }
       }
     })();
     this.#loadingPromise = loadingPromise;
     this.#loadingKey = key;
+    this.#loadingRenderer = renderer;
   }
 
   async consumePreloaded(dirName, scene) {
@@ -83,6 +88,15 @@ class PreloadManager {
       }
     }
     this.#preloaded = null;
+    if (this.#loadingRenderer) {
+      try {
+        if (typeof this.#loadingRenderer.abort === 'function') this.#loadingRenderer.abort();
+        else this.#loadingRenderer.dispose();
+      } catch (e) {
+        console.error('[PreloadManager] Error aborting preload:', e);
+      }
+    }
+    this.#loadingRenderer = null;
     this.#loadingPromise = null;
     this.#loadingKey = '';
   }

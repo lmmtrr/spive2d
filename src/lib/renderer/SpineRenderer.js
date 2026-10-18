@@ -9,6 +9,7 @@ export class SpineRenderer extends SpineRendererBase {
   #onFirstRender = null;
   #firstRender = true;
   #isPreload = false;
+  #aborted = false;
 
   constructor(isExport = false) {
     const canvas = document.createElement('canvas');
@@ -34,7 +35,9 @@ export class SpineRenderer extends SpineRendererBase {
     this._thumbnail = typeof options === 'boolean' ? false : !!options?.thumbnail;
     this._canvas.style.display = this.#isPreload ? 'none' : 'block';
     await SpineVersionManager.init();
+    this.#throwIfAborted();
     const { version, isJson, path, data } = await SpineVersionManager.detectVersion(dirName, scene);
+    this.#throwIfAborted();
     const spine = SpineVersionManager.getLib(version);
     if (!spine) {
       const msg = `Spine library for version ${version} not loaded.`;
@@ -63,10 +66,24 @@ export class SpineRenderer extends SpineRendererBase {
     } else {
       await this.initCtx(this._alphaMode);
     }
+    this.#throwIfAborted();
     this._detectAlphaOnLoad = typeof options === 'boolean' ? options : !!options?.detectAlpha;
     await this.loadAssets(dirName, scene, isJson);
     await this._waitForAssets();
+    this.#throwIfAborted();
     await this.processLoadedAssets();
+    this.#throwIfAborted();
+  }
+
+  abort() {
+    this.#aborted = true;
+    this.#cancelRenderLoop();
+    if (this._ctx) this._releaseScene();
+    this.dispose();
+  }
+
+  #throwIfAborted() {
+    if (this.#aborted) throw new Error('Load aborted');
   }
 
   activate() {
