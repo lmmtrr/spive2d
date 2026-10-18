@@ -34,7 +34,7 @@ export class SpineRenderer extends SpineRendererBase {
     this._thumbnail = typeof options === 'boolean' ? false : !!options?.thumbnail;
     this._canvas.style.display = this.#isPreload ? 'none' : 'block';
     await SpineVersionManager.init();
-    const { version, isJson } = await SpineVersionManager.detectVersion(dirName, scene);
+    const { version, isJson, path, data } = await SpineVersionManager.detectVersion(dirName, scene);
     const spine = SpineVersionManager.getLib(version);
     if (!spine) {
       const msg = `Spine library for version ${version} not loaded.`;
@@ -43,6 +43,8 @@ export class SpineRenderer extends SpineRendererBase {
     }
     if (this._ctx && this._spine !== spine) this.dispose();
     this._spine = spine;
+    this.spineVersion = version;
+    this._prefetched = { path, data };
     const canvasSize = typeof options === 'boolean' ? undefined : options?.canvasSize;
     if (canvasSize) {
       this._canvas.width = canvasSize;

@@ -167,7 +167,10 @@ async function prepareExportContext(taskId, baseFilename, WorkerClass) {
     const originalSize = activeRenderer?.getOriginalSize() || { width: 1, height: 1 };
     let spineVersion = null;
     let isFileJson = false;
-    if (modelInfo.rendererType === 'spine') {
+    if (modelInfo.rendererType === 'spine' && activeRenderer?.spineVersion) {
+      spineVersion = activeRenderer.spineVersion;
+      isFileJson = !!activeRenderer._isFileJson;
+    } else if (modelInfo.rendererType === 'spine') {
       const v = await SpineVersionManager.detectVersion(modelInfo.selectedDir, modelInfo.fileNames);
       spineVersion = v.version;
       isFileJson = v.isJson;

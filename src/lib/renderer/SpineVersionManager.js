@@ -47,7 +47,8 @@ export class SpineVersionManager {
     if (scene.isMerged && scene.files.length > 0) {
       baseName = scene.files[0];
     }
-    const rawUrl = `${dirName}${baseName}${scene.mainExt}`;
+    const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
+    const rawUrl = `${normalizedDirName}${baseName}${scene.mainExt}`;
     const isTauriAsset = (() => {
       try {
         const url = new URL(rawUrl);
@@ -86,14 +87,14 @@ export class SpineVersionManager {
           showNotification('Invalid JSON structure', 'error');
           throw new Error('Invalid JSON structure');
         }
-        return { version: jsonData.skeleton.spine.substring(0, 3), isJson: true };
+        return { version: jsonData.skeleton.spine.substring(0, 3), isJson: true, path: rawUrl, data };
       } else {
         const versionMatch = new TextDecoder().decode(data.subarray(0, 256)).match(/\d\.\d/);
         if (!versionMatch) {
           showNotification('Valid version pattern not found in binary file', 'error');
           throw new Error('Valid version pattern not found in binary file');
         }
-        return { version: versionMatch[0], isJson: false };
+        return { version: versionMatch[0], isJson: false, path: rawUrl, data };
       }
     } catch (err) {
       console.error('Spine version detection failed:', err);

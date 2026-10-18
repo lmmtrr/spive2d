@@ -305,7 +305,8 @@ export class SpineRendererBase extends BaseRenderer {
     const normalizedDirName = dirName.endsWith('/') ? dirName : `${dirName}/`;
     this._assetManager = new this._spine.AssetManager(this._ctx.gl, '');
     this._installTextureLoader(this._assetManager);
-    setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl);
+    setupSpineAssetManager(this._assetManager, this._spine, this._ctx.gl, null, this._prefetched);
+    this._prefetched = null;
     applyTextureAlphaMode(this._assetManager, this._effectiveAlphaMode);
     const mainExt = scene.mainExt;
     const atlasExt = scene.atlasExt;

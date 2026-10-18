@@ -480,10 +480,21 @@ export function toSpineAssetUrl(url) {
   return typeof convert === 'function' ? convert(url) : url;
 }
 
-export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
+export function setupSpineAssetManager(assetManager, spine, gl, onFallback, prefetched = null) {
   const target = assetManager.downloader || assetManager;
+  const takePrefetched = (url) => {
+    if (!prefetched?.data || prefetched.path !== url) return null;
+    const { data } = prefetched;
+    prefetched = null;
+    return data;
+  };
   const originalDownloadText = target.downloadText.bind(target);
   target.downloadText = (url, success, error) => {
+    const cached = takePrefetched(url);
+    if (cached) {
+      Promise.resolve().then(() => success?.(new TextDecoder().decode(cached)));
+      return;
+    }
     const isAtlas = typeof url === 'string' && /\.(atlas|txt)$/.test(url.split(/[?#]/)[0]);
     return originalDownloadText(toSpineAssetUrl(url), (text) => {
       if (typeof text === 'string' && isAtlas) {
@@ -494,7 +505,14 @@ export function setupSpineAssetManager(assetManager, spine, gl, onFallback) {
   };
   if (typeof target.downloadBinary === 'function') {
     const originalDownloadBinary = target.downloadBinary.bind(target);
-    target.downloadBinary = (url, success, error) => originalDownloadBinary(toSpineAssetUrl(url), success, error);
+    target.downloadBinary = (url, success, error) => {
+      const cached = takePrefetched(url);
+      if (cached) {
+        Promise.resolve().then(() => success?.(cached));
+        return;
+      }
+      return originalDownloadBinary(toSpineAssetUrl(url), success, error);
+    };
   }
   const getAssetsCache = () => assetManager.cache?.assets || assetManager.assets;
   const originalLoadTexture = assetManager.loadTexture.bind(assetManager);
