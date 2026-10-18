@@ -1963,10 +1963,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             }
             all_bases.push(group.name.clone());
             for extra in &group.files {
-                let stem = Path::new(extra)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(extra);
+                let stem = extra.strip_suffix(group.main_ext.as_str()).unwrap_or(extra);
                 all_bases.push(format!("{}{}", group.name, stem));
             }
         }

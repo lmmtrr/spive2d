@@ -36,6 +36,12 @@ import { createSorter } from '../utils.js';
 
 const sortByDisplayName = createSorter(item => item.displayName || item.name);
 
+function extraModelName(scene, extraFile) {
+  const mainExt = scene.mainExt || '';
+  if (!mainExt || !extraFile.toLowerCase().endsWith(mainExt.toLowerCase())) return null;
+  return scene.name + extraFile.slice(0, extraFile.length - mainExt.length);
+}
+
 const BONE_PARAM_PROPS = ['x', 'y', 'rotation', 'scaleX', 'scaleY'];
 const TRANSFORM_PARAM_PROPS = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY', 'mixScaleX', 'scaleMix', 'mixScaleY', 'mixShearY', 'shearMix'];
 const PATH_PARAM_PROPS = ['mixRotate', 'rotateMix', 'mixX', 'translateMix', 'mixY'];
@@ -316,8 +322,8 @@ export class SpineRendererBase extends BaseRenderer {
     } else {
       loadModel(scene.name);
       for (const extraFile of scene.files) {
-        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-        loadModel(scene.name + extraFile.substring(0, extraFile.lastIndexOf('.')));
+        const extraName = extraModelName(scene, extraFile);
+        if (extraName) loadModel(extraName);
       }
     }
   }
@@ -334,9 +340,8 @@ export class SpineRendererBase extends BaseRenderer {
       const skel0 = await this._loadSkeleton(sceneInfo.name);
       if (skel0) this._skeletons['0'] = skel0;
       for (let i = 0; i < sceneInfo.files.length; i++) {
-        const extraFile = sceneInfo.files[i];
-        if (!extraFile.endsWith('.skel') && !extraFile.endsWith('.json') && !extraFile.endsWith('.asset')) continue;
-        const name2 = sceneInfo.name + extraFile.substring(0, extraFile.lastIndexOf('.'));
+        const name2 = extraModelName(sceneInfo, sceneInfo.files[i]);
+        if (!name2) continue;
         const skelN = await this._loadSkeleton(name2);
         if (skelN) this._skeletons[String(i + 1)] = skelN;
       }
