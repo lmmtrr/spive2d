@@ -87,5 +87,9 @@
   "exportModelSkelParamsIgnored": "바이너리 .skel 모델은 편집할 수 없으므로 변경된 파라미터가 내보낸 파일에 적용되지 않았습니다",
   "mediaRecorderNotSupported": "이 브라우저에서는 애니메이션 녹화를 지원하지 않습니다",
   "addedToList": "목록에 추가되었습니다",
-  "noFilesFound": "지원되는 파일을 찾을 수 없습니다"
+  "noFilesFound": "지원되는 파일을 찾을 수 없습니다",
+  "completed": "완료",
+  "error": "오류",
+  "cancelled": "취소됨",
+  "exportError": "내보내기 오류"
 }
