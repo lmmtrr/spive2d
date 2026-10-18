@@ -588,9 +588,7 @@ export class Live2DRenderer extends BaseRenderer {
   setExpression(value) {
     if (!this.#model) return;
     if (value === '') {
-      this.#model.expression(
-        this.#model.internalModel.motionManager.ExpressionManager?.defaultExpression
-      );
+      this.#model.internalModel.motionManager.expressionManager?.resetExpression();
     } else {
       this.#model.expression(Number(value));
     }
