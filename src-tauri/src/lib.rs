@@ -1013,6 +1013,7 @@ fn handle_dropped_paths_blocking(
     })?;
     let temp_path = temp_dir.path().to_string_lossy().into_owned();
     let mut added_any = false;
+    let mut bundle_dirs: HashMap<String, PathBuf> = HashMap::new();
     for path in paths {
         let path_obj = Path::new(&path);
         let stem = path_obj
@@ -1032,8 +1033,10 @@ fn handle_dropped_paths_blocking(
             }
         } else if path_obj.is_file() {
             if !skip_unity && is_unity_file(path_obj) {
-                let bundle_out_dir = unique_child(temp_dir.path(), &get_model_group_key(path_obj));
-                if extract_unity_bundle(path_obj, &bundle_out_dir) {
+                let bundle_out_dir = bundle_dirs
+                    .entry(get_model_group_key(path_obj))
+                    .or_insert_with_key(|key| unique_child(temp_dir.path(), key));
+                if extract_unity_bundle(path_obj, bundle_out_dir) {
                     added_any = true;
                 }
             } else if let Some(ext) = archive_ext(path_obj) {
