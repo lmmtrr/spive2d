@@ -2,7 +2,7 @@ import { BaseRenderer } from './BaseRenderer.js';
 import {
   getLive2DFrameBox,
   fitLive2DBox,
-  resolveLive2DModelUrl,
+  resolveLive2DModelSource,
   canUpdateLive2DCore,
   getCubism2MotionEntry,
   pinCubism2MotionEntry,
@@ -150,7 +150,7 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#isExport && this.#canvas && !isPreload) {
       this.#canvas.style.display = 'block';
     }
-    const url = await resolveLive2DModelUrl(dirName, scene);
+    const url = await resolveLive2DModelSource(dirName, scene);
     applyLive2DEnginePatches(PIXI);
     const { live2d: { Live2DModel } } = PIXI;
     try {

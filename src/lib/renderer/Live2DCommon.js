@@ -1,4 +1,39 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+
+const IMAGE_MIME_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+
+function isRemoteUrl(url) {
+  return typeof url === 'string' &&
+    /^https?:\/\//i.test(url) &&
+    !/^https?:\/\/(asset|tauri|ipc)\.localhost\//i.test(url);
+}
+
+function canInvoke() {
+  return typeof window !== 'undefined' && typeof window.__TAURI_INTERNALS__?.invoke === 'function';
+}
+
+async function fetchRemoteBytes(url) {
+  return new Uint8Array(await invoke('fetch_url_bytes', { url }));
+}
+
+async function fetchSettingsText(url) {
+  if (isRemoteUrl(url) && canInvoke()) {
+    return new TextDecoder().decode(await fetchRemoteBytes(url));
+  }
+  const res = await fetch(url);
+  return res.ok ? await res.text() : null;
+}
+
+function bytesToDataUrl(bytes, path) {
+  const ext = String(path).split(/[?#]/)[0].split('.').pop().toLowerCase();
+  const blob = new Blob([bytes], { type: IMAGE_MIME_TYPES[ext] || 'image/png' });
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
 export function canUpdateLive2DCore(coreModel) {
   if (!coreModel) return false;
   const drawParam = coreModel.drawParamWebGL;
@@ -155,6 +190,33 @@ function patchLenientJSONLoader(pixi) {
   loader.__spive2dLenientJSON = true;
 }
 
+function patchRemoteXHRLoader(pixi) {
+  const loader = pixi?.live2d?.XHRLoader;
+  if (!loader || loader.__spive2dRemoteXHR) return;
+  const createXHR = loader.createXHR;
+  loader.createXHR = function (target, url, type, onload, onerror) {
+    if (!isRemoteUrl(url) || !canInvoke()) return createXHR.call(this, target, url, type, onload, onerror);
+    let aborted = false;
+    return {
+      send() {
+        fetchRemoteBytes(url).then((bytes) => {
+          if (aborted) return;
+          if (type === 'arraybuffer') onload(toArrayBuffer(bytes));
+          else if (type === 'blob') onload(new Blob([bytes]));
+          else if (type === 'json') onload(JSON.parse(new TextDecoder().decode(bytes)));
+          else onload(new TextDecoder().decode(bytes));
+        }, (err) => {
+          if (!aborted) onerror(err instanceof Error ? err : new Error(String(err)));
+        });
+      },
+      abort() {
+        aborted = true;
+      },
+    };
+  };
+  loader.__spive2dRemoteXHR = true;
+}
+
 function patchModelSettingsResolveURL(pixi) {
   const proto = pixi?.live2d?.ModelSettings?.prototype;
   if (!proto || proto.__spive2dEncodedPathResolve) return;
@@ -190,6 +252,7 @@ function patchCubismMocReleaseOrder(pixi) {
 
 export function applyLive2DEnginePatches(pixi) {
   patchModelSettingsResolveURL(pixi);
+  patchRemoteXHRLoader(pixi);
   patchLenientJSONLoader(pixi);
   patchCubismMocReleaseOrder(pixi);
 }
@@ -397,9 +460,9 @@ export async function resolveLive2DSettings(dirName, scene) {
       ? rawUrl
       : convertFileSrc(rawUrl);
     try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const json = parseLive2DJSON(await res.text());
+      const text = await fetchSettingsText(url);
+      if (text !== null) {
+        const json = parseLive2DJSON(text);
         if (isValidLive2DSettings(json)) {
           return { file: candidate, url, json };
         }
@@ -422,4 +485,27 @@ export async function resolveLive2DSettings(dirName, scene) {
 export async function resolveLive2DModelUrl(dirName, scene) {
   const { url } = await resolveLive2DSettings(dirName, scene);
   return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+}
+
+export async function resolveLive2DModelSource(dirName, scene) {
+  const settings = await resolveLive2DSettings(dirName, scene);
+  const url = settings.url + (settings.url.includes('?') ? '&' : '?') + 't=' + Date.now();
+  if (!settings.json || !isRemoteUrl(settings.url) || !canInvoke()) return url;
+  const json = structuredClone(settings.json);
+  const toDataUrl = async (path) => {
+    const bytes = await fetchRemoteBytes(new URL(path, settings.url).href);
+    return bytesToDataUrl(bytes, path);
+  };
+  try {
+    if (Array.isArray(json.FileReferences?.Textures)) {
+      json.FileReferences.Textures = await Promise.all(json.FileReferences.Textures.map(toDataUrl));
+    } else if (Array.isArray(json.textures)) {
+      json.textures = await Promise.all(json.textures.map(toDataUrl));
+    }
+  } catch (e) {
+    console.warn('[Live2DCommon] Failed to fetch remote textures:', e);
+    return url;
+  }
+  json.url = settings.url;
+  return json;
 }
