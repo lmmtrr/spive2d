@@ -49,6 +49,10 @@ export function createTransformAction() {
       isMove = false;
     }
 
+    function handleMouseOut(e) {
+      if (!e.relatedTarget) handleMouseUp();
+    }
+
     function handleWheel(e) {
       if (dialogOpen || !appState.initialized) return;
       if (e.clientX < SIDEBAR_WIDTH || (window.innerHeight - e.clientY <= CONTROLLER_HEIGHT)) return;
@@ -76,7 +80,7 @@ export function createTransformAction() {
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('mouseout', handleMouseUp);
+    window.addEventListener('mouseout', handleMouseOut);
     window.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('contextmenu', handleContextMenu);
 
@@ -91,7 +95,7 @@ export function createTransformAction() {
         window.removeEventListener('mousedown', handleMouseDown);
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
-        window.removeEventListener('mouseout', handleMouseUp);
+        window.removeEventListener('mouseout', handleMouseOut);
         window.removeEventListener('wheel', handleWheel);
         window.removeEventListener('contextmenu', handleContextMenu);
       }
