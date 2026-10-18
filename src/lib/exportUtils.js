@@ -1,6 +1,5 @@
 import { appState } from './appState.svelte.js';
 import { getRenderer } from './rendererStore.svelte.js';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { resolveLive2DModelUrl } from './renderer/Live2DCommon.js';
 
 export function getFinalExportSize(renderer) {
@@ -43,7 +42,6 @@ export async function resolveModelInfo() {
   return {
     fileNames: scene,
     selectedDir,
-    selectedDirUrl: (selectedDir.startsWith('http://') || selectedDir.startsWith('https://')) ? selectedDir : convertFileSrc(selectedDir),
     isLive2D,
     modelUrl,
     rendererType: isLive2D ? 'live2d' : 'spine'

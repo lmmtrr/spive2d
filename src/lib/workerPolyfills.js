@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-export function setupWorkerEnv(self) {
+export function setupWorkerEnv(self, assetBaseUrl = '') {
   self.window = self;
   self.HTMLCanvasElement = OffscreenCanvas;
   self.HTMLImageElement = class HTMLImageElement {
@@ -96,11 +96,12 @@ export function setupWorkerEnv(self) {
     head: { appendChild: () => { } },
     body: { appendChild: () => { }, contains: () => false },
   };
-  self.__TAURI__ = {
-    core: {
-      convertFileSrc: (url) => url
-    }
+  const convertFileSrc = (url) => {
+    if (!assetBaseUrl || typeof url !== 'string' || /^(https?|data|blob|asset|tauri):/i.test(url)) return url;
+    return assetBaseUrl + encodeURIComponent(url);
   };
+  self.__TAURI__ = { core: { convertFileSrc } };
+  self.__TAURI_INTERNALS__ = { convertFileSrc };
   Object.defineProperty(self, 'document', { value: mockDoc, writable: true });
   self.setupPIXISettings = (PIXI) => {
     if (!PIXI) return;

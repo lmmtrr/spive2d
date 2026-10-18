@@ -28,12 +28,12 @@ let currentTasks = new Map();
 let libsLoaded = false;
 let libsLoadedVersion = null;
 
-async function loadLibraries(rendererType, version = null, libraryBaseUrl = null) {
+async function loadLibraries(rendererType, version = null, libraryBaseUrl = null, assetBaseUrl = '') {
   if (libsLoaded === rendererType && (rendererType !== 'spine' || libsLoadedVersion === version)) return;
   const isLive2D = rendererType === 'live2d';
   const isSpine = rendererType === 'spine';
   const origin = libraryBaseUrl || self.location.origin;
-  setupWorkerEnv(self);
+  setupWorkerEnv(self, assetBaseUrl);
   if (isLive2D) {
     const scripts = [
       origin + '/lib/pixi.worker.min.js',
@@ -486,7 +486,7 @@ self.onmessage = async (e) => {
   const { type, id, ...p } = e.data;
   try {
     if (type === 'START_VIDEO' || type === 'START_PNG_SEQUENCE') {
-      await loadLibraries(p.rendererType, p.spineVersion, p.libraryBaseUrl);
+      await loadLibraries(p.rendererType, p.spineVersion, p.libraryBaseUrl, p.assetBaseUrl);
       self.useNonePMA = (p.rendererType === 'spine' &&
         resolveAlphaMode(self.spineLib, p.alphaMode) !== 'unpack');
       self.wantFlipYBitmap = (p.rendererType === 'live2d');

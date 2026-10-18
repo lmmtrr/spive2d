@@ -6,6 +6,7 @@ import { showNotification } from './notificationStore.svelte.js';
 import { t } from './i18n.svelte.js';
 import { writeFile, exists } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { getExportDirectory } from './fileManager.js';
 import { exportQueue } from './exportQueue.svelte.js';
 import {
@@ -341,10 +342,10 @@ export async function exportAnimation(sceneText, animationName, animationValue, 
     marginY,
     contentWidth,
     contentHeight,
-    libraryBaseUrl: window.location.origin
+    libraryBaseUrl: window.location.origin,
+    assetBaseUrl: convertFileSrc('')
   };
   const cleanVideoPayload = JSON.parse(JSON.stringify(videoPayload));
-  cleanVideoPayload.selectedDir = ctx.selectedDirUrl || selectedDir;
   cleanVideoPayload.bgBitmap = bgBitmap;
   worker.postMessage(cleanVideoPayload, bgBitmap ? [bgBitmap] : []);
 }
@@ -474,10 +475,10 @@ export async function exportImageSequence(targetDir, sceneText, animationName, a
     marginY,
     contentWidth,
     contentHeight,
-    libraryBaseUrl: window.location.origin
+    libraryBaseUrl: window.location.origin,
+    assetBaseUrl: convertFileSrc('')
   };
   const cleanPngPayload = JSON.parse(JSON.stringify(pngPayload));
-  cleanPngPayload.selectedDir = ctx.selectedDirUrl || selectedDir;
   cleanPngPayload.bgBitmap = bgBitmap;
   worker.postMessage(cleanPngPayload, bgBitmap ? [bgBitmap] : []);
 }
