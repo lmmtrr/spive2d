@@ -718,25 +718,35 @@ fn find_unity_bundles(files: &[PathBuf]) -> HashSet<PathBuf> {
 }
 
 fn extract_unity_bundle(bundle_path: &Path, out_dir: &Path) -> bool {
-    let bytes = match fs::read(bundle_path) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("Failed to read bundle {:?}: {}", bundle_path, e);
-            return false;
-        }
-    };
-    extract_unity_bytes(bytes, bundle_path, out_dir)
+    extract_unity_bundle_as(bundle_path, bundle_path, out_dir)
 }
 
-fn extract_unity_bytes(bytes: Vec<u8>, name_path: &Path, out_dir: &Path) -> bool {
-    if let Err(e) = unityfs::extract_unity_assets(&bytes, out_dir) {
+fn extract_unity_bundle_as(bundle_path: &Path, name_path: &Path, out_dir: &Path) -> bool {
+    if let Err(e) = unityfs::extract_unity_assets_from_path(bundle_path, out_dir) {
         eprintln!("Failed to extract Unity assets from {:?}: {}", name_path, e);
         return false;
     }
-    if let Err(e) = write_layered_sprite_meta(bytes, name_path, out_dir) {
-        eprintln!("Failed to read layered sprite data from {:?}: {}", name_path, e);
+    match fs::read(bundle_path) {
+        Ok(bytes) => {
+            if let Err(e) = write_layered_sprite_meta(bytes, name_path, out_dir) {
+                eprintln!("Failed to read layered sprite data from {:?}: {}", name_path, e);
+            }
+        }
+        Err(e) => eprintln!("Failed to read bundle {:?}: {}", bundle_path, e),
     }
     true
+}
+
+fn extract_unity_bytes(bytes: Vec<u8>, name_path: &Path, out_dir: &Path) -> bool {
+    let staged = out_dir.with_extension("download");
+    if let Err(e) = fs::write(&staged, &bytes) {
+        eprintln!("Failed to stage downloaded bundle {:?}: {}", name_path, e);
+        return false;
+    }
+    drop(bytes);
+    let extracted = extract_unity_bundle_as(&staged, name_path, out_dir);
+    let _ = fs::remove_file(&staged);
+    extracted
 }
 
 fn has_model_files(files: &[PathBuf]) -> bool {
