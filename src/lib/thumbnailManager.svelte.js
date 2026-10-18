@@ -6,9 +6,11 @@ import { findIdleAnimation } from './utils.js';
 import { thumbnailCache } from './thumbnailCache.js';
 
 const THUMBNAIL_SIZE = 256;
-const SAMPLE_PROGRESS = 0.5;
-const CACHE_VERSION = 1;
+const SCORE_SIZE = 48;
+const SAMPLE_PROGRESS = [0.25, 0.5, 0.75];
+const CACHE_VERSION = 2;
 
+let scoreCtx = null;
 let spineRenderer = null;
 let thumbnails = $state({});
 let queue = [];
@@ -79,11 +81,45 @@ async function captureThumbnail(dirName, scene) {
 async function captureFrame(renderer) {
   const animations = renderer.getAnimations() ?? [];
   const animation = findIdleAnimation(animations) || animations[0];
-  if (animation) {
-    await renderer.setAnimation(animation.value);
-    renderer.seekAnimation(SAMPLE_PROGRESS);
+  if (!animation) return renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+  await renderer.setAnimation(animation.value);
+  let best = null;
+  let bestScore = -1;
+  for (const progress of SAMPLE_PROGRESS) {
+    renderer.seekAnimation(progress);
+    const canvas = renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+    if (!canvas) continue;
+    const score = scoreFrame(canvas);
+    if (score > bestScore) {
+      best = canvas;
+      bestScore = score;
+    }
   }
-  return renderer.captureFrame(THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+  return best;
+}
+
+function scoreFrame(canvas) {
+  if (!scoreCtx) {
+    const scoreCanvas = document.createElement('canvas');
+    scoreCanvas.width = SCORE_SIZE;
+    scoreCanvas.height = SCORE_SIZE;
+    scoreCtx = scoreCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  scoreCtx.clearRect(0, 0, SCORE_SIZE, SCORE_SIZE);
+  scoreCtx.drawImage(canvas, 0, 0, SCORE_SIZE, SCORE_SIZE);
+  const { data } = scoreCtx.getImageData(0, 0, SCORE_SIZE, SCORE_SIZE);
+  let sum = 0;
+  let sumSq = 0;
+  const count = data.length / 4;
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3] / 255;
+    const lum = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+    const v = lum * a + 0.5 * (1 - a);
+    sum += v;
+    sumSq += v * v;
+  }
+  const mean = sum / count;
+  return Math.sqrt(Math.max(0, sumSq / count - mean * mean));
 }
 
 function storeThumbnail(key, canvas, cacheKey, currentGeneration) {
