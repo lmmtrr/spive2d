@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createRenderer, getRendererType } from './renderer/createRenderer.js';
 import { SpineRenderer } from './renderer/SpineRenderer.js';
+import { Live2DRenderer } from './renderer/Live2DRenderer.js';
 import { appState } from './appState.svelte.js';
 import { findIdleAnimation } from './utils.js';
 import { thumbnailCache } from './thumbnailCache.js';
@@ -11,7 +12,7 @@ const SAMPLE_PROGRESS = [0.25, 0.5, 0.75];
 const CACHE_VERSION = 2;
 
 let scoreCtx = null;
-let spineRenderer = null;
+let sharedRenderers = {};
 let thumbnails = $state({});
 let queue = [];
 let queued = new Set();
@@ -47,14 +48,26 @@ async function getCacheKey(dirName, scene) {
   }
 }
 
-function releaseSpineRenderer() {
-  spineRenderer?.dispose();
-  spineRenderer = null;
+function getSharedRenderer(type) {
+  if (type === 'spine') return (sharedRenderers.spine ??= new SpineRenderer());
+  if (type === 'live2d') return (sharedRenderers.live2d ??= new Live2DRenderer());
+  return null;
+}
+
+function releaseSharedRenderer(type) {
+  sharedRenderers[type]?.dispose();
+  delete sharedRenderers[type];
+}
+
+function releaseSharedRenderers() {
+  for (const type of Object.keys(sharedRenderers)) releaseSharedRenderer(type);
 }
 
 async function captureThumbnail(dirName, scene) {
-  const reuseContext = getRendererType(scene) === 'spine';
-  const renderer = reuseContext ? (spineRenderer ??= new SpineRenderer()) : createRenderer(scene);
+  const type = getRendererType(scene);
+  const shared = getSharedRenderer(type);
+  const reuseContext = type === 'spine';
+  const renderer = shared || createRenderer(scene);
   try {
     if ('setAlphaMode' in renderer) {
       renderer.setAlphaMode(appState.alphaMode);
@@ -70,11 +83,11 @@ async function captureThumbnail(dirName, scene) {
     });
     return await captureFrame(renderer);
   } catch (err) {
-    if (reuseContext) releaseSpineRenderer();
+    if (shared) releaseSharedRenderer(type);
     throw err;
   } finally {
-    if (!reuseContext) renderer.dispose();
-    else spineRenderer?._releaseScene();
+    if (!shared) renderer.dispose();
+    else if (reuseContext) sharedRenderers.spine?._releaseScene();
   }
 }
 
@@ -185,7 +198,7 @@ async function processQueue() {
       storeThumbnail(key, canvas, cacheKey, currentGeneration);
     }
   } finally {
-    releaseSpineRenderer();
+    releaseSharedRenderers();
     processing = false;
   }
   if (currentGeneration !== generation && hasWork()) processQueue();
