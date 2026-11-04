@@ -4,6 +4,7 @@
   import { thumbnailManager } from '#lib/thumbnailManager.svelte.js';
   import { filterSceneIndices } from '#lib/utils.js';
   import { t } from '#lib/i18n.svelte.js';
+  import { scrollAssist } from '#lib/scrollAssist.js';
 
   let { open = $bindable(false), onSelect } = $props();
   let dialogEl;
@@ -130,7 +131,7 @@
     </button>
   </div>
 
-  <div class="thumbnail-grid" bind:this={gridEl} tabindex="-1">
+  <div class="thumbnail-grid" bind:this={gridEl} use:scrollAssist tabindex="-1">
     {#if open}
       {#each sceneIndices as i (dirName + '::' + scenes[i].name)}
         {@const scene = scenes[i]}
@@ -268,7 +269,7 @@
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     grid-auto-rows: max-content;
     gap: 10px;
-    padding: 10px;
+    padding: 10px 10px 10px 22px;
     outline: none;
   }
 

@@ -4,6 +4,7 @@
   import { t } from '#lib/i18n.svelte.js';
   import { saveSetting } from '#lib/settings.js';
   import { filterSceneIndices, findIdleAnimation } from '#lib/utils.js';
+  import { scrollAssist } from '#lib/scrollAssist.js';
 
   let { onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick, onSceneGridClick } = $props();
   let filterText = $state('');
@@ -386,7 +387,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_mouse_events_have_key_events -->
-  <div id="property" bind:this={propertyScrollEl}
+  <div id="property" bind:this={propertyScrollEl} use:scrollAssist
     oninput={handlePropertyInput}
     onmousedown={handlePropertyMouseDown}
     onmouseover={handlePropertyMouseOver}
@@ -435,10 +436,20 @@
     height: 100vh;
     width: var(--sidebar-width);
     padding: 10px;
-    background: var(--sidebar-color);
     z-index: 100;
     display: flex;
     flex-direction: column;
+  }
+
+  #sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: var(--sidebar-color);
+    z-index: -1;
   }
 
   #sidebar.hidden {
@@ -511,9 +522,13 @@
   }
 
   #property {
+    overflow-x: hidden;
     overflow-y: auto;
+    padding-left: 18px;
     flex: 1;
     min-height: 0;
+    width: max-content;
+    min-width: 100%;
   }
 
   .item {
@@ -528,31 +543,39 @@
   .item label {
     display: flex;
     align-items: center;
-    overflow: hidden;
     padding: 4px 0;
     width: 100%;
+    white-space: nowrap;
   }
 
   .label-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
-    min-width: 0;
   }
 
   .item input[type="range"] {
     width: 80px;
     min-width: 80px;
     flex-shrink: 0;
-    margin-left: 4px;
+    order: -1;
+    align-self: stretch;
+    height: auto;
+    margin: -4px 0;
+    padding: 0;
     -webkit-appearance: none;
     appearance: none;
+    background: transparent;
+    border: none;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .item input[type="range"]::-webkit-slider-runnable-track {
+    box-sizing: border-box;
+    height: 8px;
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid #666;
-    height: 8px;
     border-radius: 4px;
-    outline: none;
   }
 
   .item input[type="range"]::-webkit-slider-thumb {
@@ -560,9 +583,14 @@
     appearance: none;
     width: 12px;
     height: 12px;
+    margin-top: -3px;
     background: #bbb;
     border-radius: 50%;
     box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+  }
+
+  .item label:has(input[type="range"]) .label-text {
+    padding-left: 8px;
   }
 
   .item input[type="checkbox"] {

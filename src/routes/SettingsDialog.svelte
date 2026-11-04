@@ -849,6 +849,12 @@
     width: 480px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     user-select: none;
+    direction: rtl;
+  }
+
+  dialog > *,
+  .shortcut-tab > * {
+    direction: ltr;
   }
 
   dialog.wide {
@@ -1022,6 +1028,7 @@
 
   .shortcut-tab {
     overflow-y: auto;
+    direction: rtl;
   }
 
   .preview-section {

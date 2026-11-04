@@ -4,6 +4,10 @@
   --text-color: #fff;
   --text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
   --border-color: 1px solid #999;
+  --scroll-track-color: rgba(238, 238, 238, 0.25);
+  --scroll-thumb-color: #ccc;
+  --scroll-thumb-hover-color: #e0e0e0;
+  --scroll-thumb-border: 1px solid rgba(0, 0, 0, 0.6);
 }
 
 *,
@@ -44,17 +48,23 @@ textarea {
 }
 
 ::-webkit-scrollbar-track {
-  background: #eee;
+  background: var(--scroll-track-color);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--scroll-thumb-color);
+  border: var(--scroll-thumb-border);
   border-radius: 10px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: var(--scroll-thumb-hover-color);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 ::placeholder {
