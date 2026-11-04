@@ -16,6 +16,7 @@ import {
   patchCoreRenderOrders,
   patchCubism2CoreAccessors,
   installLive2DDrawableFilter,
+  setLive2DAutomaticMovements,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
   getLive2DTextureUrls,
@@ -108,7 +109,6 @@ export class Live2DRenderer extends BaseRenderer {
   #partIds = [];
   #drawableIds = [];
   #partIndexByName = new Map();
-  #originalBreath = null;
   #originalIdleGroup = 'Idle';
   #pointerMoveHandler = null;
   #pointerLeaveHandler = null;
@@ -187,13 +187,8 @@ export class Live2DRenderer extends BaseRenderer {
         window.Live2D.setGL(this.#app.renderer.gl);
       }
       this.setTextureFilter(appState.textureFilter);
-      this.#originalBreath = model.internalModel?.breath || null;
       this.#originalIdleGroup = model.internalModel?.motionManager?.groups?.idle || 'Idle';
-      if (!appState.enableIdleAndBreathing) {
-        if (model.internalModel) {
-          model.internalModel.breath = null;
-        }
-      }
+      setLive2DAutomaticMovements(model.internalModel, appState.enableIdleAndBreathing);
       this.#initialPartOpacities.clear();
       this.#initialParameterValues.clear();
       this.#hiddenDrawables.clear();
@@ -246,7 +241,7 @@ export class Live2DRenderer extends BaseRenderer {
         if (!internalModel) return;
         this.#model.deltaTime = 0;
         if (this.#paused) return;
-        internalModel.breath = appState.enableIdleAndBreathing ? this.#originalBreath : null;
+        setLive2DAutomaticMovements(internalModel, appState.enableIdleAndBreathing);
         if (internalModel.motionManager && internalModel.motionManager.groups) {
           internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
         }

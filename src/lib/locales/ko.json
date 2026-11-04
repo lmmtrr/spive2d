@@ -28,7 +28,7 @@
   "removeBackground": "배경 제거",
   "skipUnity": "Unity 파일을 불러오지 않음",
   "mergeSequential": "[Spine] 연번 파일을 하나로 합성하여 불러오기",
-  "enableIdleAndBreathing": "[Live2D] 자동 대기 및 호흡 모션 활성화",
+  "enableIdleAndBreathing": "[Live2D] 자동 대기, 호흡 및 눈 깜빡임 활성화",
   "enableMouseTracking": "[Live2D] 마우스 트래킹 활성화",
   "clearThumbnailCache": "썸네일 캐시 삭제",
   "sceneThumbnails": "장면 썸네일",

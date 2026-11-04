@@ -28,7 +28,7 @@
   "removeBackground": "Remove Background",
   "skipUnity": "Do not load Unity files",
   "mergeSequential": "[Spine] Merge sequential files into one model",
-  "enableIdleAndBreathing": "[Live2D] Enable automatic idle & breathing motions",
+  "enableIdleAndBreathing": "[Live2D] Enable automatic idle, breathing & blinking motions",
   "enableMouseTracking": "[Live2D] Enable mouse tracking",
   "clearThumbnailCache": "Clear Thumbnail Cache",
   "sceneThumbnails": "Scene thumbnails",

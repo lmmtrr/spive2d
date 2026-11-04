@@ -167,6 +167,28 @@ export function installLive2DDrawableFilter(coreModel, isHidden) {
   return drawDataList;
 }
 
+export function setLive2DAutomaticMovements(internalModel, enabled) {
+  if (!internalModel) return;
+  let state = internalModel.__spive2dAutomaticMovements;
+  if (!state) {
+    state = {
+      enabled: true,
+      breath: internalModel.breath ?? null,
+      eyeBlink: internalModel.eyeBlink ?? null,
+    };
+    internalModel.__spive2dAutomaticMovements = state;
+    const updateNaturalMovements = internalModel.updateNaturalMovements;
+    if (typeof updateNaturalMovements === 'function') {
+      internalModel.updateNaturalMovements = function (...args) {
+        if (state.enabled) return updateNaturalMovements.apply(this, args);
+      };
+    }
+  }
+  state.enabled = !!enabled;
+  internalModel.breath = state.enabled ? state.breath : null;
+  internalModel.eyeBlink = state.enabled ? state.eyeBlink : null;
+}
+
 export function patchCoreRenderOrders(coreModel) {
   const native = coreModel?._model;
   if (!native || native.drawables?.renderOrders) return;

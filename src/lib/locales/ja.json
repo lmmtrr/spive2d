@@ -28,7 +28,7 @@
   "removeBackground": "背景を削除",
   "skipUnity": "Unityファイルを読み込まない",
   "mergeSequential": "[Spine] 連番ファイルを重ねて読み込む",
-  "enableIdleAndBreathing": "[Live2D] 自動アイドリング・呼吸モーションを有効にする",
+  "enableIdleAndBreathing": "[Live2D] 自動アイドリング・呼吸・まばたきを有効にする",
   "enableMouseTracking": "[Live2D] マウス追従を有効にする",
   "clearThumbnailCache": "サムネイルキャッシュを削除",
   "sceneThumbnails": "シーンのサムネイル",

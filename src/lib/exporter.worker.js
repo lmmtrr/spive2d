@@ -19,6 +19,7 @@ import {
   patchCoreRenderOrders,
   patchCubism2CoreAccessors,
   installLive2DDrawableFilter,
+  setLive2DAutomaticMovements,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
@@ -222,9 +223,7 @@ class WorkerLive2DRenderer {
     const { baseScale, dx, dy } = fitLive2DBox(this.model.internalModel, this.frameBox, width, height);
     this.model.scale.set(baseScale);
     this.model.position.set(width * 0.5 - dx * baseScale, height * 0.5 - dy * baseScale);
-    if (this.model.internalModel && this.model.internalModel.breath) {
-      this.model.internalModel.breath = null;
-    }
+    setLive2DAutomaticMovements(this.model.internalModel, false);
     this.hideMaskMosaicDrawables();
     if (this._textureFilter) {
       this.setTextureFilter(this._textureFilter);
