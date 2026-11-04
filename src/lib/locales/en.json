@@ -30,6 +30,7 @@
   "mergeSequential": "[Spine] Merge sequential files into one model",
   "enableIdleAndBreathing": "[Live2D] Enable automatic idle, breathing & blinking motions",
   "enableMouseTracking": "[Live2D] Enable mouse tracking",
+  "enablePhysics": "[Live2D] Enable physics",
   "clearThumbnailCache": "Clear Thumbnail Cache",
   "sceneThumbnails": "Scene thumbnails",
   "resetAnimation": "Disable animation",

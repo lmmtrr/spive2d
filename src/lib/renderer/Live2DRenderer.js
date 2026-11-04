@@ -17,6 +17,8 @@ import {
   patchCubism2CoreAccessors,
   installLive2DDrawableFilter,
   setLive2DAutomaticMovements,
+  setLive2DPhysics,
+  queueLive2DPhysicsDrag,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
   getLive2DTextureUrls,
@@ -189,6 +191,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.setTextureFilter(appState.textureFilter);
       this.#originalIdleGroup = model.internalModel?.motionManager?.groups?.idle || 'Idle';
       setLive2DAutomaticMovements(model.internalModel, appState.enableIdleAndBreathing);
+      setLive2DPhysics(model.internalModel, appState.enablePhysics);
       this.#initialPartOpacities.clear();
       this.#initialParameterValues.clear();
       this.#hiddenDrawables.clear();
@@ -242,6 +245,7 @@ export class Live2DRenderer extends BaseRenderer {
         this.#model.deltaTime = 0;
         if (this.#paused) return;
         setLive2DAutomaticMovements(internalModel, appState.enableIdleAndBreathing);
+        setLive2DPhysics(internalModel, appState.enablePhysics);
         if (internalModel.motionManager && internalModel.motionManager.groups) {
           internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
         }
@@ -411,6 +415,7 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   applyTransform(scale, moveX, moveY, rotate) {
+    const previous = { scale: this._scale, moveX: this._moveX, moveY: this._moveY, rotate: this._rotate };
     super.applyTransform(scale, moveX, moveY, rotate);
     if (!this.#model) return;
     const { innerWidth: w, innerHeight: h } = window;
@@ -419,6 +424,23 @@ export class Live2DRenderer extends BaseRenderer {
     this.#model.scale.set(s);
     this.#model.position.set(w * 0.5 - dx * s + moveX, h * 0.5 - dy * s + moveY);
     this.#model.rotation = (rotate * Math.PI) / 180;
+    if (previous.scale === scale && previous.rotate === rotate) {
+      this.#queuePhysicsDrag(moveX - (previous.moveX || 0), moveY - (previous.moveY || 0));
+    }
+  }
+
+  #queuePhysicsDrag(screenX, screenY) {
+    if ((!screenX && !screenY) || this.#paused) return;
+    const model = this.#model;
+    const internalModel = model?.internalModel;
+    const scale = model?.scale?.x;
+    const height = this.#getContentBox()?.height || internalModel?.originalHeight;
+    if (!internalModel || !(scale > 0) || !(height > 0)) return;
+    const cos = Math.cos(-model.rotation);
+    const sin = Math.sin(-model.rotation);
+    const localX = (screenX * cos - screenY * sin) / scale / height;
+    const localY = (screenX * sin + screenY * cos) / scale / height;
+    queueLive2DPhysicsDrag(internalModel, localX, localY);
   }
 
   resetTransform(width = window.innerWidth, height = window.innerHeight) {

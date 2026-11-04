@@ -30,6 +30,7 @@
   "mergeSequential": "[Spine] 連番ファイルを重ねて読み込む",
   "enableIdleAndBreathing": "[Live2D] 自動アイドリング・呼吸・まばたきを有効にする",
   "enableMouseTracking": "[Live2D] マウス追従を有効にする",
+  "enablePhysics": "[Live2D] 物理演算を有効にする",
   "clearThumbnailCache": "サムネイルキャッシュを削除",
   "sceneThumbnails": "シーンのサムネイル",
   "resetAnimation": "アニメーションを無効にする",

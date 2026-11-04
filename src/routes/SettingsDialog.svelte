@@ -692,6 +692,14 @@
           <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableMouseTracking')}</span>
         </label>
       </div>
+      <div class="input-row" style="margin-top: 5px;">
+        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
+          <input type="checkbox" bind:checked={appState.enablePhysics} onchange={() => {
+            saveSetting('spive2d_enable_physics', appState.enablePhysics);
+          }} style="width: auto; margin: 0;">
+          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enablePhysics')}</span>
+        </label>
+      </div>
       <hr>
       <div class="button-group">
         <button onclick={handleClearThumbnailCache}>{t('clearThumbnailCache')}</button>

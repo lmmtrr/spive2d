@@ -46,6 +46,7 @@ let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let skipUnity = $state(loadSetting('spive2d_skip_unity', 'false') === 'true');
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
 let enableIdleAndBreathing = $state(loadSetting('spive2d_enable_idle_and_breathing', 'false') === 'true');
+let enablePhysics = $state(loadSetting('spive2d_enable_physics', 'true') === 'true');
 let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'false') === 'true');
 const SCALE_MAX = 16;
 const SCALE_MIN = 0.125;
@@ -84,6 +85,8 @@ export const appState = {
   set mergeSequential(v) { mergeSequential = v; },
   get enableIdleAndBreathing() { return enableIdleAndBreathing; },
   set enableIdleAndBreathing(v) { enableIdleAndBreathing = v; },
+  get enablePhysics() { return enablePhysics; },
+  set enablePhysics(v) { enablePhysics = v; },
   get enableMouseTracking() { return enableMouseTracking; },
   set enableMouseTracking(v) { enableMouseTracking = v; },
   get skipUnity() { return skipUnity; },

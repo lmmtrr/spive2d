@@ -20,6 +20,7 @@ import {
   patchCubism2CoreAccessors,
   installLive2DDrawableFilter,
   setLive2DAutomaticMovements,
+  setLive2DPhysics,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
@@ -197,7 +198,7 @@ class WorkerLive2DRenderer {
     });
   }
 
-  async load(modelUrl, motionFiles) {
+  async load(modelUrl, motionFiles, enablePhysics = true) {
     const { live2d: { Live2DModel } } = PIXI;
     this._cubism2Entry = null;
     this.model = await Live2DModel.from(modelUrl, {
@@ -224,6 +225,7 @@ class WorkerLive2DRenderer {
     this.model.scale.set(baseScale);
     this.model.position.set(width * 0.5 - dx * baseScale, height * 0.5 - dy * baseScale);
     setLive2DAutomaticMovements(this.model.internalModel, false);
+    setLive2DPhysics(this.model.internalModel, enablePhysics);
     this.hideMaskMosaicDrawables();
     if (this._textureFilter) {
       this.setTextureFilter(this._textureFilter);
@@ -492,7 +494,7 @@ self.onmessage = async (e) => {
         if (p.textureFilter) {
           renderer.setTextureFilter(p.textureFilter);
         }
-        await renderer.load(p.modelUrl, p.fileNames?.motionFiles);
+        await renderer.load(p.modelUrl, p.fileNames?.motionFiles, p.enablePhysics !== false);
         if (p.transform) {
           renderer.marginX = p.marginX || 0;
           renderer.marginY = p.marginY || 0;

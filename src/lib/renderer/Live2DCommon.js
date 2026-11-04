@@ -189,6 +189,92 @@ export function setLive2DAutomaticMovements(internalModel, enabled) {
   internalModel.eyeBlink = state.enabled ? state.eyeBlink : null;
 }
 
+export function setLive2DPhysics(internalModel, enabled) {
+  if (!internalModel) return;
+  const current = internalModel.physics;
+  if (current && current !== internalModel.__spive2dPhysics) {
+    internalModel.__spive2dPhysics = current;
+  }
+  const next = enabled ? (internalModel.__spive2dPhysics ?? null) : null;
+  if (!next) clearLive2DPhysicsDrag(internalModel);
+  if (current === next) return;
+  if (next?._physicsRig && typeof next.initialize === 'function') next.initialize();
+  internalModel.physics = next;
+}
+
+const PHYSICS_DRAG_SCALE_CUBISM4 = 60;
+const PHYSICS_DRAG_SCALE_CUBISM2 = 30;
+const PHYSICS_DRAG_MAX_STEP = 0.25;
+
+function clearLive2DPhysicsDrag(internalModel) {
+  const drag = internalModel?.__spive2dPhysicsDrag;
+  if (drag) drag.x = drag.y = 0;
+}
+
+function takeLive2DPhysicsDrag(internalModel) {
+  const drag = internalModel.__spive2dPhysicsDrag;
+  if (!drag || (!drag.x && !drag.y)) return null;
+  let { x, y } = drag;
+  drag.x = drag.y = 0;
+  const length = Math.hypot(x, y);
+  if (length > PHYSICS_DRAG_MAX_STEP) {
+    x *= PHYSICS_DRAG_MAX_STEP / length;
+    y *= PHYSICS_DRAG_MAX_STEP / length;
+  }
+  return { x, y };
+}
+
+function shiftCubism4PhysicsParticles(rig, x, y) {
+  for (let i = 0; i < rig.subRigCount; i++) {
+    const setting = rig.settings.at(i);
+    const particles = rig.particles.get(setting.baseParticleIndex);
+    for (let j = 1; j < setting.particleCount; j++) {
+      const position = particles[j]?.position;
+      if (!position) continue;
+      position.x -= x;
+      position.y -= y;
+    }
+  }
+}
+
+function installLive2DPhysicsDrag(internalModel, physics) {
+  if (physics.__spive2dPhysicsDrag) return;
+  physics.__spive2dPhysicsDrag = true;
+  if (physics._physicsRig && typeof physics.evaluate === 'function') {
+    const evaluate = physics.evaluate;
+    physics.evaluate = function (...args) {
+      const drag = takeLive2DPhysicsDrag(internalModel);
+      if (drag && this._physicsRig) {
+        shiftCubism4PhysicsParticles(this._physicsRig, drag.x * PHYSICS_DRAG_SCALE_CUBISM4, drag.y * PHYSICS_DRAG_SCALE_CUBISM4);
+      }
+      return evaluate.apply(this, args);
+    };
+  } else if (Array.isArray(physics.physicsHairs) && typeof physics.update === 'function') {
+    const update = physics.update;
+    physics.update = function (...args) {
+      const drag = takeLive2DPhysicsDrag(internalModel);
+      if (drag) {
+        for (const hair of this.physicsHairs) {
+          const root = hair?.p1;
+          if (!root) continue;
+          root._$s0 -= drag.x * PHYSICS_DRAG_SCALE_CUBISM2;
+          root._$70 -= drag.y * PHYSICS_DRAG_SCALE_CUBISM2;
+        }
+      }
+      return update.apply(this, args);
+    };
+  }
+}
+
+export function queueLive2DPhysicsDrag(internalModel, x, y) {
+  const physics = internalModel?.physics;
+  if (!physics || !Number.isFinite(x) || !Number.isFinite(y)) return;
+  installLive2DPhysicsDrag(internalModel, physics);
+  const drag = internalModel.__spive2dPhysicsDrag || (internalModel.__spive2dPhysicsDrag = { x: 0, y: 0 });
+  drag.x += x;
+  drag.y += y;
+}
+
 export function patchCoreRenderOrders(coreModel) {
   const native = coreModel?._model;
   if (!native || native.drawables?.renderOrders) return;
