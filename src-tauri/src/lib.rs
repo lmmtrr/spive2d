@@ -132,6 +132,8 @@ struct SceneData {
     is_merged: bool,
     #[serde(rename = "motionFiles", skip_serializing_if = "Vec::is_empty")]
     motion_files: Vec<String>,
+    #[serde(rename = "settingsFile", skip_serializing_if = "Option::is_none")]
+    settings_file: Option<String>,
 }
 
 async fn run_blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
@@ -1694,6 +1696,72 @@ fn find_relative_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
     result
 }
 
+fn normalize_path_key(path: &Path) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                parts.pop();
+            }
+            other => parts.push(other.as_os_str().to_string_lossy().to_lowercase()),
+        }
+    }
+    parts.join("/")
+}
+
+fn find_ancestor_v2_model_json(dir_path: &Path, base_path: &Path, moc_path: &Path) -> Option<PathBuf> {
+    const MAX_SETTINGS_BYTES: u64 = 1 << 20;
+    let moc_key = normalize_path_key(moc_path);
+    let mut current = dir_path.parent();
+    while let Some(dir) = current {
+        if !dir.starts_with(base_path) {
+            break;
+        }
+        let mut candidates: Vec<PathBuf> = fs::read_dir(dir)
+            .ok()?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| {
+                let name = p
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .map(|f| f.to_lowercase())
+                    .unwrap_or_default();
+                name.ends_with(".json")
+                    && !name.ends_with(".exp.json")
+                    && !name.ends_with(".physics.json")
+                    && !name.ends_with(".pose.json")
+                    && p.metadata().is_ok_and(|m| m.is_file() && m.len() <= MAX_SETTINGS_BYTES)
+            })
+            .collect();
+        candidates.sort();
+        for candidate in candidates {
+            let Ok(content) = fs::read_to_string(&candidate) else {
+                continue;
+            };
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(content.trim_start_matches('\u{feff}')) else {
+                continue;
+            };
+            let Some(model) = value.get("model").and_then(|m| m.as_str()) else {
+                continue;
+            };
+            let has_textures = value
+                .get("textures")
+                .and_then(|t| t.as_array())
+                .is_some_and(|t| !t.is_empty());
+            if has_textures && normalize_path_key(&dir.join(model)) == moc_key {
+                return Some(candidate);
+            }
+        }
+        if dir == base_path {
+            break;
+        }
+        current = dir.parent();
+    }
+    None
+}
+
 fn is_valid_v2_model_json(path: &Path) -> bool {
     if !path.exists() {
         return false;
@@ -1789,6 +1857,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 files: Vec::new(),
                 is_merged: false,
                 motion_files: Vec::new(),
+                settings_file: None,
             });
         }
     }
@@ -1803,16 +1872,25 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             let has_valid_json = is_valid_v2_model_json(&model_json_path)
                 || is_valid_v2_model_json(&model_json_path_short)
                 || is_valid_v2_model_json(&generic_model_json);
-            if !has_valid_json {
+            let ancestor_json = if has_valid_json {
+                None
+            } else {
+                find_ancestor_v2_model_json(dir_path, base_path, &dir_path.join(&filename))
+            };
+            if !has_valid_json && ancestor_json.is_none() {
                 let _ = auto_generate_model_v2_json(dir_path, &filename, moc_stem, &dir_files);
             }
-            let declares_motions = [
-                &model_json_path,
-                &model_json_path_short,
-                &generic_model_json,
-            ]
-            .iter()
-            .any(|p| v2_model_json_has_motions(p));
+            let declares_motions = match &ancestor_json {
+                Some(p) => v2_model_json_has_motions(p),
+                None => [&model_json_path, &model_json_path_short, &generic_model_json]
+                    .iter()
+                    .any(|p| v2_model_json_has_motions(p)),
+            };
+            let settings_file = ancestor_json.as_ref().and_then(|p| {
+                p.strip_prefix(base_path)
+                    .ok()
+                    .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+            });
             let motion_files = if declares_motions {
                 Vec::new()
             } else {
@@ -1827,6 +1905,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 files: Vec::new(),
                 is_merged: false,
                 motion_files,
+                settings_file,
             });
         }
     }
@@ -1838,6 +1917,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             files: Vec::new(),
             is_merged: false,
             motion_files: Vec::new(),
+            settings_file: None,
         });
     }
     for meta_filename in meta_json_files {
@@ -1851,6 +1931,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             files: Vec::new(),
             is_merged: false,
             motion_files: Vec::new(),
+            settings_file: None,
         });
     }
     let mut potential_extra_atlases = HashSet::new();
@@ -1943,6 +2024,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 files: bg_files,
                 is_merged: false,
                 motion_files: Vec::new(),
+                settings_file: None,
             });
         }
     }
@@ -1986,6 +2068,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 files: all_bases,
                 is_merged: true,
                 motion_files: Vec::new(),
+                settings_file: None,
             }]);
         }
     }

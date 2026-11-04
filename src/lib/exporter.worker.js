@@ -17,6 +17,8 @@ import {
   getMotionEntries,
   getMotionCurves,
   patchCoreRenderOrders,
+  patchCubism2CoreAccessors,
+  installLive2DDrawableFilter,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
   CUBISM2_TIME_BASE,
@@ -181,20 +183,8 @@ class WorkerLive2DRenderer {
     if (canUpdateLive2DCore(coreModel)) {
       coreModel.update();
     }
-    if (this.hiddenDrawables.size > 0 && !this.opacities && coreModel._model?.drawables?.opacities) {
-      const wasmOpacities = coreModel._model.drawables.opacities;
-      const renderer = this;
-      this.opacities = new Proxy(wasmOpacities, {
-        get(target, prop) {
-          if (typeof prop === 'string') {
-            const idx = Number(prop);
-            if (!isNaN(idx) && renderer.hiddenDrawables.has(idx)) return 0;
-          }
-          const val = target[prop];
-          return typeof val === 'function' ? val.bind(target) : val;
-        }
-      });
-      coreModel._model.drawables.opacities = this.opacities;
+    if (this.hiddenDrawables.size > 0 && !this.opacities) {
+      this.opacities = installLive2DDrawableFilter(coreModel, idx => this.hiddenDrawables.has(idx));
     }
   }
 
@@ -218,6 +208,7 @@ class WorkerLive2DRenderer {
     registerLive2DMotionFiles(this.model, motionFiles);
     this.model.automator.autoUpdate = false;
     const coreModel = this.model.internalModel.coreModel;
+    patchCubism2CoreAccessors(coreModel);
     this.parameterIds = toIdArray(coreModel?._parameterIds);
     this.partIds = toIdArray(coreModel?._partIds);
     this.drawableIds = toIdArray(coreModel?._drawableIds);

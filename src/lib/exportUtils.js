@@ -1,6 +1,6 @@
 import { appState } from './appState.svelte.js';
 import { getRenderer } from './rendererStore.svelte.js';
-import { resolveLive2DModelUrl } from './renderer/Live2DCommon.js';
+import { resolveLive2DModelSource } from './renderer/Live2DCommon.js';
 
 export function getFinalExportSize(renderer) {
   let baseWidth, baseHeight;
@@ -37,7 +37,7 @@ export async function resolveModelInfo() {
   const isLive2D = scene.mainExt.includes('.moc') || scene.mainExt.includes('.model3.json') || scene.mainExt.includes('.model.json');
   let modelUrl = '';
   if (isLive2D) {
-    modelUrl = await resolveLive2DModelUrl(selectedDir, scene);
+    modelUrl = await resolveLive2DModelSource(selectedDir, scene);
   }
   return {
     fileNames: scene,

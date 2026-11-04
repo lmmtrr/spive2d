@@ -24,9 +24,25 @@ async function fetchSettingsText(url) {
   return res.ok ? await res.text() : null;
 }
 
+function getImageExtension(path) {
+  const file = String(path).split(/[?#]/)[0].split('/').pop();
+  const dot = file.lastIndexOf('.');
+  if (dot === -1) return '';
+  const ext = file.slice(dot + 1).toLowerCase();
+  return IMAGE_MIME_TYPES[ext] ? ext : '';
+}
+
+function sniffImageMime(bytes) {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return 'image/png';
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return null;
+}
+
 function bytesToDataUrl(bytes, path) {
-  const ext = String(path).split(/[?#]/)[0].split('.').pop().toLowerCase();
-  const blob = new Blob([bytes], { type: IMAGE_MIME_TYPES[ext] || 'image/png' });
+  const ext = getImageExtension(path);
+  const blob = new Blob([bytes], { type: IMAGE_MIME_TYPES[ext] || sniffImageMime(bytes) || 'image/png' });
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -77,6 +93,78 @@ export function getMotionEntries(queueManager) {
 
 export function getMotionCurves(motion) {
   return csmToArray(motion?._motionData?.curves);
+}
+
+export function patchCubism2CoreAccessors(coreModel) {
+  if (!coreModel || coreModel._parameterIds || typeof coreModel.getModelContext !== 'function') return;
+  const context = () => coreModel.getModelContext();
+  const paramDefs = () => {
+    const defs = coreModel.getModelImpl?.()?._$E2?.()?._$1s?.();
+    return Array.isArray(defs) ? defs : [];
+  };
+  const declaredParamCount = () => Math.min(context()._$qo || 0, paramDefs().length);
+  Object.defineProperties(coreModel, {
+    _parameterIds: {
+      configurable: true,
+      get: () => Array.from(context()._$pb.slice(0, declaredParamCount()), idToString),
+    },
+    _parameterValues: { configurable: true, get: () => context()._$_2 },
+    _parameterMinimumValues: { configurable: true, get: () => context()._$Rr },
+    _parameterMaximumValues: { configurable: true, get: () => context()._$Or },
+    _partIds: {
+      configurable: true,
+      get: () => (context()._$F2 || []).map(part => idToString(part?._$p2?.())),
+    },
+    _drawableIds: {
+      configurable: true,
+      get: () => (context()._$aS || []).map(drawData => idToString(drawData?.getDrawDataID?.())),
+    },
+    getParameterDefaultValue: {
+      configurable: true,
+      value: (index) => paramDefs()[index]?.getDefaultValue?.(),
+    },
+    getPartOpacityByIndex: {
+      configurable: true,
+      value: (index) => coreModel.getPartsOpacity(index),
+    },
+    setPartOpacityByIndex: {
+      configurable: true,
+      value: (index, opacity) => coreModel.setPartsOpacity(index, opacity),
+    },
+  });
+}
+
+export function installLive2DDrawableFilter(coreModel, isHidden) {
+  const opacities = coreModel?._model?.drawables?.opacities;
+  if (opacities) {
+    const proxy = new Proxy(opacities, {
+      get(target, prop) {
+        if (typeof prop === 'string') {
+          const idx = Number(prop);
+          if (!isNaN(idx) && isHidden(idx)) return 0;
+        }
+        const val = target[prop];
+        return typeof val === 'function' ? val.bind(target) : val;
+      }
+    });
+    coreModel._model.drawables.opacities = proxy;
+    return proxy;
+  }
+  const drawDataList = typeof coreModel?.getModelContext === 'function'
+    ? coreModel.getModelContext()?._$aS
+    : null;
+  if (!Array.isArray(drawDataList)) return null;
+  drawDataList.forEach((drawData, index) => {
+    if (!drawData || typeof drawData.draw !== 'function') return;
+    const original = drawData.__spive2dOriginalDraw || drawData.draw;
+    drawData.__spive2dOriginalDraw = original;
+    drawData.draw = function (drawParam, ...rest) {
+      const isMaskPass = !!drawParam?.getClipBufPre_clipContextMask?.();
+      if (!isMaskPass && isHidden(index)) return;
+      return original.call(this, drawParam, ...rest);
+    };
+  });
+  return drawDataList;
 }
 
 export function patchCoreRenderOrders(coreModel) {
@@ -454,6 +542,9 @@ export async function resolveLive2DSettings(dirName, scene) {
   candidates = [...new Set(candidates)]
     .filter(c => c && !c.endsWith('.model.model.json') && !c.endsWith('.model3.model3.json'))
     .map(c => `${prefix}${c}`);
+  if (typeof scene.settingsFile === 'string' && scene.settingsFile) {
+    candidates.push(scene.settingsFile);
+  }
   for (const candidate of candidates) {
     const rawUrl = `${dirName}${candidate}`;
     const url = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
@@ -557,23 +648,43 @@ export async function prefetchLive2DTextures(pixi, dirName, scene) {
   }).catch(() => null)));
 }
 
+function resolveLocalSettingsPath(settingsUrl, path) {
+  const lastEncodedSlash = settingsUrl.lastIndexOf('%2F');
+  if (lastEncodedSlash === -1) return new URL(path, settingsUrl).href;
+  return settingsUrl.slice(0, lastEncodedSlash + 3) + path;
+}
+
+async function fetchLocalBytes(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 export async function resolveLive2DModelSource(dirName, scene) {
   const settings = await resolveLive2DSettings(dirName, scene);
   const url = settings.url + (settings.url.includes('?') ? '&' : '?') + 't=' + Date.now();
-  if (!settings.json || !isRemoteUrl(settings.url) || !canInvoke()) return url;
+  if (!settings.json) return url;
+  const remote = isRemoteUrl(settings.url);
+  if (remote && !canInvoke()) return url;
+  const isCubism2 = !Array.isArray(settings.json.FileReferences?.Textures);
+  const textures = isCubism2 ? settings.json.textures : settings.json.FileReferences.Textures;
+  if (!Array.isArray(textures)) return url;
+  const needsInline = (path) => remote || (typeof path === 'string' && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !getImageExtension(path));
+  if (!textures.some(needsInline)) return url;
   const json = structuredClone(settings.json);
   const toDataUrl = async (path) => {
-    const bytes = await fetchRemoteBytes(new URL(path, settings.url).href);
+    if (!needsInline(path)) return path;
+    const bytes = remote
+      ? await fetchRemoteBytes(new URL(path, settings.url).href)
+      : await fetchLocalBytes(resolveLocalSettingsPath(settings.url, path));
     return bytesToDataUrl(bytes, path);
   };
   try {
-    if (Array.isArray(json.FileReferences?.Textures)) {
-      json.FileReferences.Textures = await Promise.all(json.FileReferences.Textures.map(toDataUrl));
-    } else if (Array.isArray(json.textures)) {
-      json.textures = await Promise.all(json.textures.map(toDataUrl));
-    }
+    const inlined = await Promise.all(textures.map(toDataUrl));
+    if (isCubism2) json.textures = inlined;
+    else json.FileReferences.Textures = inlined;
   } catch (e) {
-    console.warn('[Live2DCommon] Failed to fetch remote textures:', e);
+    console.warn('[Live2DCommon] Failed to inline textures:', e);
     return url;
   }
   json.url = settings.url;

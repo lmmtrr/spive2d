@@ -14,6 +14,8 @@ import {
   getMotionEntries,
   getMotionCurves,
   patchCoreRenderOrders,
+  patchCubism2CoreAccessors,
+  installLive2DDrawableFilter,
   applyLive2DEnginePatches,
   ensureLive2DRuntimeReady,
   getLive2DTextureUrls,
@@ -197,6 +199,7 @@ export class Live2DRenderer extends BaseRenderer {
       this.#hiddenDrawables.clear();
       this.#opacities = null;
       const coreModel = model.internalModel?.coreModel;
+      patchCubism2CoreAccessors(coreModel);
       this.#cacheModelIds(coreModel);
       if (coreModel) {
         patchCoreRenderOrders(coreModel);
@@ -1000,20 +1003,8 @@ export class Live2DRenderer extends BaseRenderer {
   #setupDrawableOpacitiesProxy() {
     if (this.#opacities) return;
     const coreModel = this.#model?.internalModel?.coreModel;
-    if (!coreModel || !coreModel._model?.drawables?.opacities) return;
-    const wasmOpacities = coreModel._model.drawables.opacities;
-    const renderer = this;
-    this.#opacities = new Proxy(wasmOpacities, {
-      get(target, prop) {
-        if (typeof prop === 'string') {
-          const idx = Number(prop);
-          if (!isNaN(idx) && renderer.#hiddenDrawables.has(idx)) return 0;
-        }
-        const val = target[prop];
-        return typeof val === 'function' ? val.bind(target) : val;
-      }
-    });
-    coreModel._model.drawables.opacities = this.#opacities;
+    if (!coreModel) return;
+    this.#opacities = installLive2DDrawableFilter(coreModel, idx => this.#hiddenDrawables.has(idx));
   }
 
   getModel() {
