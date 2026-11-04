@@ -51,7 +51,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: audit JS dependencies
-        run: bun audit
+        # GHSA-gcqx-w48m-w2h4: deepmerge (via @sveltejs/vite-plugin-svelte, dev-only; merges trusted local config). No patched version yet.
+        run: bun audit --ignore=GHSA-gcqx-w48m-w2h4
 
       - name: install python requests
         run: pip install requests
