@@ -19,6 +19,7 @@ import {
   patchCoreRenderOrders,
   patchCubism2CoreAccessors,
   installLive2DDrawableFilter,
+  toLive2DOpacity,
   setLive2DAutomaticMovements,
   setLive2DPhysics,
   applyLive2DEnginePatches,
@@ -91,7 +92,7 @@ class WorkerLive2DRenderer {
     this.parameterOverrides = new Map();
     this.partOverrides = new Map();
     this.drawableOverrides = new Map();
-    this.hiddenDrawables = new Set();
+    this.drawableOpacities = new Map();
     this.opacities = null;
     this.parameterIds = [];
     this.partIds = [];
@@ -143,9 +144,10 @@ class WorkerLive2DRenderer {
     if (state.partOverrides) this.partOverrides = new Map(state.partOverrides);
     if (state.drawableOverrides) {
       this.drawableOverrides = new Map(state.drawableOverrides);
-      for (const [index, visible] of this.drawableOverrides) {
-        if (visible) this.hiddenDrawables.delete(index);
-        else this.hiddenDrawables.add(index);
+      for (const [index, value] of this.drawableOverrides) {
+        const opacity = toLive2DOpacity(value);
+        if (opacity === 1) this.drawableOpacities.delete(Number(index));
+        else this.drawableOpacities.set(Number(index), opacity);
       }
     }
     if (this.model) {
@@ -185,15 +187,15 @@ class WorkerLive2DRenderer {
     if (canUpdateLive2DCore(coreModel)) {
       coreModel.update();
     }
-    if (this.hiddenDrawables.size > 0 && !this.opacities) {
-      this.opacities = installLive2DDrawableFilter(coreModel, idx => this.hiddenDrawables.has(idx));
+    if (this.drawableOpacities.size > 0 && !this.opacities) {
+      this.opacities = installLive2DDrawableFilter(coreModel, idx => this.drawableOpacities.get(idx) ?? 1);
     }
   }
 
   hideMaskMosaicDrawables() {
     this.drawableIds.forEach((name, index) => {
       if (name && name.includes('Mosaic')) {
-        this.hiddenDrawables.add(index);
+        this.drawableOpacities.set(index, 0);
       }
     });
   }

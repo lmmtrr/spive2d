@@ -26,8 +26,10 @@
   let propertyScrollEl;
   let checkboxDragging = false;
   let checkboxState = false;
-  let rangeDragging = false;
-  let rangeDragTarget = 'min';
+  let resetDragging = false;
+  let sliderDrag = null;
+  const SLIDER_THUMB_WIDTH = 12;
+  const SLIDER_EDGE_SNAP = 8;
 
   export function setSidebarVisible(visible) {
     sidebarVisible = visible;
@@ -160,6 +162,7 @@
       const item = propertyItems.find(i => i.index === index);
       if(item) {
         item.value = Number(target.value);
+        item.overridden = true;
       }
     } else if (target.type === 'checkbox') {
       if (appState.propertyCategory === 'skins') {
@@ -192,37 +195,82 @@
     return e.target.closest?.('.item')?.querySelector('input[type="checkbox"]');
   }
 
-  function getRangeFromEvent(e, isMouseDown) {
-    if (isMouseDown && e.target.tagName === 'INPUT' && e.target.type === 'range') return null;
-    if (!e.target.classList.contains('label-text') && !e.target.closest('.label-text')) return null;
-    const itemEl = e.target.closest('.item');
-    if (!itemEl) return null;
-    return itemEl.querySelector('input[type="range"]');
+  function getRangeFromLabel(e) {
+    if (!e.target.closest?.('.label-text')) return null;
+    return e.target.closest('.item')?.querySelector('input[type="range"]') ?? null;
+  }
+
+  function resetRange(rangeInput) {
+    const renderer = getRenderer();
+    if (typeof renderer?.resetPropertyItem !== 'function') return;
+    const index = Number(rangeInput.dataset.oldIndex);
+    const value = renderer.resetPropertyItem(appState.propertyCategory, rangeInput.dataset.name, index);
+    if (!Number.isFinite(value)) return;
+    rangeInput.value = String(value);
+    const item = propertyItems.find(i => i.index === index);
+    if (item) {
+      item.value = value;
+      item.overridden = false;
+    }
+  }
+
+  function getVisibleRows() {
+    if (!propertyScrollEl) return [];
+    return Array.from(propertyScrollEl.querySelectorAll('.item')).filter(el => el.style.display !== 'none');
+  }
+
+  function getRowIndexAt(rows, clientY) {
+    for (let i = 0; i < rows.length; i++) {
+      const rect = rows[i].getBoundingClientRect();
+      if (clientY >= rect.top && clientY < rect.bottom) return i;
+    }
+    return -1;
+  }
+
+  function setRangeFromPointer(rangeInput, clientX) {
+    if (!rangeInput) return;
+    const rect = rangeInput.getBoundingClientRect();
+    const inset = SLIDER_THUMB_WIDTH / 2 + SLIDER_EDGE_SNAP;
+    const span = rect.width - inset * 2;
+    const ratio = span > 0 ? Math.min(1, Math.max(0, (clientX - rect.left - inset) / span)) : 0;
+    const min = Number(rangeInput.min);
+    const max = Number(rangeInput.max);
+    const previous = rangeInput.value;
+    rangeInput.value = String(min + (max - min) * ratio);
+    if (rangeInput.value !== previous) {
+      rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  function getRowRange(row) {
+    return row?.querySelector('input[type="range"]') ?? null;
   }
 
   function handlePropertyMouseDown(e) {
+    if (e.button !== 0) return;
+    if (e.target.tagName === 'INPUT' && e.target.type === 'range') {
+      e.preventDefault();
+      e.target.focus({ preventScroll: true });
+      const rows = getVisibleRows();
+      sliderDrag = { rows, last: rows.indexOf(e.target.closest('.item')) };
+      setRangeFromPointer(e.target, e.clientX);
+      return;
+    }
     const cb = getCheckboxFromEvent(e);
     if (cb) {
       checkboxDragging = true;
-      checkboxState = !cb.checked;    
+      checkboxState = !cb.checked;
       if (cb.checked !== checkboxState) {
         cb.checked = checkboxState;
         cb.dispatchEvent(new Event('input', { bubbles: true }));
       }
       return;
     }
-    const rangeInput = getRangeFromEvent(e, true);
+    const rangeInput = getRangeFromLabel(e);
     if (rangeInput) {
-      rangeDragging = true;
-      const val = Number(rangeInput.value);
-      const min = Number(rangeInput.min);
-      const max = Number(rangeInput.max);
-      const newValue = val !== min ? min : max;
-      rangeDragTarget = val !== min ? 'min' : 'max';
-      if (val !== newValue) {
-        rangeInput.value = newValue;
-        rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
+      e.preventDefault();
+      resetDragging = true;
+      resetRange(rangeInput);
     }
   }
 
@@ -235,18 +283,9 @@
       }
       return;
     }
-    if (rangeDragging) {
-      const rangeInput = getRangeFromEvent(e, false);
-      if (rangeInput) {
-        const val = Number(rangeInput.value);
-        const min = Number(rangeInput.min);
-        const max = Number(rangeInput.max);
-        const newValue = rangeDragTarget === 'min' ? min : max;
-        if (val !== newValue) {
-          rangeInput.value = newValue;
-          rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }
+    if (resetDragging) {
+      const rangeInput = getRangeFromLabel(e);
+      if (rangeInput) resetRange(rangeInput);
     }
   }
 
@@ -256,20 +295,42 @@
       if (e.detail !== 0) e.preventDefault();
       return;
     }
-    const rangeInput = getRangeFromEvent(e, true);
-    if (rangeInput) {
+    if (getRangeFromLabel(e)) {
       e.preventDefault();
     }
   }
 
+  function handleGlobalMouseMove(e) {
+    if (!sliderDrag) return;
+    const { rows } = sliderDrag;
+    const current = getRowIndexAt(rows, e.clientY);
+    if (current === -1 || sliderDrag.last === -1 || current === sliderDrag.last) {
+      const index = current === -1 ? sliderDrag.last : current;
+      setRangeFromPointer(getRowRange(rows[index]), e.clientX);
+      if (current !== -1) sliderDrag.last = current;
+      return;
+    }
+    const step = current > sliderDrag.last ? 1 : -1;
+    for (let i = sliderDrag.last + step; ; i += step) {
+      setRangeFromPointer(getRowRange(rows[i]), e.clientX);
+      if (i === current) break;
+    }
+    sliderDrag.last = current;
+  }
+
   function handleGlobalMouseUp() {
     checkboxDragging = false;
-    rangeDragging = false;
+    resetDragging = false;
+    sliderDrag = null;
   }
 
   $effect(() => {
+    window.addEventListener('mousemove', handleGlobalMouseMove);
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
   });
 
   function matchesFilter(name) {
@@ -406,7 +467,7 @@
       </div>
     {:else}
       {#each propertyItems as item (item.name + '_' + item.index)}
-        <div class="item" style:display={matchesFilter(item.displayName || item.name) ? 'flex' : 'none'}>
+        <div class="item" class:overridden={item.overridden} style:display={matchesFilter(item.displayName || item.name) ? 'flex' : 'none'}>
           {#if item.type === 'range'}
             <label title={item.displayName || item.name}><span class="label-text">{item.displayName || item.name}</span><input type="range" data-name={item.name} data-old-index={item.index} max={item.max} min={item.min} step={item.step} value={item.value}></label>
           {:else}
@@ -538,6 +599,11 @@
     user-select: none;
     color: var(--text-color);
     text-shadow: var(--text-shadow);
+  }
+
+  .item.overridden {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
   }
 
   .item label {

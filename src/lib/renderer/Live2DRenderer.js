@@ -16,6 +16,7 @@ import {
   patchCoreRenderOrders,
   patchCubism2CoreAccessors,
   installLive2DDrawableFilter,
+  toLive2DOpacity,
   setLive2DAutomaticMovements,
   setLive2DPhysics,
   queueLive2DPhysicsDrag,
@@ -93,7 +94,7 @@ export class Live2DRenderer extends BaseRenderer {
   #contentBox = null;
   #model = null;
   #textureUrls = [];
-  #hiddenDrawables = new Set();
+  #drawableOpacities = new Map();
   #opacities = null;
   #currentMotion = { group: null, index: null };
   #speed = 1.0;
@@ -194,7 +195,7 @@ export class Live2DRenderer extends BaseRenderer {
       setLive2DPhysics(model.internalModel, appState.enablePhysics);
       this.#initialPartOpacities.clear();
       this.#initialParameterValues.clear();
-      this.#hiddenDrawables.clear();
+      this.#drawableOpacities.clear();
       this.#opacities = null;
       const coreModel = model.internalModel?.coreModel;
       patchCubism2CoreAccessors(coreModel);
@@ -646,6 +647,7 @@ export class Live2DRenderer extends BaseRenderer {
           min: coreModel._parameterMinimumValues[index],
           value: coreModel._parameterValues[index],
           step: (coreModel._parameterMaximumValues[index] - coreModel._parameterMinimumValues[index]) / 100,
+          overridden: this.parameterOverrides.has(index),
         }))
         .sort(sortById);
     }
@@ -654,25 +656,43 @@ export class Live2DRenderer extends BaseRenderer {
         .map((name, index) => ({
           name,
           index,
-          type: 'checkbox',
-          checked: coreModel.getPartOpacityByIndex(index) > 0,
+          type: 'range',
+          min: 0,
+          max: 1,
+          step: 0.01,
+          value: coreModel.getPartOpacityByIndex(index),
+          overridden: this.partOverrides.has(name),
         }))
         .sort(sortByText);
     }
     if (category === 'drawables') {
       return this.#drawableIds
-        .map((name, index) => {
-          let isVisible = !this.#hiddenDrawables.has(index);
-          return {
-            name,
-            index,
-            type: 'checkbox',
-            checked: isVisible,
-          };
-        })
+        .map((name, index) => ({
+          name,
+          index,
+          type: 'range',
+          min: 0,
+          max: 1,
+          step: 0.01,
+          value: this.#getDrawableOpacity(index),
+          overridden: this.drawableOverrides.has(index),
+        }))
         .sort(sortByText);
     }
     return [];
+  }
+
+  #getDrawableOpacity(index) {
+    return this.#drawableOpacities.get(index) ?? 1;
+  }
+
+  #setDrawableOpacity(index, opacity) {
+    if (opacity === 1) this.#drawableOpacities.delete(index);
+    else this.#drawableOpacities.set(index, opacity);
+  }
+
+  #defaultDrawableOpacity(index) {
+    return this.#drawableIds[index]?.includes('Mosaic') ? 0 : 1;
   }
 
   updatePropertyItem(category, name, index, value) {
@@ -682,19 +702,45 @@ export class Live2DRenderer extends BaseRenderer {
       coreModel._parameterValues[index] = value;
       this.parameterOverrides.set(index, value);
     } else if (category === 'parts') {
-      this.#setPartOpacity(coreModel, name, value ? 1 : 0);
-      this.partOverrides.set(name, value ? 1 : 0);
+      const opacity = toLive2DOpacity(value);
+      this.#setPartOpacity(coreModel, name, opacity);
+      this.partOverrides.set(name, opacity);
     } else if (category === 'drawables') {
-      if (value) {
-        this.#hiddenDrawables.delete(index);
-        this.drawableOverrides.set(index, true);
-      } else {
-        this.#hiddenDrawables.add(index);
-        this.drawableOverrides.set(index, false);
-      }
+      const opacity = toLive2DOpacity(value);
+      this.#setDrawableOpacity(index, opacity);
+      this.drawableOverrides.set(index, opacity);
       this.#setupDrawableOpacitiesProxy();
       this.render();
     }
+  }
+
+  resetPropertyItem(category, name, index) {
+    if (!this.#model) return undefined;
+    const coreModel = this.#model.internalModel.coreModel;
+    let value;
+    if (category === 'parameters') {
+      this.parameterOverrides.delete(index);
+      value = this.#initialParameterValues.get(index);
+      if (!Number.isFinite(value) && typeof coreModel.getParameterDefaultValue === 'function') {
+        value = coreModel.getParameterDefaultValue(index);
+      }
+      if (!Number.isFinite(value)) value = coreModel._parameterValues[index];
+      coreModel._parameterValues[index] = value;
+      this.#saveParameterSnapshot();
+    } else if (category === 'parts') {
+      this.partOverrides.delete(name);
+      value = this.#initialPartOpacities.get(name) ?? 1;
+      this.#setPartOpacity(coreModel, name, value);
+    } else if (category === 'drawables') {
+      this.drawableOverrides.delete(index);
+      value = this.#defaultDrawableOpacity(index);
+      this.#setDrawableOpacity(index, value);
+      this.#setupDrawableOpacitiesProxy();
+    } else {
+      return undefined;
+    }
+    this.render();
+    return value;
   }
 
   #getParameterDefaults() {
@@ -725,9 +771,10 @@ export class Live2DRenderer extends BaseRenderer {
       parts.push({ id: name, opacity: Number(opacity) });
     }
     const drawables = [];
-    for (const [rawIndex, visible] of this.drawableOverrides) {
+    for (const [rawIndex, value] of this.drawableOverrides) {
       const id = this.#drawableIds[Number(rawIndex)];
-      if (id) drawables.push({ id, visible: !!visible });
+      const opacity = toLive2DOpacity(value);
+      if (id) drawables.push({ id, visible: opacity > 0, opacity });
     }
     return { type: 'live2d', parameters, parameterDefaults: this.#getParameterDefaults(), parts, drawables };
   }
@@ -754,7 +801,7 @@ export class Live2DRenderer extends BaseRenderer {
         this.#setPartOpacity(coreModel, name, defVal);
       });
     } else if (category === 'drawables') {
-      this.#hiddenDrawables.clear();
+      this.#drawableOpacities.clear();
       this.#hideMaskMosaicDrawables();
     }
     this.render();
@@ -881,9 +928,8 @@ export class Live2DRenderer extends BaseRenderer {
     if (!state) return;
     super.applySyncState(state);
     if (state.drawableOverrides) {
-      for (const [index, visible] of this.drawableOverrides) {
-        if (visible) this.#hiddenDrawables.delete(index);
-        else this.#hiddenDrawables.add(index);
+      for (const [index, value] of this.drawableOverrides) {
+        this.#setDrawableOpacity(Number(index), toLive2DOpacity(value));
       }
     }
   }
@@ -1004,7 +1050,7 @@ export class Live2DRenderer extends BaseRenderer {
     for (const [name, opacity] of this.partOverrides) {
       this.#setPartOpacity(coreModel, name, opacity);
     }
-    if (this.#hiddenDrawables.size > 0 && !this.#opacities) {
+    if (this.#drawableOpacities.size > 0 && !this.#opacities) {
       this.#setupDrawableOpacitiesProxy();
     }
   }
@@ -1012,7 +1058,7 @@ export class Live2DRenderer extends BaseRenderer {
   #hideMaskMosaicDrawables() {
     this.#drawableIds.forEach((name, index) => {
       if (name && name.includes('Mosaic')) {
-        this.#hiddenDrawables.add(index);
+        this.#setDrawableOpacity(index, 0);
       }
     });
   }
@@ -1021,7 +1067,7 @@ export class Live2DRenderer extends BaseRenderer {
     if (this.#opacities) return;
     const coreModel = this.#model?.internalModel?.coreModel;
     if (!coreModel) return;
-    this.#opacities = installLive2DDrawableFilter(coreModel, idx => this.#hiddenDrawables.has(idx));
+    this.#opacities = installLive2DDrawableFilter(coreModel, idx => this.#getDrawableOpacity(idx));
   }
 
   getModel() {

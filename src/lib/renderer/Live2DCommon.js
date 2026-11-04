@@ -134,14 +134,24 @@ export function patchCubism2CoreAccessors(coreModel) {
   });
 }
 
-export function installLive2DDrawableFilter(coreModel, isHidden) {
+export function toLive2DOpacity(value) {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  const opacity = Number(value);
+  if (!Number.isFinite(opacity)) return 1;
+  return Math.min(1, Math.max(0, opacity));
+}
+
+export function installLive2DDrawableFilter(coreModel, getOpacity) {
   const opacities = coreModel?._model?.drawables?.opacities;
   if (opacities) {
     const proxy = new Proxy(opacities, {
       get(target, prop) {
         if (typeof prop === 'string') {
           const idx = Number(prop);
-          if (!isNaN(idx) && isHidden(idx)) return 0;
+          if (!isNaN(idx)) {
+            const factor = getOpacity(idx);
+            if (factor !== 1) return (target[idx] ?? 0) * factor;
+          }
         }
         const val = target[prop];
         return typeof val === 'function' ? val.bind(target) : val;
@@ -158,10 +168,20 @@ export function installLive2DDrawableFilter(coreModel, isHidden) {
     if (!drawData || typeof drawData.draw !== 'function') return;
     const original = drawData.__spive2dOriginalDraw || drawData.draw;
     drawData.__spive2dOriginalDraw = original;
-    drawData.draw = function (drawParam, ...rest) {
-      const isMaskPass = !!drawParam?.getClipBufPre_clipContextMask?.();
-      if (!isMaskPass && isHidden(index)) return;
-      return original.call(this, drawParam, ...rest);
+    drawData.draw = function (drawParam, context, drawContext, ...rest) {
+      if (drawParam?.getClipBufPre_clipContextMask?.()) {
+        return original.call(this, drawParam, context, drawContext, ...rest);
+      }
+      const factor = getOpacity(index);
+      if (factor === 1 || !drawContext) return original.call(this, drawParam, context, drawContext, ...rest);
+      if (!(factor > 0)) return;
+      const partsOpacity = drawContext._$VS;
+      drawContext._$VS = partsOpacity * factor;
+      try {
+        return original.call(this, drawParam, context, drawContext, ...rest);
+      } finally {
+        drawContext._$VS = partsOpacity;
+      }
     };
   });
   return drawDataList;

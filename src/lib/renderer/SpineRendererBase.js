@@ -1796,13 +1796,15 @@ export class SpineRendererBase extends BaseRenderer {
         if (isMerged && usedNames.has(fullPropName)) return;
         usedNames.add(fullPropName);
         const displayName = (Object.keys(this._skeletons).length > 1 && !isMerged ? `[${skelName}] ${name}` : name).replace(/\[.*?\]\s*/g, '');
+        const index = (skelId * 1000000) + localId;
         items.push({
           name: name,
           displayName: displayName,
-          index: (skelId * 1000000) + localId,
+          index,
           type: 'range',
           min, max, step,
           value: getTargetProperty(target, prop),
+          overridden: this.parameterOverrides.has(index),
           _target: target,
           _prop: prop,
           _skeletonId: key
@@ -1955,29 +1957,8 @@ export class SpineRendererBase extends BaseRenderer {
       const item = this._parameterItemsMap?.get(idx) || this._parameterItems?.find(i => i.index === idx);
       if (item) {
         const val = Number(value);
-        const prop = item._prop;
-        const itemName = item.name;
-        const isMerged = !!this._fileNames?.isMerged;
-        for (const k in this._skeletons) {
-          if (!isMerged && k !== item._skeletonId) continue;
-          const s = this._skeletons[k].skeleton;
-          let targetObj = null;
-          if (itemName.startsWith('Bone ')) {
-            const bName = itemName.split(': ')[0].replace('Bone ', '');
-            targetObj = s.findBone(bName);
-          } else if (itemName.startsWith('IK: ')) {
-            const ikName = itemName.replace('IK: ', '');
-            targetObj = s.findIkConstraint(ikName);
-          } else if (itemName.startsWith('TF ')) {
-            const tfName = itemName.split(': ')[0].replace('TF ', '');
-            targetObj = s.findTransformConstraint(tfName);
-          } else if (itemName.startsWith('Path ')) {
-            const pathName = itemName.split(': ')[0].replace('Path ', '');
-            targetObj = s.findPathConstraint(pathName);
-          }
-          if (targetObj) {
-            setTargetProperty(targetObj, prop, val);
-          }
+        for (const targetObj of this._findParameterTargets(item)) {
+          setTargetProperty(targetObj, item._prop, val);
         }
         this.parameterOverrides.set(idx, val);
       }
@@ -1991,6 +1972,47 @@ export class SpineRendererBase extends BaseRenderer {
     if (this._paused) {
       this.render(0);
     }
+  }
+
+  _findParameterTargets(item) {
+    const targets = [];
+    const itemName = item.name;
+    const isMerged = !!this._fileNames?.isMerged;
+    for (const k in this._skeletons) {
+      if (!isMerged && k !== item._skeletonId) continue;
+      const s = this._skeletons[k].skeleton;
+      let targetObj = null;
+      if (itemName.startsWith('Bone ')) {
+        targetObj = s.findBone(itemName.split(': ')[0].replace('Bone ', ''));
+      } else if (itemName.startsWith('IK: ')) {
+        targetObj = s.findIkConstraint(itemName.replace('IK: ', ''));
+      } else if (itemName.startsWith('TF ')) {
+        targetObj = s.findTransformConstraint(itemName.split(': ')[0].replace('TF ', ''));
+      } else if (itemName.startsWith('Path ')) {
+        targetObj = s.findPathConstraint(itemName.split(': ')[0].replace('Path ', ''));
+      }
+      if (targetObj) targets.push(targetObj);
+    }
+    return targets;
+  }
+
+  resetPropertyItem(category, name, mergedIndex) {
+    if (category !== 'parameters') return undefined;
+    const idx = Number(mergedIndex);
+    const item = this._parameterItemsMap?.get(idx) || this._parameterItems?.find(i => i.index === idx);
+    if (!item) return undefined;
+    this.parameterOverrides.delete(idx);
+    let value;
+    for (const targetObj of this._findParameterTargets(item)) {
+      const data = targetObj.data;
+      const setup = data?.setup ?? data;
+      const setupValue = getTargetProperty(setup, item._prop);
+      if (!Number.isFinite(setupValue)) continue;
+      setTargetProperty(targetObj, item._prop, setupValue);
+      if (value === undefined) value = setupValue;
+    }
+    if (this._paused) this.render(0);
+    return value;
   }
 
   resetOverrides(category) {
