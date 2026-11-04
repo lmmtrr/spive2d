@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.60] - 2026-11-04
+
+### Added
+
+- Add Live2D physics toggle and drag inertia
+- Show full property names and move scrollbars left
+- Add property reset, opacity sliders, and batch slider editing
+
+### Fixed
+
+- Support Cubism 2 parameters, parts, drawables and parent-level model.json
+- Stop blinking and head sway when idle motions are disabled
+- Restore moving Live2D textures and motions into subfolders
+
 ## [0.1.59] - 2026-10-18
 
 ### Added
