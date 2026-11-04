@@ -11460,8 +11460,9 @@ var spine = (() => {
       }
     }
     dispose() {
-      this.logo.dispose();
-      this.spinner.dispose();
+      var _a, _b;
+      (_a = this.logo) == null ? void 0 : _a.dispose();
+      (_b = this.spinner) == null ? void 0 : _b.dispose();
     }
     draw(complete = false) {
       if (loaded < 2 || complete && this.fadeOut > FADE_OUT)

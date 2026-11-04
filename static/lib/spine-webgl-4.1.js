@@ -10897,7 +10897,6 @@ var spine = (() => {
     }
     static validateMagFilter(magFilter) {
       switch (magFilter) {
-        case 9987 /* MipMap */:
         case 9987 /* MipMapLinearLinear */:
         case 9985 /* MipMapLinearNearest */:
         case 9986 /* MipMapNearestLinear */:
@@ -10909,7 +10908,6 @@ var spine = (() => {
     }
     static usesMipMaps(filter) {
       switch (filter) {
-        case 9987 /* MipMap */:
         case 9987 /* MipMapLinearLinear */:
         case 9985 /* MipMapLinearNearest */:
         case 9986 /* MipMapNearestLinear */:
@@ -13496,7 +13494,7 @@ void main () {
           dispose: () => {
           }
         };
-      if (config.webglConfig)
+      if (!config.webglConfig)
         config.webglConfig = { alpha: true };
       this.htmlCanvas = canvas;
       this.context = new ManagedWebGLRenderingContext(canvas, config.webglConfig);

@@ -447,30 +447,10 @@ function patchModelSettingsResolveURL(pixi) {
   proto.__spive2dEncodedPathResolve = true;
 }
 
-function patchCubismMocReleaseOrder(pixi) {
-  const proto = pixi?.live2d?.CubismInternalModel?.prototype;
-  if (!proto || proto.__spive2dMocReleaseOrder) return;
-  const original = proto.destroy;
-  proto.destroy = function () {
-    const moc = this.__moc;
-    if (moc) this.__moc = undefined;
-    try {
-      return original.apply(this, arguments);
-    } finally {
-      if (moc && moc._moc) {
-        if (typeof moc._modelCount === 'number') moc._modelCount = 0;
-        moc.release();
-      }
-    }
-  };
-  proto.__spive2dMocReleaseOrder = true;
-}
-
 export function applyLive2DEnginePatches(pixi) {
   patchModelSettingsResolveURL(pixi);
   patchRemoteXHRLoader(pixi);
   patchLenientJSONLoader(pixi);
-  patchCubismMocReleaseOrder(pixi);
 }
 
 export async function ensureLive2DRuntimeReady(pixi) {

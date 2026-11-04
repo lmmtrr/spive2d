@@ -4417,10 +4417,10 @@ var spine = (() => {
       if (this.drainDisabled) return;
       this.drainDisabled = true;
       let objects = this.objects;
-      let listeners = this.animState.listeners;
       for (let i = 0; i < objects.length; i += 2) {
         let type = objects[i];
         let entry = objects[i + 1];
+        let listeners = this.animState.listeners.slice();
         switch (type) {
           case 0 /* start */:
             if (entry.listener && entry.listener.start) entry.listener.start(entry);
@@ -5863,6 +5863,11 @@ var spine = (() => {
           try {
             const atlas = this.createTextureAtlas(path, atlasText);
             let toLoad = atlas.pages.length, abort = false;
+            if (toLoad === 0) {
+              this.success(success, path, atlas);
+              resolve(atlas);
+              return;
+            }
             for (let page of atlas.pages) {
               this.loadTexture(
                 !fileAlias ? parent + page.name : fileAlias[page.name],
@@ -8473,12 +8478,12 @@ var spine = (() => {
       this.boneData = boneData;
     }
   };
-  var BlendMode = /* @__PURE__ */ ((BlendMode3) => {
-    BlendMode3[BlendMode3["Normal"] = 0] = "Normal";
-    BlendMode3[BlendMode3["Additive"] = 1] = "Additive";
-    BlendMode3[BlendMode3["Multiply"] = 2] = "Multiply";
-    BlendMode3[BlendMode3["Screen"] = 3] = "Screen";
-    return BlendMode3;
+  var BlendMode = /* @__PURE__ */ ((BlendMode2) => {
+    BlendMode2[BlendMode2["Normal"] = 0] = "Normal";
+    BlendMode2[BlendMode2["Additive"] = 1] = "Additive";
+    BlendMode2[BlendMode2["Multiply"] = 2] = "Multiply";
+    BlendMode2[BlendMode2["Screen"] = 3] = "Screen";
+    return BlendMode2;
   })(BlendMode || {});
 
   // spine-core/src/TransformConstraintData.ts
@@ -11176,7 +11181,7 @@ var spine = (() => {
             mixY = mixY2;
             mixScaleX = mixScaleX2;
             mixScaleY = mixScaleY2;
-            mixScaleX = mixScaleX2;
+            mixShearY = mixShearY2;
             keyMap = nextMap;
           }
           timelines.push(timeline);
@@ -13344,6 +13349,13 @@ void main () {
     temp2 = new Vector2();
     temp3 = new Color();
     temp4 = new Color();
+    /**
+     * Batches additive slots together with normal slots by rendering additive slots with premultiplied alpha RGB and zero alpha,
+     * while using normal PMA blending. This reduces draw calls for normal/additive/normal sequences with the same texture.
+     *
+     * Disabled by default in 4.2 to preserve exact additive alpha accumulation for transparent targets.
+     */
+    pmaAdditiveBatching = false;
     constructor(context, twoColorTint = true) {
       this.twoColorTint = twoColorTint;
       if (twoColorTint)
@@ -13417,14 +13429,17 @@ void main () {
         if (texture) {
           let slotColor = slot.color;
           let finalColor = this.tempColor;
+          let slotBlendMode = slot.data.blendMode;
+          let additiveBlend = this.pmaAdditiveBatching && premultipliedAlpha && slotBlendMode == 1 /* Additive */;
+          let alpha = skeletonColor.a * slotColor.a * attachmentColor.a;
           finalColor.r = skeletonColor.r * slotColor.r * attachmentColor.r;
           finalColor.g = skeletonColor.g * slotColor.g * attachmentColor.g;
           finalColor.b = skeletonColor.b * slotColor.b * attachmentColor.b;
-          finalColor.a = skeletonColor.a * slotColor.a * attachmentColor.a;
+          finalColor.a = additiveBlend ? 0 : alpha;
           if (premultipliedAlpha) {
-            finalColor.r *= finalColor.a;
-            finalColor.g *= finalColor.a;
-            finalColor.b *= finalColor.a;
+            finalColor.r *= alpha;
+            finalColor.g *= alpha;
+            finalColor.b *= alpha;
           }
           let darkColor = this.tempColor2;
           if (!slot.darkColor)
@@ -13439,9 +13454,9 @@ void main () {
             }
             darkColor.a = premultipliedAlpha ? 1 : 0;
           }
-          let slotBlendMode = slot.data.blendMode;
-          if (slotBlendMode != blendMode) {
-            blendMode = slotBlendMode;
+          let batchBlendMode = additiveBlend ? 0 /* Normal */ : slotBlendMode;
+          if (batchBlendMode != blendMode) {
+            blendMode = batchBlendMode;
             batcher.setBlendMode(blendMode, premultipliedAlpha);
           }
           if (clipper.isClipping()) {
@@ -13537,6 +13552,8 @@ void main () {
     shapes;
     shapesShader;
     activeRenderer = null;
+    maxCanvasWidth = 0;
+    maxCanvasHeight = 0;
     skeletonRenderer;
     skeletonDebugRenderer;
     constructor(canvas, context, twoColorTint = true) {
@@ -13910,7 +13927,7 @@ void main () {
     }
     resize(resizeMode) {
       let canvas = this.canvas;
-      var dpr = window.devicePixelRatio || 1;
+      var dpr = this.getSafeDevicePixelRatio(canvas.clientWidth, canvas.clientHeight);
       var w = Math.round(canvas.clientWidth * dpr);
       var h = Math.round(canvas.clientHeight * dpr);
       if (canvas.width != w || canvas.height != h) {
@@ -13929,6 +13946,18 @@ void main () {
         this.camera.setViewport(sourceWidth * scale, sourceHeight * scale);
       }
       this.camera.update();
+    }
+    getSafeDevicePixelRatio(cssWidth, cssHeight) {
+      const dpr = window.devicePixelRatio || 1;
+      if (cssWidth <= 0 || cssHeight <= 0) return dpr;
+      if (this.maxCanvasWidth === 0 || this.maxCanvasHeight === 0) {
+        const gl = this.context.gl;
+        const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+        const maxViewportDims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+        this.maxCanvasWidth = Math.min(maxRenderbufferSize, maxViewportDims[0]);
+        this.maxCanvasHeight = Math.min(maxRenderbufferSize, maxViewportDims[1]);
+      }
+      return Math.min(dpr, this.maxCanvasWidth / cssWidth, this.maxCanvasHeight / cssHeight);
     }
     enableRenderer(renderer) {
       if (this.activeRenderer === renderer) return;
