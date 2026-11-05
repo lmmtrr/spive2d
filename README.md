@@ -42,7 +42,7 @@ Hold `Ctrl` (`Cmd` on macOS) over the model to list every mesh/part under the cu
 | ------------------------ | ------------------------ |
 | 📋 Show the list         | Hold `Ctrl`              |
 | 🔼 Select an item        | `↑` / `↓` (holding Ctrl) |
-| 🔁 Toggle visible/hidden | `Enter` or `Ctrl+Click`  |
+| 🔁 Toggle visible/hidden | `←` / `→`, `Enter` or `Ctrl+Click` |
 
 - `●` marks a visible item and `○` a hidden one. The selected item's region is highlighted; a hidden item is shown as an outline.
 - The selection starts at the front-most visible item, or the back-most hidden item if nothing visible is under the cursor.

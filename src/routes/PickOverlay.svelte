@@ -236,10 +236,11 @@
       return;
     }
     if (!menu || !isActive()) return;
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'Enter') return;
+    const toggle = e.key === 'Enter' || e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+    if (!toggle && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (e.key === 'Enter') {
+    if (toggle) {
       if (!e.repeat) toggleSelected();
     } else {
       moveSelection(e.key === 'ArrowUp' ? -1 : 1);
