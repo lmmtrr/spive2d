@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.61] - 2026-11-05
+
+### Added
+
+- Add Ctrl picker to hide/show meshes and parts
+- Toggle play/pause with Space
+
+### Fixed
+
+- Load models from a single dropped model file or model.json URL
+
 ## [0.1.60] - 2026-11-04
 
 ### Added
