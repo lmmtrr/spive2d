@@ -141,6 +141,8 @@ export function toLive2DOpacity(value) {
   return Math.min(1, Math.max(0, opacity));
 }
 
+let cubism2DrawSeq = 0;
+
 export function installLive2DDrawableFilter(coreModel, getOpacity) {
   const opacities = coreModel?._model?.drawables?.opacities;
   if (opacities) {
@@ -172,6 +174,9 @@ export function installLive2DDrawableFilter(coreModel, getOpacity) {
       if (drawParam?.getClipBufPre_clipContextMask?.()) {
         return original.call(this, drawParam, context, drawContext, ...rest);
       }
+      this.__spive2dDrawTime = performance.now();
+      this.__spive2dDrawSeq = ++cubism2DrawSeq;
+      this.__spive2dPartsOpacity = drawContext?._$VS;
       const factor = getOpacity(index);
       if (factor === 1 || !drawContext) return original.call(this, drawParam, context, drawContext, ...rest);
       if (!(factor > 0)) return;

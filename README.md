@@ -33,6 +33,21 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
 
+## 👁️ Hiding Meshes/Parts
+
+Hold `Ctrl` (`Cmd` on macOS) over the model to list every mesh/part under the cursor, including hidden ones (Spine and Live2D only).
+
+| Action                   | Input                    |
+| ------------------------ | ------------------------ |
+| 📋 Show the list         | Hold `Ctrl`              |
+| 🔼 Select an item        | `↑` / `↓` (holding Ctrl) |
+| 🔁 Toggle visible/hidden | `Enter` or `Ctrl+Click`  |
+
+- `●` marks a visible item and `○` a hidden one. The selected item's region is highlighted; a hidden item is shown as an outline.
+- The selection starts at the front-most visible item, or the back-most hidden item if nothing visible is under the cursor.
+- Items toggled here are also reflected in the sidebar's mesh/part list.
+- Live2D: while the sidebar shows **Parts**, whole parts are listed and toggled; otherwise individual Drawables.
+
 ## 🍎 Note for macOS Users
 
 If the application displays a message saying it is damaged and cannot be opened, you may need to remove the quarantine attribute. Run the following command in your terminal:

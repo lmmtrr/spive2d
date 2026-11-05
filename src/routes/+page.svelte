@@ -19,6 +19,7 @@
   import Notification from './Notification.svelte';
   import ExportQueue from './ExportQueue.svelte';
   import SceneThumbnailGrid from './SceneThumbnailGrid.svelte';
+  import PickOverlay from './PickOverlay.svelte';
   import { thumbnailManager } from '#lib/thumbnailManager.svelte.js';
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
@@ -600,6 +601,7 @@
   />
   <SceneThumbnailGrid bind:open={sceneGridOpen} onSelect={(index) => handleSceneChange({ target: { value: index } })} />
   <div id="canvasContainer" bind:this={canvasContainer}></div>
+  <PickOverlay dialogOpen={dialogOpen || sceneGridOpen} onChange={() => sidebar?.refreshProperties()} />
 </div>
 
 <AnimationController bind:this={animController} />

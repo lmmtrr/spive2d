@@ -1,17 +1,23 @@
 import { getRenderer } from '#lib/rendererStore.svelte.js';
 
+const SIDEBAR_WIDTH = 250;
+const CONTROLLER_HEIGHT = 80;
+
+export const isPickModifier = (e) => e.ctrlKey || e.metaKey;
+
+export const isViewerPoint = (x, y) => x > SIDEBAR_WIDTH && (window.innerHeight - y > CONTROLLER_HEIGHT);
+
 export function createTransformAction() {
   let isMove = false;
   let startX = 0;
   let startY = 0;
   let mouseDown = false;
-  const SIDEBAR_WIDTH = 250;
-  const CONTROLLER_HEIGHT = 80;
 
   return function transformAction(node, { appState, sidebar, animController, dialogOpen }) {
 
     function handleMouseDown(e) {
       if (dialogOpen || !appState.initialized || appState.processing || e.button === 2) return;
+      if (e.button === 0 && isPickModifier(e)) return;
       startX = e.clientX;
       startY = e.clientY;
       mouseDown = true;

@@ -29,6 +29,7 @@ import {
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
 import { createSorter, findIdleAnimation } from '../utils.js';
+import { meshContainsPoint, toTriangles } from '../pick.js';
 import { showNotification } from '../notificationStore.svelte.js';
 import { appState } from '../appState.svelte.js';
 
@@ -693,6 +694,122 @@ export class Live2DRenderer extends BaseRenderer {
 
   #defaultDrawableOpacity(index) {
     return this.#drawableIds[index]?.includes('Mosaic') ? 0 : 1;
+  }
+
+  pickTargets(x, y, category) {
+    const model = this.#model;
+    const internalModel = model?.internalModel;
+    const coreModel = internalModel?.coreModel;
+    if (!coreModel || this.#isExport) return [];
+    const byPart = category === 'parts';
+    const local = model.toModelPosition(new PIXI.Point(x, y));
+    const isCubism2 = typeof coreModel.getDrawableVertexIndices !== 'function';
+    const orders = isCubism2 ? null : coreModel.getDrawableRenderOrders?.();
+    const context = isCubism2 ? coreModel.getModelContext?.() : null;
+    const drawList = context?._$aS ?? null;
+    const indicesOf = (i) => (isCubism2 ? coreModel.getIndexArray?.(i) : coreModel.getDrawableVertexIndices(i));
+    let latestDraw = -Infinity;
+    if (drawList) {
+      for (const drawData of drawList) latestDraw = Math.max(latestDraw, drawData?.__spive2dDrawTime ?? -Infinity);
+    }
+    const partHidden = (part) => this.partOverrides.get(this.#partIds[part]) === 0;
+    const parentPartOf = (part) => (isCubism2 ? -1 : coreModel._model?.parts?.parentIndices?.[part] ?? -1);
+    const partOfDrawable = (i) =>
+      isCubism2
+        ? context?._$8b?.[i]?._$IP ?? -1
+        : coreModel.getDrawableParentPartIndex?.(i) ?? coreModel._model?.drawables?.parentPartIndices?.[i] ?? -1;
+    const targetPartOf = (i) => {
+      const parent = partOfDrawable(i);
+      for (let part = parent, guard = 0; part >= 0 && guard < 256; part = parentPartOf(part), guard++) {
+        if (partHidden(part)) return part;
+      }
+      return parent;
+    };
+    const stateOf = (i) => {
+      const drawableHidden = this.#getDrawableOpacity(i) === 0;
+      const part = byPart ? targetPartOf(i) : -1;
+      if (byPart && (part < 0 || drawableHidden)) return null;
+      const userHidden = byPart ? partHidden(part) : drawableHidden;
+      let visible;
+      let order;
+      if (drawList) {
+        const drawData = drawList[i];
+        if (!(drawData?.__spive2dDrawTime >= latestDraw - 4)) return null;
+        visible = !userHidden && (drawData.__spive2dPartsOpacity ?? 1) > 0;
+        order = drawData.__spive2dDrawSeq;
+      } else {
+        if (!userHidden && coreModel.getDrawableDynamicFlagIsVisible?.(i) === false) return null;
+        visible = !userHidden && coreModel.getDrawableOpacity(i) > 0.004;
+        order = orders ? orders[i] : i;
+      }
+      if (!visible && !userHidden) return null;
+      return { part, order, hidden: !visible };
+    };
+    const hits = new Map();
+    for (let i = 0; i < this.#drawableIds.length; i++) {
+      const state = stateOf(i);
+      if (!state) continue;
+      const key = byPart ? state.part : i;
+      const existing = hits.get(key);
+      if (existing && existing.order >= state.order) continue;
+      const indices = indicesOf(i);
+      if (!indices || !meshContainsPoint(internalModel.getDrawableVertices(i), indices, local.x, local.y)) continue;
+      hits.set(key, { key, order: state.order, hidden: state.hidden });
+    }
+    const sorted = [...hits.values()].sort((a, b) => b.order - a.order);
+    const toScreen = (drawables) => {
+      const point = new PIXI.Point();
+      let first = true;
+      const map = (vx, vy, out) => {
+        point.set(vx, vy);
+        internalModel.localTransform.apply(point, point);
+        model.toGlobal(point, point, !first);
+        first = false;
+        out[0] = point.x;
+        out[1] = point.y;
+      };
+      const chunks = drawables.map((i) => toTriangles(internalModel.getDrawableVertices(i), indicesOf(i), map));
+      if (chunks.length === 1) return chunks[0];
+      const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+      let offset = 0;
+      for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return out;
+    };
+    const drawablesOfPart = (part) => {
+      const result = [];
+      for (let i = 0; i < this.#drawableIds.length; i++) if (stateOf(i)?.part === part) result.push(i);
+      return result;
+    };
+    return sorted.map(({ key, hidden }) => {
+      let triangles = null;
+      return {
+        id: byPart ? `part:${key}` : key,
+        name: byPart ? this.#partIds[key] : this.#drawableIds[key],
+        hidden,
+        get triangles() {
+          return (triangles ??= toScreen(byPart ? drawablesOfPart(key) : [key]));
+        },
+      };
+    });
+  }
+
+  setTargetHidden(id, hidden) {
+    if (typeof id === 'string' && id.startsWith('part:')) {
+      const index = Number(id.slice(5));
+      const name = this.#partIds[index];
+      if (name === undefined) return;
+      if (!hidden && (this.#initialPartOpacities.get(name) ?? 1) > 0) this.resetPropertyItem('parts', name, index);
+      else this.updatePropertyItem('parts', name, index, hidden ? 0 : 1);
+      this.render();
+      return;
+    }
+    const name = this.#drawableIds[id];
+    if (name === undefined) return;
+    if (!hidden && this.#defaultDrawableOpacity(id) === 1) this.resetPropertyItem('drawables', name, id);
+    else this.updatePropertyItem('drawables', name, id, hidden ? 0 : 1);
   }
 
   updatePropertyItem(category, name, index, value) {

@@ -85,6 +85,13 @@ export class BaseRenderer {
     }
   }
 
+  pickTargets(x, y, category) {
+    return null;
+  }
+
+  setTargetHidden(id, hidden) {
+  }
+
   getModelEdits() {
     return null;
   }

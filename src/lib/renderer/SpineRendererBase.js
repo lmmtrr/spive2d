@@ -33,8 +33,10 @@ import {
   stripExtension
 } from './SpineMask.js';
 import { createSorter } from '../utils.js';
+import { meshContainsPoint, toTriangles } from '../pick.js';
 
 const sortByDisplayName = createSorter(item => item.displayName || item.name);
+const REGION_TRIANGLES = [0, 1, 2, 2, 3, 0];
 
 export function extraModelName(scene, extraFile) {
   const mainExt = scene.mainExt || '';
@@ -89,6 +91,7 @@ export class SpineRendererBase extends BaseRenderer {
   _paused = false;
   _speed = 1.0;
   _attachmentsCache = {};
+  _suppressedAttachments = {};
   _activeSkins = null;
   _isFileJson = false;
   _maskShader = null;
@@ -548,7 +551,31 @@ export class SpineRendererBase extends BaseRenderer {
   _getSlotWorldBounds(slot) {
     const attachment = getSlotAttachment(slot);
     if (!attachment) return null;
-    let vertices;
+    const vertices = this._attachmentWorldVertices(slot, attachment);
+    if (vertices) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      let hasNan = false;
+      for (let i = 0; i < vertices.length; i += 2) {
+        const x = vertices[i];
+        const y = vertices[i + 1];
+        if (isNaN(x) || isNaN(y)) {
+          hasNan = true;
+          break;
+        }
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      if (!hasNan) {
+        return { w: maxX - minX, h: maxY - minY, minX, maxX, minY, maxY };
+      }
+    }
+    return this._getSlotBoneBounds(slot);
+  }
+
+  _attachmentWorldVertices(slot, attachment) {
+    let vertices = null;
     if (attachment.computeWorldVertices) {
       const skeleton = this._getSlotSkeleton(slot);
       const version = skeleton?.data?.version || '';
@@ -572,27 +599,13 @@ export class SpineRendererBase extends BaseRenderer {
         }
       }
     }
-    if (vertices) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      let hasNan = false;
-      for (let i = 0; i < vertices.length; i += 2) {
-        const x = vertices[i];
-        const y = vertices[i + 1];
-        if (isNaN(x) || isNaN(y)) {
-          hasNan = true;
-          break;
-        }
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-      if (!hasNan) {
-        return { w: maxX - minX, h: maxY - minY, minX, maxX, minY, maxY };
-      }
-    }
+    return vertices;
+  }
+
+  _getSlotBoneBounds(slot) {
+    const attachment = getSlotAttachment(slot);
     const bone = slot.bone;
-    if (bone) {
+    if (attachment && bone) {
       let scaleX = Math.abs(bone.scaleX || 1);
       let scaleY = Math.abs(bone.scaleY || 1);
       let curr = bone.parent;
@@ -1374,7 +1387,7 @@ export class SpineRendererBase extends BaseRenderer {
       this._applyParameterOverrides(key);
       if (advance) skeleton.update?.(delta * this._speed);
       skeleton.updateWorldTransform(2);
-      this._syncHiddenAttachments(skeleton, key);
+      this._syncHiddenAttachments(skeleton, key, true);
       const maskShader = entry.mask ? this._getMaskShader() : null;
       let shader = maskShader || this._shader;
       shader.bind();
@@ -1432,7 +1445,10 @@ export class SpineRendererBase extends BaseRenderer {
     });
   }
 
-  _syncHiddenAttachments(skeleton, id) {
+  _syncHiddenAttachments(skeleton, id, record = false) {
+    const previous = this._suppressedAttachments[id];
+    const suppressed = new Map();
+    if (record) this._suppressedAttachments[id] = suppressed;
     if (!this._attachmentsCache) return;
     for (const compositeKey in this._attachmentsCache) {
       const entry = this._attachmentsCache[compositeKey];
@@ -1441,10 +1457,69 @@ export class SpineRendererBase extends BaseRenderer {
         const slot = skeleton.slots[idx];
         const att = getSlotAttachment(slot);
         if (att && att.name === name) {
+          suppressed.set(slot, att);
           setSlotAttachment(slot, null);
+        } else if (!att && previous?.get(slot)?.name === name) {
+          suppressed.set(slot, previous.get(slot));
         }
       }
     }
+  }
+
+  _pickableTriangles(attachment) {
+    if (!attachment?.computeWorldVertices) return null;
+    if (attachment.triangles) return attachment.triangles;
+    return typeof attachment.worldVerticesLength === 'number' ? null : REGION_TRIANGLES;
+  }
+
+  pickTargets(x, y) {
+    if (!this._ctx || !this._mvp || this.isExport) return [];
+    const rect = this._canvas.getBoundingClientRect();
+    const ratioX = rect.width > 0 ? this._canvas.width / rect.width : 1;
+    const ratioY = rect.height > 0 ? this._canvas.height / rect.height : 1;
+    const hits = [];
+    for (const key of this._getSortedSkeletonKeys()) {
+      const { skeleton } = this._skeletons[key];
+      const suppressed = this._suppressedAttachments[key];
+      for (const slot of skeleton.drawOrder || skeleton.slots) {
+        const visible = getSlotAttachment(slot);
+        const attachment = visible || suppressed?.get(slot);
+        const indices = this._pickableTriangles(attachment);
+        if (!indices) continue;
+        const color = slot.appliedPose?.color ?? slot.pose?.color ?? slot.color;
+        if (visible && (color?.a ?? 1) <= 0) continue;
+        const vertices = this._attachmentWorldVertices(slot, attachment);
+        if (!vertices) continue;
+        const projected = new Float32Array(vertices.length);
+        for (let i = 0; i < vertices.length; i += 2) {
+          const { px, py } = this._projectToPixel(vertices[i], vertices[i + 1]);
+          projected[i] = px / ratioX;
+          projected[i + 1] = py / ratioY;
+        }
+        if (!meshContainsPoint(projected, indices, x, y)) continue;
+        const index = parseInt(key) * 1000000 + skeleton.slots.indexOf(slot);
+        let triangles = null;
+        hits.push({
+          id: `${index}|${attachment.name}`,
+          name: attachment.name,
+          hidden: !visible,
+          get triangles() {
+            return (triangles ??= toTriangles(projected, indices, (px, py, out) => {
+              out[0] = px;
+              out[1] = py;
+            }));
+          },
+        });
+      }
+    }
+    return hits.reverse();
+  }
+
+  setTargetHidden(id, hidden) {
+    const separator = String(id).indexOf('|');
+    if (separator < 0) return;
+    const index = Number(String(id).slice(0, separator));
+    this.updatePropertyItem('attachments', String(id).slice(separator + 1), index, !hidden);
   }
 
   _releaseScene() {
@@ -1458,6 +1533,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._atlasPaths = [];
     this._atlasTexts = new Map();
     this._attachmentsCache = {};
+    this._suppressedAttachments = {};
     this._activeSkins = null;
     this._skeletons = {};
     this._animationStates = [];
@@ -2080,7 +2156,9 @@ export class SpineRendererBase extends BaseRenderer {
       this._attachmentsCache[compositeKey] = [slotIndex, name, skeletonId];
       const skeleton = skelEntry.skeleton;
       const slot = skeleton.slots[slotIndex];
-      if (getSlotAttachment(slot)?.name === name) {
+      const attachment = getSlotAttachment(slot);
+      if (attachment?.name === name) {
+        (this._suppressedAttachments[skeletonId] ??= new Map()).set(slot, attachment);
         setSlotAttachment(slot, null);
       }
     }
