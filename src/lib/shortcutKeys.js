@@ -9,6 +9,7 @@ const DEFAULT_SHORTCUTS = {
   nextScene: 's',
   prevAnim: 'z',
   nextAnim: 'x',
+  togglePause: ' ',
   exportImage: 'e',
   exportImageSeq: 'd',
   exportAnim: 'c',

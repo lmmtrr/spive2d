@@ -44,7 +44,7 @@
 
   const shortcutActions = [
     'prevScene', 'nextScene',
-    'prevAnim', 'nextAnim', 
+    'prevAnim', 'nextAnim', 'togglePause',
     'exportImage', 'exportImageSeq', 'exportAnim', 'exportModel',
     'toggleDialog', 'toggleSceneGrid', 'addToList', 'toggleFullscreen',
   ];
@@ -54,6 +54,7 @@
     nextScene: 'shortcutNextScene',
     prevAnim: 'shortcutPrevAnim',
     nextAnim: 'shortcutNextAnim',
+    togglePause: 'shortcutTogglePause',
     toggleDialog: 'shortcutToggleDialog',
     toggleSceneGrid: 'shortcutToggleSceneGrid',
     exportImage: 'shortcutExportImage',

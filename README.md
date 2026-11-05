@@ -23,6 +23,7 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 | ⏭️ Next Scene            | `S`                        |
 | ◀️ Previous Animation    | `Z`                        |
 | ▶️ Next Animation        | `X`                        |
+| ⏯️ Play/Pause            | `Space`                    |
 | 📷 Export Image          | `E`                        |
 | 🖼️ Export Image Sequence | `D`                        |
 | 💾 Export Animation      | `C`                        |

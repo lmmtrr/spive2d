@@ -23,6 +23,7 @@ https://github.com/user-attachments/assets/202c20b2-de3a-4e9c-9d11-a058b256510b
 | ⏭️ 下一个场景          | `S`                        |
 | ◀️ 上一个动画          | `Z`                        |
 | ▶️ 下一个动画          | `X`                        |
+| ⏯️ 播放/暂停           | `Space`                    |
 | 📷 导出图像            | `E`                        |
 | 🖼️ 导出图像序列        | `D`                        |
 | 💾 导出动画            | `C`                        |

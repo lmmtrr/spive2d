@@ -449,6 +449,7 @@
     else if (isShortcut(e, shortcuts.nextScene)) { navigateScene(1); }
     else if (isShortcut(e, shortcuts.prevAnim)) { sidebar?.navigateAnimation(-1); }
     else if (isShortcut(e, shortcuts.nextAnim)) { sidebar?.navigateAnimation(1); }
+    else if (isShortcut(e, shortcuts.togglePause)) { e.preventDefault(); animController?.togglePlayPause(); }
     else if (isShortcut(e, shortcuts.exportImage)) { doExportImage(); }
     else if (isShortcut(e, shortcuts.exportImageSeq)) { doExportImageSequence(); }
     else if (isShortcut(e, shortcuts.exportAnim)) { doExportAnimation(); }

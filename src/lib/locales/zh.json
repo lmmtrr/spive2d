@@ -61,6 +61,7 @@
   "shortcutNextScene": "下一个场景",
   "shortcutPrevAnim": "上一个动画",
   "shortcutNextAnim": "下一个动画",
+  "shortcutTogglePause": "播放 / 暂停",
   "shortcutToggleDialog": "切换设置",
   "shortcutToggleSceneGrid": "切换场景缩略图",
   "shortcutExportImage": "导出图片",

@@ -61,6 +61,7 @@
   "shortcutNextScene": "Next Scene",
   "shortcutPrevAnim": "Previous Animation",
   "shortcutNextAnim": "Next Animation",
+  "shortcutTogglePause": "Play / Pause",
   "shortcutToggleDialog": "Toggle Settings",
   "shortcutToggleSceneGrid": "Toggle Scene Thumbnails",
   "shortcutExportImage": "Export Image",

@@ -113,7 +113,7 @@
     return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
   });
 
-  function togglePlayPause() {
+  export function togglePlayPause() {
     const newPaused = !appState.animation.paused;
     appState.animation.paused = newPaused;
     const renderer = getRenderer();

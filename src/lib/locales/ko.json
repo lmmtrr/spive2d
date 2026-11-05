@@ -61,6 +61,7 @@
   "shortcutNextScene": "다음 씬",
   "shortcutPrevAnim": "이전 애니메이션",
   "shortcutNextAnim": "다음 애니메이션",
+  "shortcutTogglePause": "재생 / 일시정지",
   "shortcutToggleDialog": "설정 토글",
   "shortcutToggleSceneGrid": "장면 썸네일 토글",
   "shortcutExportImage": "이미지 내보내기",

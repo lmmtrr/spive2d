@@ -61,6 +61,7 @@
   "shortcutNextScene": "次のシーン",
   "shortcutPrevAnim": "前のアニメーション",
   "shortcutNextAnim": "次のアニメーション",
+  "shortcutTogglePause": "再生 / 一時停止",
   "shortcutToggleDialog": "設定の切替",
   "shortcutToggleSceneGrid": "シーンのサムネイルの切替",
   "shortcutExportImage": "画像エクスポート",
