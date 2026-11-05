@@ -170,6 +170,14 @@
               baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.model3.json'.length);
               ext1 = '.model3.json';
               ext2 = '.moc3';
+            } else if (fileNameWithExt === 'model3.json') {
+              baseName = 'model3';
+              ext1 = '.model3.json';
+              ext2 = '';
+            } else if (fileNameWithExt.endsWith('.model.json') || fileNameWithExt === 'model.json') {
+              baseName = fileNameWithExt === 'model.json' ? 'model' : fileNameWithExt.substring(0, fileNameWithExt.length - '.model.json'.length);
+              ext1 = '.model.json';
+              ext2 = '';
             } else if (fileNameWithExt.endsWith('.meta.json')) {
               baseName = fileNameWithExt.substring(0, fileNameWithExt.length - '.meta.json'.length);
               ext1 = '.meta.json';

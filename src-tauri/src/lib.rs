@@ -900,6 +900,10 @@ fn handle_dropped_path_blocking(
                 result
             }
             None => {
+                if let Some(parent) = path_obj.parent().filter(|_| is_model_entry_file(path_obj)) {
+                    let parent = parent.to_string_lossy().into_owned();
+                    return handle_dropped_path_blocking(parent, merge_sequential, skip_unity, app_handle);
+                }
                 app_handle.emit("progress", false).unwrap();
                 Err("Unsupported file type".to_string())
             }
@@ -908,6 +912,14 @@ fn handle_dropped_path_blocking(
         app_handle.emit("progress", false).unwrap();
         Err("Invalid path".to_string())
     }
+}
+
+fn is_model_entry_file(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    name.ends_with(".json") || name.contains(".skel") || name.contains(".atlas") || name.contains(".moc")
 }
 
 #[tauri::command]
