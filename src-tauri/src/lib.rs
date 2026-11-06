@@ -859,7 +859,10 @@ fn handle_dropped_path_blocking(
         let files = find_all_files(path_obj);
         let bundles = if skip_unity { HashSet::new() } else { find_unity_bundles(&files) };
         if bundles.is_empty() {
-            return get_subdir_files(path, merge_sequential, app_handle);
+            return match get_subdir_files(path.clone(), merge_sequential, app_handle.clone()) {
+                Err(e) if e.starts_with(NO_MODELS_MESSAGE) => nested_archives(path_obj, &files, merge_sequential, &app_handle).unwrap_or(Err(e)),
+                result => result,
+            };
         }
         let temp_dir = create_model_temp_dir(&app_handle)?;
         if !stage_directory(path_obj, files, &bundles, temp_dir.path()) {
@@ -912,6 +915,44 @@ fn handle_dropped_path_blocking(
         app_handle.emit("progress", false).unwrap();
         Err("Invalid path".to_string())
     }
+}
+
+fn nested_archives(
+    dir: &Path,
+    files: &[PathBuf],
+    merge_sequential: bool,
+    app_handle: &AppHandle,
+) -> Option<Result<HashMap<String, Vec<SceneData>>, String>> {
+    let archives: Vec<(&PathBuf, String)> = files.iter().filter_map(|f| archive_ext(f).map(|ext| (f, ext))).collect();
+    if archives.is_empty() {
+        return None;
+    }
+    let temp_dir = match create_model_temp_dir(app_handle) {
+        Ok(t) => t,
+        Err(e) => return Some(Err(e)),
+    };
+    let _ = app_handle.emit("progress", true);
+    let mut extracted = false;
+    for (archive, ext) in archives {
+        let rel = archive.strip_prefix(dir).unwrap_or(archive).with_extension("");
+        let dest = temp_dir.path().join(rel);
+        if fs::create_dir_all(&dest).is_err() {
+            continue;
+        }
+        match extract_archive(&archive.to_string_lossy(), &dest, &ext) {
+            Ok(()) => extracted = true,
+            Err(e) => eprintln!("Failed to extract archive {:?}: {}", archive, e),
+        }
+    }
+    if !extracted {
+        let _ = app_handle.emit("progress", false);
+        return None;
+    }
+    let result = get_subdir_files(temp_dir.path().to_string_lossy().into_owned(), merge_sequential, app_handle.clone());
+    if result.is_ok() {
+        keep_temp_dir(app_handle, temp_dir);
+    }
+    Some(result)
 }
 
 fn is_model_entry_file(path: &Path) -> bool {
@@ -1106,6 +1147,8 @@ fn list_files_recursive(dir: &Path) -> Vec<String> {
     result
 }
 
+const NO_MODELS_MESSAGE: &str = "No supported Spine (.atlas) or Live2D (.moc3) models found in directory.";
+
 fn get_subdir_files(
     folder_path: String,
     merge_sequential: bool,
@@ -1137,10 +1180,7 @@ fn get_subdir_files(
     app_handle.emit("progress", false).unwrap();
     if dir_files_map.is_empty() {
         let extracted = list_files_recursive(root_path);
-        return Err(format!(
-            "No supported Spine (.atlas) or Live2D (.moc3) models found in directory.\nExtracted files: {:?}",
-            extracted
-        ));
+        return Err(format!("{}\nExtracted files: {:?}", NO_MODELS_MESSAGE, extracted));
     }
     Ok(dir_files_map)
 }
