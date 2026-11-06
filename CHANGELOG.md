@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.62] - 2026-11-06
+
+### Added
+
+- Add Live2D and Spine parameter picking with alpha-accurate pick regions
+- Allow unbinding keyboard shortcuts
+- Load archives inside dropped folders when no models are found
+
+### Changed
+
+- Redesign sidebar and settings dialog
+
 ## [0.1.61] - 2026-11-05
 
 ### Added
