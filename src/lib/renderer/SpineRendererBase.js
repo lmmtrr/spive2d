@@ -37,6 +37,10 @@ import { meshContainsPoint, toTriangles } from '../pick.js';
 
 const sortByDisplayName = createSorter(item => item.displayName || item.name);
 const REGION_TRIANGLES = [0, 1, 2, 2, 3, 0];
+const INFLUENCE_CHUNK_MS = 24;
+const INFLUENCE_MOVE_EPSILON = 1e-4;
+const PARAMETER_KEY_STEPS = 50;
+const PHYSICS_POSE = 3;
 
 export function extraModelName(scene, extraFile) {
   const mainExt = scene.mainExt || '';
@@ -303,6 +307,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._primaryCache = null;
     this._parameterItems = null;
     this._parameterItemsMap = null;
+    this._resetParameterInfluence();
     this._loadedAtlases = [];
     this._atlasPaths = [];
     this._atlasTexts = new Map();
@@ -1472,7 +1477,12 @@ export class SpineRendererBase extends BaseRenderer {
     return typeof attachment.worldVerticesLength === 'number' ? null : REGION_TRIANGLES;
   }
 
-  pickTargets(x, y) {
+  pickTargets(x, y, category) {
+    if (category === 'parameters') return this._pickParameters(x, y);
+    return this._pickAttachments(x, y);
+  }
+
+  _pickAttachments(x, y) {
     if (!this._ctx || !this._mvp || this.isExport) return [];
     const rect = this._canvas.getBoundingClientRect();
     const ratioX = rect.width > 0 ? this._canvas.width / rect.width : 1;
@@ -1515,6 +1525,188 @@ export class SpineRendererBase extends BaseRenderer {
     return hits.reverse();
   }
 
+  _resetParameterInfluence() {
+    this._parameterInfluence = null;
+    this._influenceToken = null;
+  }
+
+  _getParameterInfluence() {
+    if (!this._parameterInfluence) {
+      const token = {};
+      this._influenceToken = token;
+      this._parameterInfluence = this._computeParameterInfluence(token);
+    }
+    return this._parameterInfluence;
+  }
+
+  _influenceSlots() {
+    const slots = [];
+    for (const key of this._getSortedSkeletonKeys()) {
+      const { skeleton } = this._skeletons[key];
+      const suppressed = this._suppressedAttachments[key];
+      skeleton.slots.forEach((slot, i) => {
+        const attachment = getSlotAttachment(slot) || suppressed?.get(slot);
+        if (!this._pickableTriangles(attachment)) return;
+        slots.push({ key, slot, attachment, id: parseInt(key) * 1000000 + i });
+      });
+    }
+    return slots;
+  }
+
+  async _computeParameterInfluence(token) {
+    const skeletons = this._skeletons;
+    const items = this._parameterItems ?? this._getParameterItems();
+    if (!items?.length) return null;
+    const isMerged = !!this._fileNames?.isMerged;
+    const scores = new Map();
+    let p = 0;
+    while (p < items.length) {
+      if (this._skeletons !== skeletons || this._influenceToken !== token) return null;
+      const base = [];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const entry of this._influenceSlots()) {
+        const vertices = this._attachmentWorldVertices(entry.slot, entry.attachment);
+        if (!vertices) continue;
+        base.push({ ...entry, vertices });
+        for (let j = 0; j + 1 < vertices.length; j += 2) {
+          const vx = vertices[j], vy = vertices[j + 1];
+          if (vx < minX) minX = vx;
+          if (vx > maxX) maxX = vx;
+          if (vy < minY) minY = vy;
+          if (vy > maxY) maxY = vy;
+        }
+      }
+      const extent = Math.max(maxX - minX, maxY - minY);
+      const scale = extent > 0 && Number.isFinite(extent) ? extent : 1;
+      const deadline = performance.now() + INFLUENCE_CHUNK_MS;
+      for (; p < items.length && performance.now() < deadline; p++) {
+        const item = items[p];
+        const targets = this._findParameterTargets(item);
+        if (targets.length === 0) continue;
+        const keys = isMerged ? Object.keys(skeletons) : [item._skeletonId];
+        const originals = targets.map((target) => getTargetProperty(target, item._prop));
+        const current = Number(originals[0]);
+        const quarter = (item.max - item.min) / 4;
+        const probes = [item.min, item.max, current + quarter <= item.max ? current + quarter : current - quarter];
+        for (const probe of probes) {
+          if (!(Math.abs(probe - current) > 1e-6)) continue;
+          for (const target of targets) setTargetProperty(target, item._prop, probe);
+          for (const key of keys) skeletons[key]?.skeleton.updateWorldTransform(PHYSICS_POSE);
+          for (const entry of base) {
+            if (!keys.includes(entry.key)) continue;
+            const after = this._attachmentWorldVertices(entry.slot, entry.attachment);
+            if (!after) continue;
+            const before = entry.vertices;
+            const n = Math.min(before.length, after.length);
+            let moved = 0;
+            for (let j = 0; j < n; j++) {
+              const d = Math.abs(after[j] - before[j]);
+              if (d > moved) moved = d;
+            }
+            moved /= scale;
+            if (!(moved > INFLUENCE_MOVE_EPSILON)) continue;
+            let slotScores = scores.get(entry.id);
+            if (!slotScores) {
+              slotScores = new Map();
+              scores.set(entry.id, slotScores);
+            }
+            if (moved > (slotScores.get(item.index) ?? 0)) slotScores.set(item.index, moved);
+          }
+        }
+        targets.forEach((target, i) => setTargetProperty(target, item._prop, originals[i]));
+        for (const key of keys) skeletons[key]?.skeleton.updateWorldTransform(PHYSICS_POSE);
+      }
+      if (p < items.length) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const bySlot = new Map();
+    const byParam = new Map();
+    for (const [slotId, slotScores] of scores) {
+      const params = [...slotScores].sort((a, b) => b[1] - a[1]).map(([param]) => param);
+      bySlot.set(slotId, params);
+      for (const param of params) {
+        if (!byParam.has(param)) byParam.set(param, []);
+        byParam.get(param).push(slotId);
+      }
+    }
+    return { bySlot, byParam };
+  }
+
+  _slotScreenTriangles(slotIds) {
+    const rect = this._canvas.getBoundingClientRect();
+    const ratioX = rect.width > 0 ? this._canvas.width / rect.width : 1;
+    const ratioY = rect.height > 0 ? this._canvas.height / rect.height : 1;
+    const map = (vx, vy, out) => {
+      const { px, py } = this._projectToPixel(vx, vy);
+      out[0] = px / ratioX;
+      out[1] = py / ratioY;
+    };
+    const chunks = [];
+    for (const id of slotIds) {
+      const slot = this._skeletons[String(Math.floor(id / 1000000))]?.skeleton.slots[id % 1000000];
+      const attachment = getSlotAttachment(slot);
+      const indices = this._pickableTriangles(attachment);
+      if (!indices) continue;
+      const color = slot.appliedPose?.color ?? slot.pose?.color ?? slot.color;
+      if ((color?.a ?? 1) <= 0) continue;
+      const vertices = this._attachmentWorldVertices(slot, attachment);
+      if (vertices) chunks.push(toTriangles(vertices, indices, map));
+    }
+    if (chunks.length === 1) return chunks[0];
+    const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return out;
+  }
+
+  async _pickParameters(x, y) {
+    const influence = await this._getParameterInfluence();
+    if (!influence || !this._ctx || !this._mvp || this.isExport) return [];
+    const params = [];
+    const seen = new Set();
+    for (const hit of this._pickAttachments(x, y)) {
+      if (hit.hidden) continue;
+      const slotId = Number(hit.id.slice(0, hit.id.indexOf('|')));
+      for (const param of influence.bySlot.get(slotId) ?? []) {
+        if (seen.has(param)) continue;
+        seen.add(param);
+        params.push(param);
+      }
+    }
+    const screen = (slotIds) => this._slotScreenTriangles(slotIds);
+    const result = [];
+    for (const param of params) {
+      const item = this._parameterItemsMap?.get(param);
+      if (!item) continue;
+      let triangles = null;
+      result.push({
+        id: `param:${param}`,
+        name: item.displayName || item.name,
+        hidden: false,
+        range: {
+          min: item.min,
+          max: item.max,
+          value: Number(getTargetProperty(item._target, item._prop)),
+          step: (item.max - item.min) / PARAMETER_KEY_STEPS,
+        },
+        get triangles() {
+          return (triangles ??= screen(influence.byParam.get(param) ?? []));
+        },
+      });
+    }
+    return result;
+  }
+
+  setTargetValue(id, value) {
+    if (typeof id !== 'string' || !id.startsWith('param:')) return;
+    const index = Number(id.slice(6));
+    const item = this._parameterItemsMap?.get(index);
+    if (!item) return;
+    this.updatePropertyItem('parameters', item.name, index, Math.min(item.max, Math.max(item.min, value)));
+  }
+
   setTargetHidden(id, hidden) {
     const separator = String(id).indexOf('|');
     if (separator < 0) return;
@@ -1538,6 +1730,7 @@ export class SpineRendererBase extends BaseRenderer {
     this._skeletons = {};
     this._animationStates = [];
     this._primaryCache = null;
+    this._resetParameterInfluence();
     if (this._evidenceCache) this._evidenceCache.clear();
     if (this._skelProfiles) this._skelProfiles.clear();
   }
@@ -1657,6 +1850,7 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   async setAnimation(value) {
+    this._resetParameterInfluence();
     if (value === '') {
       for (const key in this._skeletons) {
         const entry = this._skeletons[key];
@@ -2048,8 +2242,10 @@ export class SpineRendererBase extends BaseRenderer {
         this.parameterOverrides.set(idx, val);
       }
     } else if (category === 'skins') {
+      this._resetParameterInfluence();
       this._toggleSkin(name, value);
     } else if (category === 'attachments') {
+      this._resetParameterInfluence();
       const skeletonId = String(Math.floor(mergedIndex / 1000000));
       const slotIndex = mergedIndex % 1000000;
       this._toggleAttachment(name, slotIndex, value, skeletonId);
@@ -2130,6 +2326,7 @@ export class SpineRendererBase extends BaseRenderer {
   }
 
   applySkins(names) {
+    this._resetParameterInfluence();
     for (const key in this._skeletons) {
       const skel = this._skeletons[key].skeleton;
       const newSkin = new this._spine.Skin('_');
