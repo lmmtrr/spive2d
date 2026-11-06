@@ -4,6 +4,7 @@
   --text-color: #fff;
   --text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
   --border-color: 1px solid #999;
+  --ui-font-size: 14px;
   --scroll-track-color: rgba(238, 238, 238, 0.25);
   --scroll-thumb-color: #ccc;
   --scroll-thumb-hover-color: #e0e0e0;
@@ -110,4 +111,91 @@ option {
 canvas {
   display: none;
   vertical-align: top;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1.5px solid #ccc;
+  background: #0006 no-repeat center / 12px 12px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+input[type="checkbox"] {
+  border-radius: 4px;
+}
+
+input[type="radio"] {
+  border-radius: 50%;
+}
+
+input[type="checkbox"]:hover:not(:disabled),
+input[type="radio"]:hover:not(:disabled) {
+  border-color: #fff;
+  background-color: #555;
+}
+
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate,
+input[type="radio"]:checked {
+  border-color: #fff;
+}
+
+input[type="checkbox"]:checked {
+  background-image: url('data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="%23fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+}
+
+input[type="checkbox"]:indeterminate {
+  background-image: url('data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 8h8" stroke="%23fff" stroke-width="2.6" stroke-linecap="round"/></svg>');
+}
+
+input[type="radio"]:checked {
+  background-image: url('data:image/svg+xml;charset=utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="3.25" fill="%23fff"/></svg>');
+  background-size: 100% 100%;
+}
+
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="color"]:focus-visible {
+  outline: 1px solid #ccc;
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex-shrink: 0;
+  width: 64px;
+  height: 30px;
+  padding: 3px;
+  border: var(--border-color);
+  border-radius: 6px;
+  background-color: #0006;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+input[type="color"]:hover {
+  background-color: #555;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: 4px;
 }

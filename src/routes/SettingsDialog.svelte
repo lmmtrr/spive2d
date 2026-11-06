@@ -9,6 +9,8 @@
   import { showNotification } from '#lib/notificationStore.svelte.js';
   import { thumbnailCache } from '#lib/thumbnailCache.js';
   import { thumbnailManager } from '#lib/thumbnailManager.svelte.js';
+  import { scrollAssist } from '#lib/scrollAssist.js';
+  import { checkboxDrag } from '#lib/checkboxDrag.js';
 
   let { open = $bindable(false), onPathSelected, onShortcutsChanged } = $props();
   let windowWidth = $state(getPhysicalWindowSize().width);
@@ -24,6 +26,22 @@
   let exportDirPath = $state('');
   let shortcuts = $state(getShortcuts());
   let editingKey = $state(null);
+  let shortcutQuery = $state('');
+  const CHECKBOX_SETTINGS = [
+    { key: 'skipUnity', storageKey: 'spive2d_skip_unity', labelKey: 'skipUnity' },
+    { key: 'mergeSequential', storageKey: 'spive2d_merge_sequential', labelKey: 'mergeSequential' },
+    { key: 'enableIdle', storageKey: 'spive2d_enable_idle', labelKey: 'enableIdle' },
+    { key: 'enableBreathing', storageKey: 'spive2d_enable_breathing', labelKey: 'enableBreathing' },
+    { key: 'enableBlinking', storageKey: 'spive2d_enable_blinking', labelKey: 'enableBlinking' },
+    { key: 'showHitAreas', storageKey: 'spive2d_show_hit_areas', labelKey: 'showHitAreas' },
+    { key: 'enableMouseTracking', storageKey: 'spive2d_enable_mouse_tracking', labelKey: 'enableMouseTracking' },
+    { key: 'enablePhysics', storageKey: 'spive2d_enable_physics', labelKey: 'enablePhysics' },
+  ];
+  const checkboxOptions = $derived(
+    CHECKBOX_SETTINGS
+      .map((option) => ({ ...option, text: t(option.labelKey) }))
+      .sort((a, b) => a.text.localeCompare(b.text, locale))
+  );
 
   const isSpine = $derived.by(() => {
     if (!appState.directories?.files || !appState.directories?.selectedDir) return false;
@@ -47,6 +65,35 @@
     'prevAnim', 'nextAnim', 'togglePause',
     'exportImage', 'exportImageSeq', 'exportAnim', 'exportModel',
     'toggleDialog', 'toggleSceneGrid', 'addToList', 'toggleFullscreen',
+    'openDirectory',
+    'openArchive',
+    'openCurrentDirectory',
+    'focusUrl',
+    'focusFilter',
+    'prevExpression',
+    'nextExpression',
+    'toggleSetupPose',
+    'resetOverrides',
+    'resetView',
+    'resetScale',
+    'resetRotation',
+    'resetPositionX',
+    'resetPositionY',
+    'resetPosition',
+    'cycleTextureFilter',
+    'openBackgroundImage',
+    'removeBackground',
+    'openExportDirectory',
+    'resetExportMarginX',
+    'resetExportMarginY',
+    'resetExportMargin',
+    'resetExportScale',
+    'toggleIdle',
+    'toggleBreathing',
+    'toggleBlinking',
+    'toggleHitAreas',
+    'toggleMouseTracking',
+    'togglePhysics',
   ];
 
   const shortcutLabelKeys = {
@@ -63,7 +110,49 @@
     exportModel: 'shortcutExportModel',
     addToList: 'shortcutAddToList',
     toggleFullscreen: 'shortcutToggleFullscreen',
+    openDirectory: 'openDirectory',
+    openArchive: 'openArchive',
+    openCurrentDirectory: 'openCurrentDirectory',
+    focusUrl: 'shortcutFocusUrl',
+    focusFilter: 'shortcutFocusFilter',
+    prevExpression: 'shortcutPrevExpression',
+    nextExpression: 'shortcutNextExpression',
+    toggleSetupPose: 'shortcutToggleSetupPose',
+    resetOverrides: 'shortcutResetOverrides',
+    resetView: 'resetView',
+    resetScale: 'shortcutResetScale',
+    resetRotation: 'shortcutResetRotation',
+    resetPositionX: 'shortcutResetPositionX',
+    resetPositionY: 'shortcutResetPositionY',
+    resetPosition: 'shortcutResetPosition',
+    cycleTextureFilter: 'shortcutCycleTextureFilter',
+    openBackgroundImage: 'openImage',
+    removeBackground: 'removeBackground',
+    openExportDirectory: 'shortcutOpenExportDirectory',
+    resetExportMarginX: 'shortcutResetExportMarginX',
+    resetExportMarginY: 'shortcutResetExportMarginY',
+    resetExportMargin: 'shortcutResetExportMargin',
+    resetExportScale: 'shortcutResetExportScale',
+    toggleIdle: 'shortcutToggleLive2DIdle',
+    toggleBreathing: 'shortcutToggleLive2DBreathing',
+    toggleBlinking: 'shortcutToggleLive2DBlinking',
+    toggleHitAreas: 'shortcutToggleLive2DHitAreas',
+    toggleMouseTracking: 'shortcutToggleLive2DMouseTracking',
+    togglePhysics: 'shortcutToggleLive2DPhysics',
   };
+
+  const visibleShortcutActions = $derived.by(() => {
+    const query = shortcutQuery.trim().toLowerCase();
+    const actions = shortcutActions
+      .filter((a) => !query || t(shortcutLabelKeys[a]).toLowerCase().includes(query) || displayKey(shortcuts[a]).toLowerCase().includes(query))
+      .sort((a, b) => t(shortcutLabelKeys[a]).localeCompare(t(shortcutLabelKeys[b]), locale));
+    return [...actions.filter((a) => shortcuts[a]), ...actions.filter((a) => !shortcuts[a])];
+  });
+
+  function setCheckboxSetting(option, checked) {
+    appState[option.key] = checked;
+    saveSetting(option.storageKey, checked);
+  }
 
   $effect(() => {
     if (open && dialogEl && !dialogEl.open) {
@@ -122,17 +211,17 @@
     }
   }
 
-  async function handleOpenDirectory() {
+  export async function handleOpenDirectory() {
     const path = await openDirectory();
     if (path) onPathSelected([path]);
   }
 
-  async function handleOpenArchive() {
+  export async function handleOpenArchive() {
     const path = await openArchiveFile();
     if (path) onPathSelected([path]);
   }
 
-  async function handleOpenCurrentDir() {
+  export async function handleOpenCurrentDir() {
     if (!appState.initialized) return;
     const dir = appState.directories?.selectedDir;
     if (!dir || dir.startsWith('http://') || dir.startsWith('https://')) return;
@@ -166,7 +255,7 @@
     await refreshExportDirPath();
   }
 
-  async function handleOpenImage() {
+  export async function handleOpenImage() {
     const path = await openImageFile();
     if (!path) return;
     document.body.style.backgroundColor = '';
@@ -177,7 +266,18 @@
     appState.background = { ...appState.background, imagePath: path };
   }
 
-  function handleRemoveBackground() {
+  export function focusUrl() {
+    activeTab = 'general';
+    open = true;
+    requestAnimationFrame(() => {
+      const input = document.getElementById('urlInput');
+      if (!(input instanceof HTMLTextAreaElement)) return;
+      input.focus();
+      input.select();
+    });
+  }
+
+  export function handleRemoveBackground() {
     document.body.style.backgroundColor = '';
     document.body.style.backgroundImage = `
       linear-gradient(45deg, #333 25%, transparent 0),
@@ -605,7 +705,7 @@
 
 <svelte:window onresize={handleResize} />
 
-<dialog bind:this={dialogEl} onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja' || locale === 'ko'} onclick={handleDialogClick} class:wide={activeTab === 'export'}>
+<dialog bind:this={dialogEl} use:checkboxDrag onclose={onDialogClose} closedby="any" autofocus class:lang-ja={locale === 'ja' || locale === 'ko'} onclick={handleDialogClick} class:wide={activeTab === 'export'}>
   <div class="tab-bar">
     <button id="tabBtnGeneral" class="tab-btn" class:active={activeTab === 'general'} onclick={() => activeTab = 'general'}>
       {t('tabGeneral')}
@@ -652,55 +752,25 @@
         </div>
       </div>
       <hr>
-      <div class="input-row">
-        <label for="bgColorPicker">{t('backgroundColor')}</label>
-        <input type="color" id="bgColorPicker" oninput={handleColorChange}>
-      </div>
-      <div class="button-group">
+      <div class="button-group background-row">
+        <label class="color-swatch" title={t('backgroundColor').replace(/[:：]\s*$/, '')}>
+          <input type="color" id="bgColorPicker" oninput={handleColorChange}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+          </svg>
+        </label>
         <button onclick={handleOpenImage}>{t('openImage')}</button>
         <button onclick={handleRemoveBackground}>{t('removeBackground')}</button>
       </div>
       <hr>
-      <div class="input-row" style="margin-top: 5px;">
-        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
-          <input type="checkbox" bind:checked={appState.skipUnity} onchange={() => {
-            saveSetting('spive2d_skip_unity', appState.skipUnity);
-          }} style="width: auto; margin: 0;">
-          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('skipUnity')}</span>
-        </label>
-      </div>
-      <div class="input-row" style="margin-top: 5px;">
-        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
-          <input type="checkbox" bind:checked={appState.mergeSequential} onchange={() => {
-            saveSetting('spive2d_merge_sequential', appState.mergeSequential);
-          }} style="width: auto; margin: 0;">
-          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('mergeSequential')}</span>
-        </label>
-      </div>
-      <div class="input-row" style="margin-top: 5px;">
-        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
-          <input type="checkbox" bind:checked={appState.enableIdleAndBreathing} onchange={() => {
-            saveSetting('spive2d_enable_idle_and_breathing', appState.enableIdleAndBreathing);
-          }} style="width: auto; margin: 0;">
-          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableIdleAndBreathing')}</span>
-        </label>
-      </div>
-      <div class="input-row" style="margin-top: 5px;">
-        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
-          <input type="checkbox" bind:checked={appState.enableMouseTracking} onchange={() => {
-            saveSetting('spive2d_enable_mouse_tracking', appState.enableMouseTracking);
-          }} style="width: auto; margin: 0;">
-          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enableMouseTracking')}</span>
-        </label>
-      </div>
-      <div class="input-row" style="margin-top: 5px;">
-        <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
-          <input type="checkbox" bind:checked={appState.enablePhysics} onchange={() => {
-            saveSetting('spive2d_enable_physics', appState.enablePhysics);
-          }} style="width: auto; margin: 0;">
-          <span style="font-size: 15px; letter-spacing: 0.08em; font-weight: 500;">{t('enablePhysics')}</span>
-        </label>
-      </div>
+      {#each checkboxOptions as option (option.key)}
+        <div class="input-row checkbox-row">
+          <label style="display: flex; align-items: center; cursor: pointer; gap: 12px; width: 100%; white-space: nowrap;">
+            <input type="checkbox" checked={appState[option.key]} onchange={(e) => setCheckboxSetting(option, e.currentTarget.checked)} style="margin: 0;">
+            <span style="font-size: var(--ui-font-size); letter-spacing: 0.08em; font-weight: 500;">{option.text}</span>
+          </label>
+        </div>
+      {/each}
       <hr>
       <div class="button-group">
         <button onclick={handleClearThumbnailCache}>{t('clearThumbnailCache')}</button>
@@ -711,70 +781,74 @@
   {#if activeTab === 'export'}
     <div class="tab-content export-tab-wrapper">
       <div class="export-col-left">
-        <div class="button-group" style="justify-content: flex-start; gap: 10px;">
-          <button onclick={handleResetState} style="width: auto; padding: 0 15px;">{t('resetState')}</button>
-          <button onclick={handleOpenExportDir} style="width: auto; padding: 0 15px;">{t('openExportDirectory')}</button>
-        </div>
-        <div class="input-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px;">
-          <span>{t('exportDirectory')}</span>
-          <input type="text" readonly value={exportDirPath} title={exportDirPath}>
-          <div class="button-group" style="justify-content: flex-start; gap: 10px;">
-            <button onclick={handleChangeExportDir} style="width: auto; padding: 0 15px;">{t('changeExportDirectory')}</button>
-            <button onclick={handleResetExportDir} disabled={!appState.exportDir} style="width: auto; padding: 0 15px;">{t('resetExportDirectory')}</button>
+        <section>
+          <h3 class="section-title">{t('exportSectionOutput')}</h3>
+          <div class="input-row">
+            <input type="text" readonly value={exportDirPath} title={exportDirPath}>
           </div>
-        </div>
-        <div class="input-row radio-group" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px;">
-          <span>{t('exportSizeBase')}</span>
-          <div style="display: flex; gap: 15px;">
-            <label class="radio-label">
-              <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
-              <span>{t('baseWindow')}</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
-              <span>{t('baseOriginal')}</span>
-            </label>
+          <div class="button-row">
+            <button class="small-btn" onclick={handleChangeExportDir}>{t('changeExportDirectory')}</button>
+            <button class="small-btn" onclick={handleResetExportDir} disabled={!appState.exportDir}>{t('resetExportDirectory')}</button>
+            <button class="small-btn" onclick={handleOpenExportDir}>{t('openExportDirectory')}</button>
           </div>
-        </div>
-        <div class="input-row">
-          <label for="exportScale">{t('exportScale')}</label>
-          <input type="number" id="exportScale" min="10" max="1000" bind:value={appState.exportScale} onchange={handleExportScaleValidate}>
-          <span style="margin-left: 8px;">%</span>
-        </div>
-        <div class="input-row">
-          <label for="exportMarginX">{t('exportMarginX')}</label>
-          <input type="number" id="exportMarginX" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
-        </div>
-        <div class="input-row">
-          <label for="exportMarginY">{t('exportMarginY')}</label>
-          <input type="number" id="exportMarginY" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
-        </div>
-        <hr>
-        <div class="input-row">
-          <label for="transformScale">{t('transformScale')}</label>
-          <input type="number" id="transformScale" step="0.1" bind:value={appState.transform.scale} onchange={handleTransformScaleValidate}>
-        </div>
-        <div class="input-row">
-          <label for="transformRotate">{t('transformRotate')}</label>
-          <input type="number" id="transformRotate" step="1" bind:value={appState.transform.rotate} onchange={handleTransformRotateValidate}>
-        </div>
-        <div class="input-row">
-          <label for="transformMoveX">{t('transformMoveX')}</label>
-          <input type="number" id="transformMoveX" step="10" bind:value={appState.transform.moveX} onchange={handleTransformMoveXValidate}>
-        </div>
-        <div class="input-row">
-          <label for="transformMoveY">{t('transformMoveY')}</label>
-          <input type="number" id="transformMoveY" step="10" bind:value={appState.transform.moveY} onchange={handleTransformMoveYValidate}>
+        </section>
+
+        <section>
+          <h3 class="section-title">{t('exportSectionSize')}</h3>
+          <div class="input-row">
+            <span class="field-label">{t('exportSizeBase')}</span>
+            <div class="choice-group">
+              <label class="radio-label">
+                <input type="radio" name="exportBase" value="window" checked={appState.exportBase === 'window'} onchange={handleExportBaseChange}>
+                <span>{t('baseWindow')}</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="exportBase" value="original" checked={appState.exportBase === 'original'} onchange={handleExportBaseChange}>
+                <span>{t('baseOriginal')}</span>
+              </label>
+            </div>
+          </div>
+          <div class="input-row grid-row">
+            <label for="exportScale">{t('exportScale')}</label>
+            <input type="number" id="exportScale" min="10" max="1000" bind:value={appState.exportScale} onchange={handleExportScaleValidate}>
+            <span class="unit">%</span>
+          </div>
+          <div class="input-row grid-row">
+            <label for="exportMarginX">{t('exportMargin')} X</label>
+            <input type="number" id="exportMarginX" bind:value={appState.exportMarginX} onchange={handleExportMarginXValidate}>
+            <label class="second-label" for="exportMarginY">{t('exportMargin')} Y</label>
+            <input type="number" id="exportMarginY" bind:value={appState.exportMarginY} onchange={handleExportMarginYValidate}>
+          </div>
+        </section>
+
+        <section>
+          <h3 class="section-title">{t('exportSectionTransform')}</h3>
+          <div class="input-row grid-row">
+            <label for="transformScale">{t('transformScale')}</label>
+            <input type="number" id="transformScale" step="0.1" bind:value={appState.transform.scale} onchange={handleTransformScaleValidate}>
+            <label class="second-label" for="transformRotate">{t('transformRotate')}</label>
+            <input type="number" id="transformRotate" step="1" bind:value={appState.transform.rotate} onchange={handleTransformRotateValidate}>
+          </div>
+          <div class="input-row grid-row">
+            <label for="transformMoveX">{t('transformMove')} X</label>
+            <input type="number" id="transformMoveX" step="10" bind:value={appState.transform.moveX} onchange={handleTransformMoveXValidate}>
+            <label class="second-label" for="transformMoveY">{t('transformMove')} Y</label>
+            <input type="number" id="transformMoveY" step="10" bind:value={appState.transform.moveY} onchange={handleTransformMoveYValidate}>
+          </div>
+        </section>
+
+        <div class="button-row">
+          <button class="small-btn" onclick={handleResetState}>{t('resetState')}</button>
         </div>
       </div>
 
       <div class="export-col-right">
-        <div class="preview-section">
+        <section>
           <div class="preview-header">
-            <span class="preview-title">{t('exportPreview')}</span>
-            <div style="display: flex; gap: 8px;">
-              <button class="preview-refresh-btn" onclick={resetPreviewView}>{t('resetView') || 'Reset View'}</button>
-              <button class="preview-refresh-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
+            <h3 class="section-title">{t('exportPreview')}</h3>
+            <div class="button-row">
+              <button class="small-btn" onclick={resetPreviewView}>{t('resetView') || 'Reset View'}</button>
+              <button class="small-btn" onclick={refreshPreviewScreenshot}>{t('refreshPreview')}</button>
             </div>
           </div>
           <div class="preview-canvas-wrap">
@@ -788,30 +862,27 @@
               onmouseleave={handlePreviewMouseUp}
             ></canvas>
           </div>
-        </div>
-        <div class="input-row result-row" style="margin: 12px 0 8px 0;">
-          <span class="label">{t('resultingSize')}</span>
-          <span id="exportResolutionValue" class="value">{exportResolution.width} x {exportResolution.height}</span>
-        </div>
-
-        <div style="margin-top: 10px;">
-          <div class="input-row">
-            <label for="windowWidth" style="flex-basis: 140px;">{t('windowWidth')}</label>
-            <input type="number" id="windowWidth" min="100" max="10000" bind:value={windowWidth} onchange={handleWidthChange}>
+          <div class="size-card">
+            <div class="size-row main">
+              <span>{t('resultingSize')}</span>
+              <span id="exportResolutionValue" class="size-value">{exportResolution.width} x {exportResolution.height}</span>
+            </div>
           </div>
-          <div class="input-row">
-            <label for="windowHeight" style="flex-basis: 140px;">{t('windowHeight')}</label>
+        </section>
+
+        <section>
+          <h3 class="section-title">{t('exportSectionWindow')}</h3>
+          <div class="input-row grid-row">
+            <label for="windowWidth">{t('sizeWidth')}</label>
+            <input type="number" id="windowWidth" min="100" max="10000" bind:value={windowWidth} onchange={handleWidthChange}>
+            <label class="second-label" for="windowHeight">{t('sizeHeight')}</label>
             <input type="number" id="windowHeight" min="100" max="10000" bind:value={windowHeight} onchange={handleHeightChange}>
           </div>
           <div class="input-row">
-            <label for="originalWidth" style="flex-basis: 140px;">{t('originalWidth')}</label>
-            <input type="text" id="originalWidth" readonly value={originalWidth}>
+            <span class="field-label">{t('originalSize')}</span>
+            <span class="size-value muted">{originalWidth} x {originalHeight}</span>
           </div>
-          <div class="input-row">
-            <label for="originalHeight" style="flex-basis: 140px;">{t('originalHeight')}</label>
-            <input type="text" id="originalHeight" readonly value={originalHeight}>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   {/if}
@@ -819,18 +890,26 @@
   {#if activeTab === 'shortcuts'}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="tab-content shortcut-tab" role="application" tabindex="-1" onkeydown={handleShortcutKeyDown}>
-      {#each shortcutActions as action}
-        <div class="shortcut-row">
-          <span class="shortcut-label">{t(shortcutLabelKeys[action])}</span>
-          <button
-            class="shortcut-key-btn"
-            class:editing={editingKey === action}
-            onclick={(e) => startEditingKey(e, action)}
-          >
-            {editingKey === action ? t('pressKey') : displayKey(shortcuts[action])}
-          </button>
-        </div>
-      {/each}
+      <div class="search-wrapper">
+        <input type="text" class="shortcut-search" placeholder={t('shortcutSearch')} bind:value={shortcutQuery} spellcheck="false">
+        {#if shortcutQuery}
+          <button class="search-clear-btn" onclick={() => shortcutQuery = ''} aria-label="clear">×</button>
+        {/if}
+      </div>
+      <div class="shortcut-list" use:scrollAssist>
+        {#each visibleShortcutActions as action (action)}
+          <div class="shortcut-row">
+            <span class="shortcut-label">{t(shortcutLabelKeys[action])}</span>
+            <button
+              class="shortcut-key-btn"
+              class:editing={editingKey === action}
+              onclick={(e) => startEditingKey(e, action)}
+            >
+              {editingKey === action ? t('pressKey') : displayKey(shortcuts[action])}
+            </button>
+          </div>
+        {/each}
+      </div>
       <hr>
       <div class="button-group">
         <button onclick={handleResetShortcuts}>{t('shortcutResetDefaults')}</button>
@@ -851,18 +930,16 @@
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     user-select: none;
     direction: rtl;
+    font-size: var(--ui-font-size);
   }
 
-  dialog > *,
-  .shortcut-tab > * {
+  dialog > :global(*) {
     direction: ltr;
   }
 
   dialog.wide {
     width: 760px;
   }
-
-
 
   .tab-bar {
     display: flex;
@@ -881,7 +958,7 @@
     background: transparent;
     color: var(--text-color);
     text-shadow: var(--text-shadow);
-    font-size: 14px;
+    font-size: var(--ui-font-size);
     cursor: pointer;
     opacity: 0.6;
     transition: opacity 0.15s, background-color 0.15s;
@@ -898,16 +975,16 @@
     border-bottom: 2px solid var(--text-color);
   }
 
-  .tab-content {
+  dialog :global(.tab-content) {
     padding: 10px 25px;
   }
 
-  .button-group {
+  dialog :global(.button-group) {
     display: flex;
     justify-content: center;
   }
 
-  dialog button:not(.tab-btn):not(.shortcut-key-btn) {
+  dialog :global(button:not(.tab-btn):not(.shortcut-key-btn)) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -921,61 +998,69 @@
     background-color: var(--sidebar-color);
     color: var(--text-color);
     text-shadow: var(--text-shadow);
-    font-size: 14px;
+    font-size: var(--ui-font-size);
     margin: 10px 0;
     cursor: pointer;
   }
 
-  dialog.lang-ja button:not(.tab-btn):not(.shortcut-key-btn) {
+  dialog.lang-ja :global(button:not(.tab-btn):not(.shortcut-key-btn)) {
     font-size: 12px;
   }
 
-  dialog.lang-ja input[type="text"]::placeholder {
-    font-size: 14px;
+  dialog.lang-ja :global(input[type="text"]::placeholder) {
+    font-size: var(--ui-font-size);
   }
 
-  dialog button:not(.tab-btn):not(.shortcut-key-btn):hover:not(:disabled) {
+  dialog :global(button:not(.tab-btn):not(.shortcut-key-btn):hover:not(:disabled)) {
     background-color: #555;
   }
 
-  dialog button:not(.tab-btn):not(.shortcut-key-btn):disabled {
+  dialog :global(button:not(.tab-btn):not(.shortcut-key-btn):disabled) {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  hr {
+  dialog :global(hr) {
     border: 0;
     height: 1px;
     background-color: #999;
   }
 
-  .input-row {
+  dialog :global(.input-row) {
     display: flex;
     align-items: center;
     margin-bottom: 12px;
   }
 
-  .input-row label {
+  dialog :global(.input-row label) {
     flex-basis: 140px;
     flex-shrink: 0;
   }
 
-  .input-row input[type="number"],
-  .input-row input[type="text"] {
+  dialog :global(.input-row.checkbox-row) {
+    margin: 0;
+  }
+
+  dialog :global(.input-row.checkbox-row > label) {
+    padding: 4px 0;
+  }
+
+  dialog :global(.input-row input[type="number"]),
+  dialog :global(.input-row input[type="text"]) {
     text-indent: 6px;
     border-radius: 6px;
-    height: 35px;
+    height: 30px;
     width: 100%;
     outline: none;
     color: var(--text-color);
     border: var(--border-color);
     background-color: #0006;
     text-shadow: var(--text-shadow);
-    font-size: 15px;
+    font-size: var(--ui-font-size);
     user-select: text;
   }
-  
-  .input-row input[readonly] {
+
+  dialog :global(.input-row input[readonly]) {
     background-color: #0009;
     color: var(--text-color);
     border: var(--border-color);
@@ -983,7 +1068,7 @@
     cursor: default;
   }
 
-  .input-row textarea {
+  dialog :global(.input-row textarea) {
     padding: 6px;
     border-radius: 6px;
     height: 80px;
@@ -993,89 +1078,109 @@
     border: var(--border-color);
     background-color: #0006;
     text-shadow: var(--text-shadow);
-    font-size: 14px;
+    font-size: var(--ui-font-size);
     user-select: text;
     resize: vertical;
     font-family: inherit;
   }
 
-  .radio-label {
+  dialog :global(.radio-label) {
     display: flex;
     align-items: center;
     gap: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--ui-font-size);
   }
 
-  .radio-label input[type="radio"] {
+  dialog :global(.radio-label input[type="radio"]) {
     margin: 0;
   }
 
-  input[type="checkbox"],
-  input[type="radio"] {
-    accent-color: #222;
+
+  .background-row {
+    align-items: center;
+    gap: 8px;
   }
 
-  .result-row {
-    font-weight: bold;
-    color: #eef;
-    justify-content: space-between;
+  .color-swatch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border: var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
   }
 
-  .result-row .value {
-    font-family: monospace;
-    font-size: 16px;
+  .color-swatch input {
+    position: absolute;
+    inset: -8px;
+    width: calc(100% + 16px);
+    height: calc(100% + 16px);
+    padding: 0;
+    border: none;
+    cursor: pointer;
+  }
+
+  .color-swatch svg {
+    position: absolute;
+    inset: 9px;
+    width: 20px;
+    height: 20px;
+    fill: #fff;
+    filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000);
+    pointer-events: none;
   }
 
   .shortcut-tab {
+    display: flex;
+    flex-direction: column;
+    height: min(640px, calc(100vh - 120px));
+  }
+
+  .shortcut-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    direction: rtl;
+    padding-left: 18px;
   }
 
-  .preview-section {
-    margin-bottom: 4px;
+  .search-wrapper {
+    position: relative;
+    margin-bottom: 10px;
   }
 
-  .preview-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-  }
-
-  .preview-title {
-    font-size: 13px;
-    opacity: 0.8;
-  }
-
-  .preview-refresh-btn {
-    height: 26px !important;
-    width: auto !important;
-    padding: 0 12px !important;
-    margin: 0 !important;
-    font-size: 12px !important;
-    border-radius: 5px !important;
-  }
-
-  .preview-canvas-wrap {
-    display: flex;
-    justify-content: center;
-    background: #1a1a1a;
+  .shortcut-search {
+    text-indent: 6px;
     border-radius: 6px;
-    padding: 6px;
-    min-height: 40px;
+    height: 30px;
+    width: 100%;
+    outline: none;
+    color: var(--text-color);
+    border: var(--border-color);
+    font-size: var(--ui-font-size);
+    background-color: #0006;
+    text-shadow: var(--text-shadow);
+    padding-right: 30px;
+    user-select: text;
   }
 
-  .preview-canvas {
-    display: block;
-    border-radius: 3px;
-    max-width: 100%;
-    cursor: grab;
-    touch-action: none;
+  .tab-content.shortcut-tab .search-clear-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 18px;
   }
 
-  .preview-canvas:active {
-    cursor: grabbing;
+  .tab-content.shortcut-tab .search-clear-btn:hover:not(:disabled) {
+    background: transparent;
   }
 
   .shortcut-row {
@@ -1087,7 +1192,7 @@
 
   .shortcut-label {
     flex: 1;
-    font-size: 14px;
+    font-size: var(--ui-font-size);
   }
 
   .shortcut-key-btn {
@@ -1099,7 +1204,7 @@
     background-color: #0006;
     color: var(--text-color);
     text-shadow: var(--text-shadow);
-    font-size: 14px;
+    font-size: var(--ui-font-size);
     font-family: monospace;
     cursor: pointer;
     text-align: center;
@@ -1122,20 +1227,171 @@
   }
 
   .export-tab-wrapper {
+    --label-w: 60px;
+    --input-w: 72px;
+    --pair-gap: 24px;
     display: flex;
     gap: 30px;
-    padding-bottom: 20px;
+    padding-bottom: 16px;
   }
 
-  .export-col-left {
+  .export-tab-wrapper .export-col-left {
     flex: 1;
     min-width: 320px;
   }
 
-  .export-col-right {
+  .export-tab-wrapper .export-col-right {
     flex: 1;
     min-width: 340px;
     display: flex;
     flex-direction: column;
+  }
+
+  .export-tab-wrapper section {
+    margin-bottom: 18px;
+  }
+
+  .export-tab-wrapper .section-title {
+    margin: 0 0 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #fff2;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    opacity: 0.85;
+  }
+
+  .export-tab-wrapper .input-row {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .export-tab-wrapper .input-row .field-label {
+    flex: 0 0 auto;
+    min-width: var(--label-w);
+    font-size: var(--ui-font-size);
+    white-space: nowrap;
+  }
+
+  .export-tab-wrapper .input-row.grid-row {
+    display: grid;
+    grid-template-columns: var(--label-w) var(--input-w) calc(var(--label-w) + var(--pair-gap)) var(--input-w);
+    justify-content: start;
+    column-gap: 8px;
+  }
+
+  .export-tab-wrapper .grid-row label,
+  .export-tab-wrapper .grid-row .second-label {
+    font-size: var(--ui-font-size);
+    white-space: nowrap;
+  }
+
+  .export-tab-wrapper .grid-row .second-label {
+    padding-left: var(--pair-gap);
+  }
+
+  .export-tab-wrapper .grid-row .unit {
+    font-size: var(--ui-font-size);
+    opacity: 0.8;
+  }
+
+  .export-tab-wrapper .input-row input[type="number"] {
+    min-width: 0;
+  }
+
+  .export-tab-wrapper .choice-group .radio-label {
+    flex-basis: auto;
+  }
+
+  .export-tab-wrapper .choice-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 15px;
+  }
+
+  .export-tab-wrapper .button-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .export-tab-wrapper .small-btn {
+    height: 28px !important;
+    width: auto !important;
+    padding: 0 12px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    border-radius: 5px !important;
+    white-space: nowrap;
+  }
+
+  .export-tab-wrapper .preview-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #fff2;
+  }
+
+  .export-tab-wrapper .preview-header .section-title {
+    border-bottom: 0;
+    margin: 0;
+  }
+
+  .export-tab-wrapper .preview-header .button-row {
+    margin-bottom: 4px;
+  }
+
+  .export-tab-wrapper .preview-canvas-wrap {
+    display: flex;
+    justify-content: center;
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 6px;
+    min-height: 40px;
+  }
+
+  .export-tab-wrapper .preview-canvas {
+    display: block;
+    border-radius: 3px;
+    max-width: 100%;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .export-tab-wrapper .preview-canvas:active {
+    cursor: grabbing;
+  }
+
+  .export-tab-wrapper .size-card {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #0004;
+    font-size: 13px;
+  }
+
+  .export-tab-wrapper .size-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+  }
+
+  .export-tab-wrapper .size-row.main {
+    font-weight: bold;
+    color: #eef;
+  }
+
+  .export-tab-wrapper .size-value {
+    font-family: monospace;
+    font-size: var(--ui-font-size);
+    white-space: nowrap;
+  }
+
+  .export-tab-wrapper .size-value.muted {
+    opacity: 0.7;
   }
 </style>

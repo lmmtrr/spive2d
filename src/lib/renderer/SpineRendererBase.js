@@ -2027,6 +2027,15 @@ export class SpineRendererBase extends BaseRenderer {
     }
   }
 
+  getPropertyValues(category) {
+    if (category !== 'parameters' || !this._parameterItems) return null;
+    const values = {};
+    for (const item of this._parameterItems) {
+      values[item.index] = Number(getTargetProperty(item._target, item._prop));
+    }
+    return values;
+  }
+
   updatePropertyItem(category, name, mergedIndex, value) {
     if (category === 'parameters') {
       const idx = Number(mergedIndex);

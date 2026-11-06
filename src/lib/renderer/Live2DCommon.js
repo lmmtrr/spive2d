@@ -192,12 +192,12 @@ export function installLive2DDrawableFilter(coreModel, getOpacity) {
   return drawDataList;
 }
 
-export function setLive2DAutomaticMovements(internalModel, enabled) {
+export function setLive2DAutomaticMovements(internalModel, breathing, blinking) {
   if (!internalModel) return;
   let state = internalModel.__spive2dAutomaticMovements;
   if (!state) {
     state = {
-      enabled: true,
+      breathing: true,
       breath: internalModel.breath ?? null,
       eyeBlink: internalModel.eyeBlink ?? null,
     };
@@ -205,13 +205,13 @@ export function setLive2DAutomaticMovements(internalModel, enabled) {
     const updateNaturalMovements = internalModel.updateNaturalMovements;
     if (typeof updateNaturalMovements === 'function') {
       internalModel.updateNaturalMovements = function (...args) {
-        if (state.enabled) return updateNaturalMovements.apply(this, args);
+        if (state.breathing) return updateNaturalMovements.apply(this, args);
       };
     }
   }
-  state.enabled = !!enabled;
-  internalModel.breath = state.enabled ? state.breath : null;
-  internalModel.eyeBlink = state.enabled ? state.eyeBlink : null;
+  state.breathing = !!breathing;
+  internalModel.breath = state.breathing ? state.breath : null;
+  internalModel.eyeBlink = blinking ? state.eyeBlink : null;
 }
 
 export function setLive2DPhysics(internalModel, enabled) {

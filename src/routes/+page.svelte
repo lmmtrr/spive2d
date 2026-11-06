@@ -20,6 +20,7 @@
   import ExportQueue from './ExportQueue.svelte';
   import SceneThumbnailGrid from './SceneThumbnailGrid.svelte';
   import PickOverlay from './PickOverlay.svelte';
+  import HitAreaOverlay from './HitAreaOverlay.svelte';
   import { thumbnailManager } from '#lib/thumbnailManager.svelte.js';
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
@@ -27,6 +28,7 @@
   import { mkdir } from '@tauri-apps/plugin-fs';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { toggleFullscreen, exitFullscreen } from '#lib/windowManager.js';
+  import { openExportDirectory } from '#lib/fileManager.js';
 
   if (typeof window !== 'undefined') {
     window.__TAURI__ = window.__TAURI__ || {};
@@ -39,6 +41,7 @@
   let showSpinner = $state(false);
   let canvasContainer = $state();
   let sidebar = $state();
+  let settingsDialog = $state();
   let animController = $state();
   let shortcuts = $state(getShortcuts());
   const transformAction = createTransformAction();
@@ -452,6 +455,15 @@
       exitFullscreen();
       return;
     }
+    const extra = Object.keys(EXTRA_SHORTCUTS).find((action) => isShortcut(e, shortcuts[action]));
+    if (extra) {
+      const { anytime, keepFocus, run } = EXTRA_SHORTCUTS[extra];
+      if (!anytime && !appState.initialized) return;
+      e.preventDefault();
+      if (!keepFocus) focusBody();
+      run();
+      return;
+    }
     if (!isShortcut(e, shortcuts.toggleDialog) && !appState.initialized) return;
     if (isShortcut(e, shortcuts.prevScene)) { navigateScene(-1); }
     else if (isShortcut(e, shortcuts.nextScene)) { navigateScene(1); }
@@ -472,6 +484,69 @@
     else { return; }
     focusBody();
   }
+
+  const TEXTURE_FILTERS = ['nearest', 'linear', 'bicubic', 'lanczos'];
+  const TEXTURE_FILTER_KEYS = { nearest: 'textureFilterNearest', linear: 'textureFilterLinear', bicubic: 'textureFilterBicubic', lanczos: 'textureFilterLanczos' };
+
+  function notifyInfo(message) {
+    showNotification(message, 'info', 1500);
+  }
+
+  function toggleSetting(key, storageKey, titleKey) {
+    appState[key] = !appState[key];
+    saveSetting(storageKey, appState[key]);
+    notifyInfo(`${t(titleKey)}: ${appState[key] ? 'ON' : 'OFF'}`);
+  }
+
+  function resetTransformValues(values) {
+    appState.transform = { ...appState.transform, ...values };
+  }
+
+  function resetExportValues(values, titleKey) {
+    Object.assign(appState, values);
+    notifyInfo(t(titleKey));
+  }
+
+  function cycleTextureFilter() {
+    const index = TEXTURE_FILTERS.indexOf(appState.textureFilter);
+    const next = TEXTURE_FILTERS[(index + 1) % TEXTURE_FILTERS.length];
+    appState.textureFilter = next;
+    saveSetting('spive2d_texture_filter', next);
+    getRenderer()?.setTextureFilter?.(next);
+    notifyInfo(`${t('textureFilter')} ${t(TEXTURE_FILTER_KEYS[next])}`);
+  }
+
+  const EXTRA_SHORTCUTS = {
+    openDirectory: { anytime: true, run: () => settingsDialog?.handleOpenDirectory() },
+    openArchive: { anytime: true, run: () => settingsDialog?.handleOpenArchive() },
+    openCurrentDirectory: { run: () => settingsDialog?.handleOpenCurrentDir() },
+    focusUrl: { anytime: true, keepFocus: true, run: () => settingsDialog?.focusUrl() },
+    focusFilter: { keepFocus: true, run: () => sidebar?.focusSceneFilter() },
+    prevExpression: { run: () => sidebar?.navigateExpression(-1) },
+    nextExpression: { run: () => sidebar?.navigateExpression(1) },
+    toggleSetupPose: { run: () => sidebar?.toggleSetupPose() },
+    resetOverrides: { run: () => sidebar?.resetOverrides() },
+    resetView: { run: () => { appState.resetTransform(); getRenderer()?.resetTransform(); } },
+    resetScale: { run: () => resetTransformValues({ scale: 1 }) },
+    resetRotation: { run: () => resetTransformValues({ rotate: 0 }) },
+    resetPositionX: { run: () => resetTransformValues({ moveX: 0 }) },
+    resetPositionY: { run: () => resetTransformValues({ moveY: 0 }) },
+    resetPosition: { run: () => resetTransformValues({ moveX: 0, moveY: 0 }) },
+    cycleTextureFilter: { run: cycleTextureFilter },
+    openBackgroundImage: { anytime: true, run: () => settingsDialog?.handleOpenImage() },
+    removeBackground: { anytime: true, run: () => settingsDialog?.handleRemoveBackground() },
+    openExportDirectory: { anytime: true, run: () => openExportDirectory() },
+    resetExportMarginX: { anytime: true, run: () => resetExportValues({ exportMarginX: 0 }, 'shortcutResetExportMarginX') },
+    resetExportMarginY: { anytime: true, run: () => resetExportValues({ exportMarginY: 0 }, 'shortcutResetExportMarginY') },
+    resetExportMargin: { anytime: true, run: () => resetExportValues({ exportMarginX: 0, exportMarginY: 0 }, 'shortcutResetExportMargin') },
+    resetExportScale: { anytime: true, run: () => resetExportValues({ exportScale: 100 }, 'shortcutResetExportScale') },
+    toggleIdle: { anytime: true, run: () => toggleSetting('enableIdle', 'spive2d_enable_idle', 'shortcutToggleLive2DIdle') },
+    toggleBreathing: { anytime: true, run: () => toggleSetting('enableBreathing', 'spive2d_enable_breathing', 'shortcutToggleLive2DBreathing') },
+    toggleBlinking: { anytime: true, run: () => toggleSetting('enableBlinking', 'spive2d_enable_blinking', 'shortcutToggleLive2DBlinking') },
+    toggleHitAreas: { anytime: true, run: () => toggleSetting('showHitAreas', 'spive2d_show_hit_areas', 'shortcutToggleLive2DHitAreas') },
+    toggleMouseTracking: { anytime: true, run: () => toggleSetting('enableMouseTracking', 'spive2d_enable_mouse_tracking', 'shortcutToggleLive2DMouseTracking') },
+    togglePhysics: { anytime: true, run: () => toggleSetting('enablePhysics', 'spive2d_enable_physics', 'shortcutToggleLive2DPhysics') },
+  };
 
   function isShortcut(e, key) {
     if (!key) return false;
@@ -599,7 +674,7 @@
 {/if}
 
 <div use:transformAction={{ appState, sidebar, animController, dialogOpen: dialogOpen || sceneGridOpen }}>
-  <SettingsDialog bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
+  <SettingsDialog bind:this={settingsDialog} bind:open={dialogOpen} onPathSelected={processPath} onShortcutsChanged={refreshShortcuts} />
   <Sidebar
     bind:this={sidebar}
     onSceneChange={handleSceneChange}
@@ -610,6 +685,7 @@
   />
   <SceneThumbnailGrid bind:open={sceneGridOpen} onSelect={(index) => handleSceneChange({ target: { value: index } })} />
   <div id="canvasContainer" bind:this={canvasContainer}></div>
+  <HitAreaOverlay />
   <PickOverlay dialogOpen={dialogOpen || sceneGridOpen} onChange={() => sidebar?.refreshProperties()} />
 </div>
 

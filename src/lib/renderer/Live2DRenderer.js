@@ -182,7 +182,7 @@ export class Live2DRenderer extends BaseRenderer {
           autoHitTest: false,
           autoFocus: false,
           autoUpdate: false,
-          ...(appState.enableIdleAndBreathing ? {} : { idleMotionGroup: 'None' })
+          ...(appState.enableIdle ? {} : { idleMotionGroup: 'None' })
         });
         textureUrls = getLive2DTextureUrls(loaded);
         retainLive2DTextures(textureUrls);
@@ -201,7 +201,7 @@ export class Live2DRenderer extends BaseRenderer {
       }
       this.setTextureFilter(appState.textureFilter);
       this.#originalIdleGroup = model.internalModel?.motionManager?.groups?.idle || 'Idle';
-      setLive2DAutomaticMovements(model.internalModel, appState.enableIdleAndBreathing);
+      setLive2DAutomaticMovements(model.internalModel, appState.enableBreathing, appState.enableBlinking);
       setLive2DPhysics(model.internalModel, appState.enablePhysics);
       this.#initialPartOpacities.clear();
       this.#initialParameterValues.clear();
@@ -257,10 +257,10 @@ export class Live2DRenderer extends BaseRenderer {
         if (!internalModel) return;
         this.#model.deltaTime = 0;
         if (this.#paused) return;
-        setLive2DAutomaticMovements(internalModel, appState.enableIdleAndBreathing);
+        setLive2DAutomaticMovements(internalModel, appState.enableBreathing, appState.enableBlinking);
         setLive2DPhysics(internalModel, appState.enablePhysics);
         if (internalModel.motionManager && internalModel.motionManager.groups) {
-          internalModel.motionManager.groups.idle = appState.enableIdleAndBreathing ? this.#originalIdleGroup : 'None';
+          internalModel.motionManager.groups.idle = appState.enableIdle ? this.#originalIdleGroup : 'None';
         }
         if (!appState.enableMouseTracking && internalModel.focusController) {
           if (internalModel.focusController.targetX !== 0 || internalModel.focusController.targetY !== 0) {
@@ -1080,6 +1080,53 @@ export class Live2DRenderer extends BaseRenderer {
     });
   }
 
+  getHitAreas() {
+    const internalModel = this.#model?.internalModel;
+    if (!internalModel || this.#isExport) return [];
+    const map = this.#screenMapper();
+    const point = [0, 0];
+    const quad = (minX, minY, maxX, maxY) => {
+      const out = new Float32Array(8);
+      const corners = [minX, minY, maxX, minY, maxX, maxY, minX, maxY];
+      for (let k = 0; k < 4; k++) {
+        map(corners[k * 2], corners[k * 2 + 1], point);
+        out[k * 2] = point[0];
+        out[k * 2 + 1] = point[1];
+      }
+      return out;
+    };
+    const result = [];
+    for (const [name, area] of Object.entries(internalModel.hitAreas ?? {})) {
+      let index = area?.index ?? -1;
+      if (index < 0 && area?.id) index = internalModel.getDrawableIndex?.(area.id) ?? -1;
+      const vertices = index >= 0 ? internalModel.getDrawableVertices(index) : null;
+      if (!vertices || vertices.length < 2) continue;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let j = 0; j + 1 < vertices.length; j += 2) {
+        const vx = vertices[j], vy = vertices[j + 1];
+        if (vx < minX) minX = vx;
+        if (vx > maxX) maxX = vx;
+        if (vy < minY) minY = vy;
+        if (vy > maxY) maxY = vy;
+      }
+      if (!(maxX >= minX) || !(maxY >= minY)) continue;
+      result.push({ name, polygon: quad(minX, minY, maxX, maxY) });
+    }
+    const custom = internalModel.getCustomHitAreas?.();
+    const width = internalModel.originalWidth || internalModel.width;
+    const height = internalModel.originalHeight || internalModel.height;
+    if (custom && width && height) {
+      for (const [name, rect] of Object.entries(custom)) {
+        const left = ((rect.minX + 1) / 2) * width;
+        const right = ((rect.maxX + 1) / 2) * width;
+        const top = ((1 - rect.maxY) / 2) * height;
+        const bottom = ((1 - rect.minY) / 2) * height;
+        result.push({ name, polygon: quad(left, top, right, bottom) });
+      }
+    }
+    return result;
+  }
+
   setTargetValue(id, value) {
     if (typeof id !== 'string' || !id.startsWith('param:') || !this.#model) return;
     const index = Number(id.slice(6));
@@ -1108,6 +1155,11 @@ export class Live2DRenderer extends BaseRenderer {
     else this.updatePropertyItem('drawables', name, id, hidden ? 0 : 1);
   }
 
+  getPropertyValues(category) {
+    if (category !== 'parameters' || !this.#model) return null;
+    return this.#lastFrameParameters ?? this.#model.internalModel.coreModel._parameterValues ?? null;
+  }
+
   updatePropertyItem(category, name, index, value) {
     if (!this.#model) return;
     const coreModel = this.#model.internalModel.coreModel;
@@ -1115,6 +1167,9 @@ export class Live2DRenderer extends BaseRenderer {
     if (category === 'parameters') {
       coreModel._parameterValues[index] = value;
       this.parameterOverrides.set(index, value);
+      if (this.#lastFrameParameters && index < this.#lastFrameParameters.length) {
+        this.#lastFrameParameters[index] = value;
+      }
     } else if (category === 'parts') {
       const opacity = toLive2DOpacity(value);
       this.#setPartOpacity(coreModel, name, opacity);

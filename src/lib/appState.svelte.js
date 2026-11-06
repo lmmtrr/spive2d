@@ -45,7 +45,11 @@ let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
 let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let skipUnity = $state(loadSetting('spive2d_skip_unity', 'false') === 'true');
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
-let enableIdleAndBreathing = $state(loadSetting('spive2d_enable_idle_and_breathing', 'false') === 'true');
+const legacyAutomatic = loadSetting('spive2d_enable_idle_and_breathing', 'false');
+let enableIdle = $state(loadSetting('spive2d_enable_idle', legacyAutomatic) === 'true');
+let enableBreathing = $state(loadSetting('spive2d_enable_breathing', legacyAutomatic) === 'true');
+let enableBlinking = $state(loadSetting('spive2d_enable_blinking', legacyAutomatic) === 'true');
+let showHitAreas = $state(loadSetting('spive2d_show_hit_areas', 'false') === 'true');
 let enablePhysics = $state(loadSetting('spive2d_enable_physics', 'true') === 'true');
 let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'false') === 'true');
 const SCALE_MAX = 16;
@@ -83,8 +87,14 @@ export const appState = {
   set textureFilter(v) { textureFilter = v; },
   get mergeSequential() { return mergeSequential; },
   set mergeSequential(v) { mergeSequential = v; },
-  get enableIdleAndBreathing() { return enableIdleAndBreathing; },
-  set enableIdleAndBreathing(v) { enableIdleAndBreathing = v; },
+  get enableIdle() { return enableIdle; },
+  set enableIdle(v) { enableIdle = v; },
+  get enableBreathing() { return enableBreathing; },
+  set enableBreathing(v) { enableBreathing = v; },
+  get enableBlinking() { return enableBlinking; },
+  set enableBlinking(v) { enableBlinking = v; },
+  get showHitAreas() { return showHitAreas; },
+  set showHitAreas(v) { showHitAreas = v; },
   get enablePhysics() { return enablePhysics; },
   set enablePhysics(v) { enablePhysics = v; },
   get enableMouseTracking() { return enableMouseTracking; },

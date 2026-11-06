@@ -5,15 +5,39 @@
   import { saveSetting } from '#lib/settings.js';
   import { filterSceneIndices, findIdleAnimation } from '#lib/utils.js';
   import { scrollAssist } from '#lib/scrollAssist.js';
+  import { sceneIconPath } from '#lib/sceneIcons.js';
+  import HoverSelect from '#lib/HoverSelect.svelte';
 
   let { onSceneChange, onAnimationChange, onExpressionChange, onSettingsClick, onSceneGridClick } = $props();
   let filterText = $state('');
-  let scenes = $derived(appState.directories.files?.[appState.directories.selectedDir] || []);
-  let sceneOptionIndices = $derived.by(() => {
-    const indices = filterSceneIndices(scenes, appState.directories.sceneFilter);
+  let sceneFilterFocused = $state(false);
+  const ALPHA_MODES = [
+    { value: 'pma', short: 'PMA' },
+    { value: 'unpack', short: 'UNPACK' },
+    { value: 'npm', short: 'NPM' },
+  ];
+  const scenes = $derived(appState.directories.files?.[appState.directories.selectedDir] || []);
+  const sceneOption = (i) => ({ value: String(i), label: scenes[i].name.replace(/^\u200B/, ''), icon: sceneIconPath(scenes[i]) });
+  const filteredSceneIndices = $derived(filterSceneIndices(scenes, appState.directories.sceneFilter));
+  const filteredSceneOptions = $derived(filteredSceneIndices.map(sceneOption));
+
+  function lowerBound(indices, i) {
+    let lo = 0;
+    let hi = indices.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (indices[mid] < i) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  const sceneOptions = $derived.by(() => {
     const selected = appState.directories.selectedScene;
-    if (selected >= scenes.length || indices.includes(selected)) return indices;
-    return [...indices, selected].sort((a, b) => a - b);
+    if (!(selected >= 0 && selected < scenes.length)) return filteredSceneOptions;
+    const pos = lowerBound(filteredSceneIndices, selected);
+    if (filteredSceneIndices[pos] === selected) return filteredSceneOptions;
+    return [...filteredSceneOptions.slice(0, pos), sceneOption(selected), ...filteredSceneOptions.slice(pos)];
   });
   let sidebarVisible = $state(false);
   let propertyItems = $state([]);
@@ -30,6 +54,9 @@
   let sliderDrag = null;
   const SLIDER_THUMB_WIDTH = 12;
   const SLIDER_EDGE_SNAP = 8;
+  const animationOptions = $derived(animations.map((anim) => ({ value: anim.value, label: anim.name })));
+  const animationValue = $derived(selectedAnimation === '' ? lastSelectedAnimation : selectedAnimation);
+  const expressionOptions = $derived((expressions ?? []).map((expr) => ({ value: expr.value, label: expr.name })));
 
   export function setSidebarVisible(visible) {
     sidebarVisible = visible;
@@ -108,8 +135,71 @@
     }
   }
 
-  function handlePropertyCategoryChange(e) {
-    appState.propertyCategory = e.target.value;
+  export function navigateExpression(delta) {
+    if (!expressions?.length) return;
+    const index = expressions.findIndex((e) => e.value === selectedExpression);
+    const next = index < 0 ? (delta > 0 ? 0 : expressions.length - 1) : (index + delta + expressions.length) % expressions.length;
+    selectExpression(expressions[next].value);
+  }
+
+  export function toggleSetupPose() {
+    handleResetAnimation();
+  }
+
+  export function resetOverrides() {
+    handleResetOverrides();
+    if (appState.animation.paused) getRenderer()?.render();
+  }
+
+  export function focusSceneFilter() {
+    sceneFilterFocused = true;
+    requestAnimationFrame(() => {
+      const input = document.getElementById('sceneFilterBox');
+      if (!(input instanceof HTMLInputElement)) return;
+      input.focus();
+      input.select();
+    });
+  }
+
+  function selectAnimation(value) {
+    selectedAnimation = value;
+    if (value !== '') lastSelectedAnimation = value;
+    onAnimationChange(value);
+  }
+
+  function selectExpression(value) {
+    selectedExpression = value;
+    onExpressionChange(value);
+  }
+
+  function selectScene(value) {
+    onSceneChange({ target: { value: String(value) } });
+  }
+
+  $effect(() => {
+    const renderer = getRenderer();
+    const category = appState.propertyCategory;
+    if (!sidebarVisible || typeof renderer?.getPropertyValues !== 'function') return;
+    let frame = 0;
+    const sync = () => {
+      const values = renderer.getPropertyValues(category);
+      if (values) {
+        for (const item of propertyItems) {
+          if (item.type !== 'range') continue;
+          const value = values[item.index];
+          if (typeof value !== 'number') continue;
+          const step = Number(item.step) || 0;
+          if (Math.abs(value - item.value) > step / 2) item.value = value;
+        }
+      }
+      frame = requestAnimationFrame(sync);
+    };
+    frame = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(frame);
+  });
+
+  function handlePropertyCategoryChange(value) {
+    appState.propertyCategory = value;
     refreshProperties();
     if (propertyScrollEl) propertyScrollEl.scrollTop = 0;
   }
@@ -133,8 +223,9 @@
     }
   }
 
-  async function handleAlphaModeChange(e) {
-    appState.alphaMode = e.target.value;
+  async function handleAlphaModeChange(value) {
+    if (value === appState.alphaMode) return;
+    appState.alphaMode = value;
     saveSetting('spive2d_alpha_mode', appState.alphaMode);
     const renderer = getRenderer();
     if (renderer && renderer.setAlphaMode) {
@@ -159,23 +250,23 @@
       if (appState.animation.paused) {
         renderer?.render();
       }
-      const item = propertyItems.find(i => i.index === index);
-      if(item) {
+      const item = propertyItems.find((i) => i.index === index);
+      if (item) {
         item.value = Number(target.value);
         item.overridden = true;
       }
     } else if (target.type === 'checkbox') {
       if (appState.propertyCategory === 'skins') {
-        const item = propertyItems.find(i => i.index === index);
-        if(item) {
-           item.checked = target.checked;
+        const item = propertyItems.find((i) => i.index === index);
+        if (item) {
+          item.checked = target.checked;
         }
         handleSkinChange();
       } else {
         renderer?.updatePropertyItem(appState.propertyCategory, name, index, target.checked);
-        const item = propertyItems.find(i => i.index === index);
-        if(item) {
-           item.checked = target.checked;
+        const item = propertyItems.find((i) => i.index === index);
+        if (item) {
+          item.checked = target.checked;
         }
       }
       if (appState.animation.paused) {
@@ -185,9 +276,8 @@
   }
 
   function handleSkinChange() {
-    const names = propertyItems.filter(item => item.checked).map(item => item.name);
-    const renderer = getRenderer();
-    renderer?.applySkins?.(names);
+    const names = propertyItems.filter((item) => item.checked).map((item) => item.name);
+    getRenderer()?.applySkins?.(names);
   }
 
   function getCheckboxFromEvent(e) {
@@ -195,9 +285,9 @@
     return e.target.closest?.('.item')?.querySelector('input[type="checkbox"]');
   }
 
-  function getRangeFromLabel(e) {
-    if (!e.target.closest?.('.label-text')) return null;
-    return e.target.closest('.item')?.querySelector('input[type="range"]') ?? null;
+  function getRangeFromRow(e) {
+    if (e.target.tagName === 'INPUT' && e.target.type === 'range') return null;
+    return e.target.closest?.('.item')?.querySelector('input[type="range"]') ?? null;
   }
 
   function resetRange(rangeInput) {
@@ -207,16 +297,17 @@
     const value = renderer.resetPropertyItem(appState.propertyCategory, rangeInput.dataset.name, index);
     if (!Number.isFinite(value)) return;
     rangeInput.value = String(value);
-    const item = propertyItems.find(i => i.index === index);
+    const item = propertyItems.find((i) => i.index === index);
     if (item) {
       item.value = value;
       item.overridden = false;
     }
+    if (appState.animation.paused) renderer.render();
   }
 
   function getVisibleRows() {
     if (!propertyScrollEl) return [];
-    return Array.from(propertyScrollEl.querySelectorAll('.item')).filter(el => el.style.display !== 'none');
+    return Array.from(propertyScrollEl.querySelectorAll('.item')).filter((el) => el.style.display !== 'none');
   }
 
   function getRowIndexAt(rows, clientY) {
@@ -225,6 +316,10 @@
       if (clientY >= rect.top && clientY < rect.bottom) return i;
     }
     return -1;
+  }
+
+  function getRowRange(row) {
+    return row?.querySelector('input[type="range"]') ?? null;
   }
 
   function setRangeFromPointer(rangeInput, clientX) {
@@ -240,10 +335,6 @@
     if (rangeInput.value !== previous) {
       rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
-  }
-
-  function getRowRange(row) {
-    return row?.querySelector('input[type="range"]') ?? null;
   }
 
   function handlePropertyMouseDown(e) {
@@ -266,7 +357,7 @@
       }
       return;
     }
-    const rangeInput = getRangeFromLabel(e);
+    const rangeInput = getRangeFromRow(e);
     if (rangeInput) {
       e.preventDefault();
       resetDragging = true;
@@ -284,7 +375,7 @@
       return;
     }
     if (resetDragging) {
-      const rangeInput = getRangeFromLabel(e);
+      const rangeInput = getRangeFromRow(e);
       if (rangeInput) resetRange(rangeInput);
     }
   }
@@ -295,7 +386,7 @@
       if (e.detail !== 0) e.preventDefault();
       return;
     }
-    if (getRangeFromLabel(e)) {
+    if (getRangeFromRow(e)) {
       e.preventDefault();
     }
   }
@@ -339,14 +430,17 @@
   }
 </script>
 
-<div id="sidebar" class:hidden={!sidebarVisible}>
+<div id="sidebar" class:hidden={!sidebarVisible && !sceneFilterFocused}>
   <div class="filter-wrapper">
     <input
       type="text"
       id="sceneFilterBox"
-      placeholder={t('filter')}
+      placeholder={t('sceneFilter')}
       autocomplete="off"
       bind:value={appState.directories.sceneFilter}
+      onfocus={() => sceneFilterFocused = true}
+      onblur={() => sceneFilterFocused = false}
+      onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') e.currentTarget.blur(); }}
     />
     {#if appState.directories.sceneFilter}
       <!-- svelte-ignore a11y_consider_explicit_label -->
@@ -359,33 +453,15 @@
   </div>
 
   <div class="scene-header">
-    <select id="sceneSelector" value={String(appState.directories.selectedScene)} onchange={onSceneChange}>
-      {#each sceneOptionIndices as i (i)}
-        <option value={String(i)}>{scenes[i].name.replace(/^\u200B/, '')}</option>
-      {/each}
-    </select>
+    <HoverSelect id="sceneSelector" value={String(appState.directories.selectedScene)}
+                 options={sceneOptions}
+                 onchange={selectScene}
+                 companion={{ options: animationOptions, value: animationValue, onchange: selectAnimation }} />
     <button id="sceneGridBtn" onclick={onSceneGridClick} title={t('sceneThumbnails')} disabled={scenes.length === 0}>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
         <path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/>
       </svg>
     </button>
-  </div>
-
-  <div class="animation-header">
-    <select id="animationSelector" 
-            value={selectedAnimation === '' ? lastSelectedAnimation : selectedAnimation} 
-            disabled={selectedAnimation === ''}
-            onchange={(e) => {
-              selectedAnimation = e.currentTarget.value;
-              if (selectedAnimation !== '') {
-                lastSelectedAnimation = selectedAnimation;
-              }
-              onAnimationChange(selectedAnimation);
-            }}>
-      {#each animations as anim (anim.value)}
-        <option value={anim.value}>{anim.name}</option>
-      {/each}
-    </select>
     <button id="resetAnimationBtn" class:active={selectedAnimation === ''} onclick={handleResetAnimation} title={t('resetAnimation')}>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
         <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 11H7v-2h10v2z"/>
@@ -394,56 +470,51 @@
   </div>
 
   {#if expressions}
-    <select id="expressionSelector" value={selectedExpression} onchange={(e) => {
-      selectedExpression = e.currentTarget.value;
-      onExpressionChange(selectedExpression);
-    }}>
-      {#each expressions as expr}
-        <option value={expr.value}>{expr.name}</option>
-      {/each}
-    </select>
+    <HoverSelect id="expressionSelector" value={selectedExpression}
+                 options={expressionOptions}
+                 onchange={selectExpression} />
   {/if}
-
-  <div class="property-header">
-    <select id="propertySelector" onchange={handlePropertyCategoryChange} value={appState.propertyCategory}>
-      {#each propertyCategories as cat}
-        <option value={cat}>{t(cat)}</option>
-      {/each}
-    </select>
-    {#if propertyCategories.length > 0 && appState.propertyCategory !== 'skins'}
-      <button id="resetOverridesBtn" onclick={handleResetOverrides} title={t('resetState')}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-        </svg>
-      </button>
-    {/if}
-  </div>
 
   {#if propertyCategories.includes('attachments')}
-    <select id="pmaSelect" onchange={handleAlphaModeChange} value={appState.alphaMode}>
-      <option value="pma">{t('alphaModePMA')}</option>
-      <option value="unpack">{t('alphaModeUnpack')}</option>
-      <option value="npm">{t('alphaModeNPM')}</option>
-    </select>
+    <div id="pmaSelect" class="alpha-mode" role="radiogroup">
+      {#each ALPHA_MODES as mode (mode.value)}
+        <label>
+          <input type="radio" name="alphaMode" value={mode.value} checked={appState.alphaMode === mode.value}
+                 onchange={() => handleAlphaModeChange(mode.value)} />
+          <span>{mode.short}</span>
+        </label>
+      {/each}
+    </div>
   {/if}
 
-  <div class="filter-wrapper">
-    <input
-      type="text"
-      id="filterBox"
-      placeholder={t('filter')}
-      autocomplete="off"
-      bind:value={filterText}
-    />
-    {#if filterText}
-      <!-- svelte-ignore a11y_consider_explicit_label -->
-      <button class="filter-clear-btn" onclick={() => filterText = ''}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-        </svg>
-      </button>
-    {/if}
-  </div>
+  {#if propertyCategories.length > 0}
+    <div class="property-header">
+      <div id="propertySelector" class="property-categories" role="radiogroup">
+        {#each propertyCategories as cat (cat)}
+          <label>
+            <input type="radio" name="propertyCategory" value={cat} checked={appState.propertyCategory === cat}
+                   onchange={() => handlePropertyCategoryChange(cat)} />
+            <span>{t(cat)}</span>
+          </label>
+        {/each}
+      </div>
+      {#if appState.propertyCategory !== 'skins'}
+        <button id="resetOverridesBtn" onclick={handleResetOverrides} title={t('resetState')}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+        </button>
+      {/if}
+    </div>
+  {/if}
+
+  <input
+    type="text"
+    id="filterBox"
+    placeholder={t('propertyFilter')}
+    autocomplete="off"
+    bind:value={filterText}
+  />
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -458,7 +529,7 @@
       <div id="skin-panel">
         {#each propertyItems as item (item.name + '_' + item.index)}
           <div class="item" style:display={matchesFilter(item.displayName || item.name) ? 'flex' : 'none'}>
-            <label title={item.displayName || item.name}>
+            <label>
               {item.displayName || item.name}
               <input type="checkbox" data-name={item.name} data-old-index={item.index} checked={item.checked}>
             </label>
@@ -469,9 +540,9 @@
       {#each propertyItems as item (item.name + '_' + item.index)}
         <div class="item" class:overridden={item.overridden} style:display={matchesFilter(item.displayName || item.name) ? 'flex' : 'none'}>
           {#if item.type === 'range'}
-            <label title={item.displayName || item.name}><span class="label-text">{item.displayName || item.name}</span><input type="range" data-name={item.name} data-old-index={item.index} max={item.max} min={item.min} step={item.step} value={item.value}></label>
+            <label><span class="label-text">{item.displayName || item.name}</span><input type="range" data-name={item.name} data-old-index={item.index} max={item.max} min={item.min} step={item.step} value={item.value}></label>
           {:else}
-            <label title={item.displayName || item.name}>
+            <label>
               {item.displayName || item.name}
               <input type="checkbox" data-name={item.name} data-old-index={item.index} checked={item.checked}>
             </label>
@@ -488,7 +559,6 @@
     <span>{t('settings')}</span>
   </button>
 </div>
-
 <style>
   #sidebar {
     position: fixed;
@@ -500,6 +570,7 @@
     z-index: 100;
     display: flex;
     flex-direction: column;
+    font-size: var(--ui-font-size);
   }
 
   #sidebar::before {
@@ -526,7 +597,7 @@
     outline: none;
     color: var(--text-color);
     border: var(--border-color);
-    font-size: 15px;
+    font-size: var(--ui-font-size);
     background-color: var(--sidebar-color);
     box-sizing: border-box;
     padding-right: 30px;
@@ -542,12 +613,12 @@
     gap: 8px;
   }
 
-  .scene-header select {
-    flex-grow: 1;
+  .scene-header :global(.hover-select) {
+    flex: 1;
     min-width: 0;
   }
 
-  .filter-wrapper:has(#sceneFilterBox) + .scene-header select,
+  .filter-wrapper:has(#sceneFilterBox) + .scene-header :global(.current),
   .filter-wrapper:has(#sceneFilterBox) + .scene-header button {
     border-top: 0;
   }
@@ -662,7 +733,6 @@
   .item input[type="checkbox"] {
     order: -1;
     margin-right: 8px;
-    accent-color: #222;
   }
 
   #settingsBtn {
@@ -678,7 +748,7 @@
     color: #ccc;
     text-shadow: var(--text-shadow);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--ui-font-size);
     font-weight: 500;
     transition: background-color 0.2s, border-color 0.2s;
     outline: none;
@@ -700,25 +770,50 @@
     gap: 8px;
   }
 
-  .property-header select {
-    flex-grow: 1;
-    border-top: 0 !important;
-  }
-
-  .animation-header {
+  .property-categories {
     display: flex;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+    color: var(--text-color);
+    text-shadow: var(--text-shadow);
+  }
+
+  .property-categories label {
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
+    padding: 4px 12px 4px 0;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
   }
 
-  .animation-header select {
-    flex-grow: 1;
-    border-top: 0 !important;
+  .property-categories input {
+    margin: 0;
+    cursor: pointer;
   }
 
-  .animation-header select:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .alpha-mode {
+    display: flex;
+    align-items: stretch;
+    white-space: nowrap;
+    color: var(--text-color);
+    text-shadow: var(--text-shadow);
+  }
+
+  .alpha-mode label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px 4px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .alpha-mode input {
+    margin: 0;
+    cursor: pointer;
   }
 
   #sceneGridBtn {
@@ -758,7 +853,6 @@
     justify-content: center;
     background-color: var(--sidebar-color);
     border: var(--border-color);
-    border-top: 0 !important;
     border-radius: 6px;
     color: #ccc;
     cursor: pointer;
