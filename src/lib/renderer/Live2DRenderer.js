@@ -29,7 +29,7 @@ import {
   CUBISM2_TIME_BASE,
 } from './Live2DCommon.js';
 import { createSorter, findIdleAnimation } from '../utils.js';
-import { meshContainsPoint, toTriangles } from '../pick.js';
+import { toTriangles, toTriangleUvs, alphaMapOf, sampleAlpha, meshAlphaAt, PICK_ALPHA_THRESHOLD } from '../pick.js';
 import { showNotification } from '../notificationStore.svelte.js';
 import { appState } from '../appState.svelte.js';
 
@@ -38,6 +38,12 @@ const sortById = createSorter(item => item.id);
 const MAX_DELTA_MS = 100;
 const FIXED_STEP_MS = 1000 / 60;
 const MAX_STEPS_PER_FRAME = 20;
+const INFLUENCE_CHUNK_MS = 24;
+const INFLUENCE_MOVE_EPSILON = 1e-4;
+const INFLUENCE_OPACITY_EPSILON = 0.004;
+const INFLUENCE_ORDER_SCORE = 1e-3;
+const VISIBLE_OPACITY = 0.004;
+const PARAMETER_KEY_STEPS = 50;
 
 class PixiAppManager {
   static #sharedApp = null;
@@ -123,6 +129,9 @@ export class Live2DRenderer extends BaseRenderer {
   #cubism2ElapsedMS = 0;
   #cubism2TimeSeconds = 0;
   #focusPoint = new PIXI.Point();
+  #parameterInfluence = null;
+  #pickTextures = null;
+  #influenceToken = null;
 
   constructor(isExport = false) {
     super(isExport);
@@ -198,6 +207,8 @@ export class Live2DRenderer extends BaseRenderer {
       this.#initialParameterValues.clear();
       this.#drawableOpacities.clear();
       this.#opacities = null;
+      this.#resetParameterInfluence();
+      this.#pickTextures = null;
       const coreModel = model.internalModel?.coreModel;
       patchCubism2CoreAccessors(coreModel);
       this.#cacheModelIds(coreModel);
@@ -353,6 +364,8 @@ export class Live2DRenderer extends BaseRenderer {
     this.#baseParameters = null;
     this.#contentBox = null;
     this.#opacities = null;
+    this.#resetParameterInfluence();
+    this.#pickTextures = null;
     if (this.#renderTexture) {
       this.#renderTexture.destroy(true);
       this.#renderTexture = null;
@@ -697,6 +710,11 @@ export class Live2DRenderer extends BaseRenderer {
   }
 
   pickTargets(x, y, category) {
+    if (category === 'parameters') return this.#pickParameters(x, y);
+    return this.#pickShapes(x, y, category);
+  }
+
+  #pickShapes(x, y, category) {
     const model = this.#model;
     const internalModel = model?.internalModel;
     const coreModel = internalModel?.coreModel;
@@ -745,6 +763,14 @@ export class Live2DRenderer extends BaseRenderer {
       if (!visible && !userHidden) return null;
       return { part, order, hidden: !visible };
     };
+    const textures = this.#getPickTextures();
+    const alphaAt = (i) => meshAlphaAt(internalModel.getDrawableVertices(i), indicesOf(i), textures.uvsOf(i), textures.textureOf(i), textures.flipV, local.x, local.y);
+    const covers = (i) => {
+      if (alphaAt(i) <= PICK_ALPHA_THRESHOLD) return false;
+      const masks = textures.masksOf(i);
+      if (!masks) return true;
+      return masks.some((m) => alphaAt(m) > PICK_ALPHA_THRESHOLD) !== textures.invertedOf(i);
+    };
     const hits = new Map();
     for (let i = 0; i < this.#drawableIds.length; i++) {
       const state = stateOf(i);
@@ -752,48 +778,318 @@ export class Live2DRenderer extends BaseRenderer {
       const key = byPart ? state.part : i;
       const existing = hits.get(key);
       if (existing && existing.order >= state.order) continue;
-      const indices = indicesOf(i);
-      if (!indices || !meshContainsPoint(internalModel.getDrawableVertices(i), indices, local.x, local.y)) continue;
+      if (!covers(i)) continue;
       hits.set(key, { key, order: state.order, hidden: state.hidden });
     }
     const sorted = [...hits.values()].sort((a, b) => b.order - a.order);
-    const toScreen = (drawables) => {
-      const point = new PIXI.Point();
-      let first = true;
-      const map = (vx, vy, out) => {
-        point.set(vx, vy);
-        internalModel.localTransform.apply(point, point);
-        model.toGlobal(point, point, !first);
-        first = false;
-        out[0] = point.x;
-        out[1] = point.y;
-      };
-      const chunks = drawables.map((i) => toTriangles(internalModel.getDrawableVertices(i), indicesOf(i), map));
-      if (chunks.length === 1) return chunks[0];
-      const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
-      let offset = 0;
-      for (const chunk of chunks) {
-        out.set(chunk, offset);
-        offset += chunk.length;
-      }
-      return out;
-    };
     const drawablesOfPart = (part) => {
       const result = [];
       for (let i = 0; i < this.#drawableIds.length; i++) if (stateOf(i)?.part === part) result.push(i);
       return result;
     };
+    const screen = (drawables) => this.#screenTriangles(drawables);
+    const chunks = (drawables) => this.#screenChunks(drawables);
     return sorted.map(({ key, hidden }) => {
       let triangles = null;
+      let textured = null;
+      let members = null;
+      const membersOf = () => (members ??= byPart ? drawablesOfPart(key) : [key]);
       return {
         id: byPart ? `part:${key}` : key,
         name: byPart ? this.#partIds[key] : this.#drawableIds[key],
         hidden,
         get triangles() {
-          return (triangles ??= toScreen(byPart ? drawablesOfPart(key) : [key]));
+          return (triangles ??= screen(membersOf()));
+        },
+        get textured() {
+          return (textured ??= chunks(membersOf()));
         },
       };
     });
+  }
+
+  #screenMapper() {
+    const model = this.#model;
+    const internalModel = model.internalModel;
+    const point = new PIXI.Point();
+    let first = true;
+    return (vx, vy, out) => {
+      point.set(vx, vy);
+      internalModel.localTransform.apply(point, point);
+      model.toGlobal(point, point, !first);
+      first = false;
+      out[0] = point.x;
+      out[1] = point.y;
+    };
+  }
+
+  #indicesOf(coreModel, i) {
+    return typeof coreModel.getDrawableVertexIndices !== 'function'
+      ? coreModel.getIndexArray?.(i)
+      : coreModel.getDrawableVertexIndices(i);
+  }
+
+  #screenTriangles(drawables) {
+    const internalModel = this.#model?.internalModel;
+    const coreModel = internalModel?.coreModel;
+    if (!coreModel) return new Float32Array(0);
+    const map = this.#screenMapper();
+    const chunks = [];
+    for (const i of drawables) {
+      const vertices = internalModel.getDrawableVertices(i);
+      const indices = this.#indicesOf(coreModel, i);
+      if (vertices && indices) chunks.push(toTriangles(vertices, indices, map));
+    }
+    if (chunks.length === 1) return chunks[0];
+    const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return out;
+  }
+
+  #screenChunks(drawables) {
+    const internalModel = this.#model?.internalModel;
+    const coreModel = internalModel?.coreModel;
+    if (!coreModel) return [];
+    const textures = this.#getPickTextures();
+    const map = this.#screenMapper();
+    const cache = new Map();
+    const shapeOf = (i) => {
+      if (cache.has(i)) return cache.get(i);
+      const vertices = internalModel.getDrawableVertices(i);
+      const indices = this.#indicesOf(coreModel, i);
+      const shape = vertices && indices
+        ? {
+          triangles: toTriangles(vertices, indices, map),
+          uvs: toTriangleUvs(textures.uvsOf(i), indices, textures.flipV),
+          map: textures.textureOf(i),
+        }
+        : null;
+      cache.set(i, shape);
+      return shape;
+    };
+    const chunks = [];
+    for (const i of drawables) {
+      const shape = shapeOf(i);
+      if (!shape) continue;
+      const masks = textures.masksOf(i);
+      const clips = masks ? masks.map(shapeOf).filter(Boolean) : null;
+      chunks.push({
+        ...shape,
+        clips: clips?.length ? clips : null,
+        clipKey: masks ? masks.join(',') : null,
+        inverted: textures.invertedOf(i),
+      });
+    }
+    return chunks;
+  }
+
+  #getPickTextures() {
+    if (this.#pickTextures) return this.#pickTextures;
+    const model = this.#model;
+    const coreModel = model.internalModel.coreModel;
+    const isCubism2 = typeof coreModel.getDrawableVertexIndices !== 'function';
+    const drawList = isCubism2 ? coreModel.getModelContext?.()?._$aS ?? null : null;
+    const maps = (model.textures ?? []).map((texture) => alphaMapOf(texture?.source ?? texture?.baseTexture ?? null));
+    const textureOf = (i) => maps[isCubism2 ? drawList?.[i]?.getTextureNo?.() : coreModel.getDrawableTextureIndex?.(i)] ?? null;
+    const uvsOf = (i) => (isCubism2 ? drawList?.[i]?._$Qi : coreModel.getDrawableVertexUvs?.(i)) ?? null;
+    const maskList = isCubism2 ? null : coreModel.getDrawableMasks?.();
+    const maskCounts = isCubism2 ? null : coreModel.getDrawableMaskCounts?.();
+    const masksOf = (i) => {
+      const count = maskCounts?.[i] ?? 0;
+      if (!(count > 0) || !maskList?.[i]) return null;
+      const masks = Array.from(maskList[i]).slice(0, count).filter((m) => m >= 0);
+      return masks.length > 0 ? masks : null;
+    };
+    const invertedOf = (i) => !isCubism2 && !!coreModel.getDrawableInvertedMaskBit?.(i);
+    let straight = 0;
+    let flipped = 0;
+    for (let i = 0; i < this.#drawableIds.length; i++) {
+      const map = textureOf(i);
+      const uvs = uvsOf(i);
+      const indices = this.#indicesOf(coreModel, i);
+      if (!map || !uvs || !indices) continue;
+      for (let k = 0; k + 2 < indices.length; k += 3) {
+        const a = indices[k] * 2, b = indices[k + 1] * 2, c = indices[k + 2] * 2;
+        const u = (uvs[a] + uvs[b] + uvs[c]) / 3;
+        const v = (uvs[a + 1] + uvs[b + 1] + uvs[c + 1]) / 3;
+        straight += sampleAlpha(map, u, v);
+        flipped += sampleAlpha(map, u, 1 - v);
+      }
+    }
+    this.#pickTextures = { textureOf, uvsOf, masksOf, invertedOf, flipV: flipped >= straight };
+    return this.#pickTextures;
+  }
+
+  #drawableAlpha(coreModel, context, i) {
+    if (context) {
+      const drawContext = context._$8b?.[i];
+      if (!drawContext || drawContext._$IS?.[0]) return 0;
+      return drawContext._$7s ?? 1;
+    }
+    if (coreModel.getDrawableDynamicFlagIsVisible?.(i) === false) return 0;
+    return coreModel.getDrawableOpacity(i) ?? 0;
+  }
+
+  #resetParameterInfluence() {
+    this.#parameterInfluence = null;
+    this.#influenceToken = null;
+  }
+
+  #getParameterInfluence() {
+    if (!this.#parameterInfluence) {
+      const token = {};
+      this.#influenceToken = token;
+      this.#parameterInfluence = this.#computeParameterInfluence(token);
+    }
+    return this.#parameterInfluence;
+  }
+
+  async #computeParameterInfluence(token) {
+    const model = this.#model;
+    const internalModel = model?.internalModel;
+    const coreModel = internalModel?.coreModel;
+    const values = coreModel?._parameterValues;
+    if (!values || !canUpdateLive2DCore(coreModel)) return null;
+    const context = typeof coreModel.getDrawableVertexIndices !== 'function' ? coreModel.getModelContext?.() : null;
+    const count = this.#drawableIds.length;
+    const paramCount = Math.min(this.#parameterIds.length, values.length);
+    const mins = coreModel._parameterMinimumValues;
+    const maxs = coreModel._parameterMaximumValues;
+    const scores = Array.from({ length: count }, () => new Map());
+    const ordersOf = () => (context ? null : coreModel.getDrawableRenderOrders?.() ?? null);
+    const load = (source) => {
+      for (let k = 0; k < values.length; k++) values[k] = source[k];
+    };
+    let p = 0;
+    while (p < paramCount) {
+      if (this.#model !== model || this.#influenceToken !== token) return null;
+      const original = Float32Array.from(values);
+      const snapshot = this.#lastFrameParameters;
+      const base = Float32Array.from(snapshot?.length === values.length ? snapshot : values);
+      for (const [index, value] of this.parameterOverrides) base[index] = value;
+      load(base);
+      coreModel.update();
+      const baseVertices = [];
+      const baseAlpha = new Float32Array(count);
+      const baseOrders = Int32Array.from(ordersOf() ?? []);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let i = 0; i < count; i++) {
+        const vertices = internalModel.getDrawableVertices(i);
+        baseVertices.push(vertices ? Float32Array.from(vertices) : null);
+        baseAlpha[i] = this.#drawableAlpha(coreModel, context, i);
+        if (!vertices) continue;
+        for (let j = 0; j + 1 < vertices.length; j += 2) {
+          const vx = vertices[j], vy = vertices[j + 1];
+          if (vx < minX) minX = vx;
+          if (vx > maxX) maxX = vx;
+          if (vy < minY) minY = vy;
+          if (vy > maxY) maxY = vy;
+        }
+      }
+      const extent = Math.max(maxX - minX, maxY - minY);
+      const scale = extent > 0 && Number.isFinite(extent) ? extent : 1;
+      const deadline = performance.now() + INFLUENCE_CHUNK_MS;
+      for (; p < paramCount && performance.now() < deadline; p++) {
+        for (const target of [mins[p], maxs[p]]) {
+          if (!(Math.abs(target - base[p]) > 1e-6)) continue;
+          load(base);
+          values[p] = target;
+          coreModel.update();
+          const orders = baseOrders.length > 0 ? ordersOf() : null;
+          for (let i = 0; i < count; i++) {
+            const before = baseVertices[i];
+            const after = before ? internalModel.getDrawableVertices(i) : null;
+            let moved = 0;
+            if (after) {
+              const n = Math.min(before.length, after.length);
+              for (let j = 0; j < n; j++) {
+                const d = Math.abs(after[j] - before[j]);
+                if (d > moved) moved = d;
+              }
+            }
+            moved /= scale;
+            const faded = Math.abs(this.#drawableAlpha(coreModel, context, i) - baseAlpha[i]);
+            const score = (moved > INFLUENCE_MOVE_EPSILON ? moved : 0)
+              + (faded > INFLUENCE_OPACITY_EPSILON ? faded : 0)
+              + (orders && orders[i] !== baseOrders[i] ? INFLUENCE_ORDER_SCORE : 0);
+            if (score > (scores[i].get(p) ?? 0)) scores[i].set(p, score);
+          }
+        }
+      }
+      load(original);
+      this.render();
+      if (p < paramCount) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const byDrawable = scores.map((entries) => [...entries].sort((a, b) => b[1] - a[1]).map(([param]) => param));
+    const byParam = Array.from({ length: paramCount }, () => []);
+    byDrawable.forEach((params, i) => {
+      for (const param of params) byParam[param].push(i);
+    });
+    return { byDrawable, byParam };
+  }
+
+  async #pickParameters(x, y) {
+    const influence = await this.#getParameterInfluence();
+    if (!influence || !this.#model || this.#isExport) return [];
+    const drawables = this.#pickShapes(x, y, 'drawables').filter((item) => !item.hidden);
+    const params = [];
+    const seen = new Set();
+    for (const item of drawables) {
+      for (const param of influence.byDrawable[item.id] ?? []) {
+        if (seen.has(param)) continue;
+        seen.add(param);
+        params.push(param);
+      }
+    }
+    const coreModel = this.#model.internalModel.coreModel;
+    const context = typeof coreModel.getDrawableVertexIndices !== 'function' ? coreModel.getModelContext?.() : null;
+    const visible = (i) => {
+      if (this.#getDrawableOpacity(i) === 0) return false;
+      const partsOpacity = context ? context._$8b?.[i]?._$VS ?? 1 : 1;
+      return this.#drawableAlpha(coreModel, context, i) * partsOpacity > VISIBLE_OPACITY;
+    };
+    const screen = (list) => this.#screenTriangles(list.filter(visible));
+    const chunks = (list) => this.#screenChunks(list.filter(visible));
+    const values = coreModel._parameterValues;
+    const mins = coreModel._parameterMinimumValues;
+    const maxs = coreModel._parameterMaximumValues;
+    return params.map((param) => {
+      let triangles = null;
+      let textured = null;
+      return {
+        id: `param:${param}`,
+        name: this.#parameterIds[param],
+        hidden: false,
+        range: {
+          min: mins[param],
+          max: maxs[param],
+          value: this.parameterOverrides.get(param) ?? values[param],
+          step: (maxs[param] - mins[param]) / PARAMETER_KEY_STEPS,
+        },
+        get triangles() {
+          return (triangles ??= screen(influence.byParam[param]));
+        },
+        get textured() {
+          return (textured ??= chunks(influence.byParam[param]));
+        },
+      };
+    });
+  }
+
+  setTargetValue(id, value) {
+    if (typeof id !== 'string' || !id.startsWith('param:') || !this.#model) return;
+    const index = Number(id.slice(6));
+    const name = this.#parameterIds[index];
+    if (name === undefined) return;
+    const coreModel = this.#model.internalModel.coreModel;
+    const min = coreModel._parameterMinimumValues[index];
+    const max = coreModel._parameterMaximumValues[index];
+    this.updatePropertyItem('parameters', name, index, Math.min(max, Math.max(min, value)));
+    this.render();
   }
 
   setTargetHidden(id, hidden) {
@@ -815,6 +1111,7 @@ export class Live2DRenderer extends BaseRenderer {
   updatePropertyItem(category, name, index, value) {
     if (!this.#model) return;
     const coreModel = this.#model.internalModel.coreModel;
+    if (category === 'parts') this.#resetParameterInfluence();
     if (category === 'parameters') {
       coreModel._parameterValues[index] = value;
       this.parameterOverrides.set(index, value);
@@ -835,6 +1132,7 @@ export class Live2DRenderer extends BaseRenderer {
     if (!this.#model) return undefined;
     const coreModel = this.#model.internalModel.coreModel;
     let value;
+    if (category === 'parts') this.#resetParameterInfluence();
     if (category === 'parameters') {
       this.parameterOverrides.delete(index);
       value = this.#initialParameterValues.get(index);
@@ -900,6 +1198,7 @@ export class Live2DRenderer extends BaseRenderer {
     super.resetOverrides(category);
     if (!this.#model) return;
     const coreModel = this.#model.internalModel.coreModel;
+    if (category === 'parts') this.#resetParameterInfluence();
     if (category === 'parameters') {
       this.#parameterIds.forEach((id, index) => {
         const defVal = this.#initialParameterValues.has(index)
