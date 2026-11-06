@@ -34,20 +34,26 @@ A desktop application built with Tauri for viewing and interacting with Spine sk
 
 - **Append to List**: Saves the current scene text to a list. See [`py/copy_by_list.py`](py/copy_by_list.py) for processing the exported list.
 
-## 👁️ Hiding Meshes/Parts
+## 👁️ Picking Meshes, Parts and Parameters
 
-Hold `Ctrl` (`Cmd` on macOS) over the model to list every mesh/part under the cursor, including hidden ones (Spine and Live2D only).
+Hold `Ctrl` (`Cmd` on macOS) over the model to list what is under the cursor (Spine and Live2D only). What is listed depends on what the sidebar currently shows:
 
-| Action                   | Input                    |
-| ------------------------ | ------------------------ |
-| 📋 Show the list         | Hold `Ctrl`              |
-| 🔼 Select an item        | `↑` / `↓` (holding Ctrl) |
+| Sidebar shows      | Listed items                                                                  | `←` / `→`                    |
+| ------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
+| **Parameters**     | Parameters that move the visible meshes under the cursor, with their values   | Decrease / increase the value |
+| **Parts** (Live2D) | Whole parts, including hidden ones                                            | Toggle visible/hidden        |
+| Anything else      | Individual meshes (Spine attachments, Live2D Drawables), including hidden ones | Toggle visible/hidden        |
+
+| Action                   | Input                              |
+| ------------------------ | ---------------------------------- |
+| 📋 Show the list         | Hold `Ctrl`                        |
+| 🔼 Select an item        | `↑` / `↓` (holding Ctrl)           |
 | 🔁 Toggle visible/hidden | `←` / `→`, `Enter` or `Ctrl+Click` |
+| 🎚️ Adjust a parameter    | `←` / `→` (hold to repeat)         |
 
-- `●` marks a visible item and `○` a hidden one. The selected item's region is highlighted; a hidden item is shown as an outline.
-- The selection starts at the front-most visible item, or the back-most hidden item if nothing visible is under the cursor.
-- Items toggled here are also reflected in the sidebar's mesh/part list.
-- Live2D: while the sidebar shows **Parts**, whole parts are listed and toggled; otherwise individual Drawables.
+- Meshes/parts: `●` marks a visible item and `○` a hidden one. The selected item's region is highlighted; a hidden item is shown as an outline. The selection starts at the front-most visible item, or the back-most hidden item if nothing visible is under the cursor.
+- Parameters: the region the selected parameter moves is highlighted. Each press changes the value by 1/50 of its range.
+- Changes made here are also reflected in the sidebar's list.
 
 ## 🍎 Note for macOS Users
 
