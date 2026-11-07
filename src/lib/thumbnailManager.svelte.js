@@ -7,7 +7,7 @@ import { normalizeAtlasText, toSpineAssetUrl } from './renderer/SpineCommon.js';
 import { prefetchTextures, clearTexturePrefetch } from './renderer/workerTextureLoader.js';
 import { Live2DRenderer } from './renderer/Live2DRenderer.js';
 import { prefetchLive2DTextures, releaseLive2DTexturePrefetch } from './renderer/Live2DCommon.js';
-import { appState } from './appState.svelte.js';
+import { appState, sceneDir } from './appState.svelte.js';
 import { findIdleAnimation } from './utils.js';
 import { thumbnailCache } from './thumbnailCache.js';
 
@@ -246,7 +246,7 @@ function nextItem() {
   while (prefetchList.length > 0) {
     const scene = prefetchList.shift();
     const key = getKey(prefetchDir, scene);
-    if (!isPending(key)) return { key, dirName: prefetchDir, scene };
+    if (!isPending(key)) return { key, dirName: sceneDir(prefetchDir, scene), scene };
   }
   return null;
 }
@@ -254,7 +254,7 @@ function nextItem() {
 function peekItem() {
   if (queue.length > 0) return queue[0];
   const scene = prefetchList.find(scene => !isPending(getKey(prefetchDir, scene)));
-  return scene ? { key: getKey(prefetchDir, scene), dirName: prefetchDir, scene } : null;
+  return scene ? { key: getKey(prefetchDir, scene), dirName: sceneDir(prefetchDir, scene), scene } : null;
 }
 
 function hasWork() {
@@ -308,7 +308,7 @@ export const thumbnailManager = {
     const key = getKey(dirName, scene);
     if (isPending(key)) return;
     queued.add(key);
-    queue.push({ key, dirName, scene });
+    queue.push({ key, dirName: sceneDir(dirName, scene), scene });
     processQueue();
   },
 

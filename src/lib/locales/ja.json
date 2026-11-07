@@ -27,6 +27,7 @@
   "removeBackground": "背景を削除",
   "skipUnity": "Unityファイルを読み込まない",
   "mergeSequential": "[Spine] 連番ファイルを重ねて読み込む",
+  "preferArchives": "同名フォルダよりアーカイブを優先",
   "enableMouseTracking": "[Live2D] マウス追従を有効にする",
   "enablePhysics": "[Live2D] 物理演算を有効にする",
   "clearThumbnailCache": "サムネイルキャッシュを削除",

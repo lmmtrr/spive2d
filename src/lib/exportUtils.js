@@ -1,4 +1,4 @@
-import { appState } from './appState.svelte.js';
+import { appState, sceneDir } from './appState.svelte.js';
 import { getRenderer } from './rendererStore.svelte.js';
 import { resolveLive2DModelSource } from './renderer/Live2DCommon.js';
 
@@ -34,14 +34,15 @@ export async function resolveModelInfo() {
     return null;
   }
   const scene = files[selectedDir][selectedScene];
+  const dir = sceneDir(selectedDir, scene);
   const isLive2D = scene.mainExt.includes('.moc') || scene.mainExt.includes('.model3.json') || scene.mainExt.includes('.model.json');
   let modelUrl = '';
   if (isLive2D) {
-    modelUrl = await resolveLive2DModelSource(selectedDir, scene);
+    modelUrl = await resolveLive2DModelSource(dir, scene);
   }
   return {
     fileNames: scene,
-    selectedDir,
+    selectedDir: dir,
     isLive2D,
     modelUrl,
     rendererType: isLive2D ? 'live2d' : 'spine'

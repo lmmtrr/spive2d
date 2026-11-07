@@ -1,4 +1,4 @@
-import { appState } from './appState.svelte.js';
+import { appState, sceneDir } from './appState.svelte.js';
 import { getRenderer } from './rendererStore.svelte.js';
 import { showNotification } from './notificationStore.svelte.js';
 import { exportQueue } from './exportQueue.svelte.js';
@@ -409,8 +409,8 @@ export async function exportModelFiles(sceneText) {
   try {
     const { dir, name } = await createTargetDir(baseFilename);
     const exported = isLive2DScene(scene)
-      ? await exportLive2DModel(selectedDir, scene, renderer, dir)
-      : await exportSpineModel(selectedDir, renderer, dir);
+      ? await exportLive2DModel(sceneDir(selectedDir, scene), scene, renderer, dir)
+      : await exportSpineModel(sceneDir(selectedDir, scene), renderer, dir);
     if (!exported) {
       exportQueue.updateStatus(taskId, 'error');
       showNotification(t('exportModelError'), 'error');

@@ -1,5 +1,5 @@
 import { createRenderer } from './createRenderer.js';
-import { appState } from '../appState.svelte.js';
+import { appState, sceneDir } from '../appState.svelte.js';
 
 class PreloadManager {
   #preloaded = null;
@@ -33,7 +33,7 @@ class PreloadManager {
     const detectAlpha = typeof options === 'boolean' ? options : !!options?.detectAlpha;
     const loadingPromise = (async () => {
       try {
-        await renderer.load(dirName, nextScene, { detectAlpha, isPreload });
+        await renderer.load(sceneDir(dirName, nextScene), nextScene, { detectAlpha, isPreload });
         if (this.#currentLoadId === loadId) {
           this.#preloaded = {
             key,

@@ -27,6 +27,7 @@
   "removeBackground": "배경 제거",
   "skipUnity": "Unity 파일을 불러오지 않음",
   "mergeSequential": "[Spine] 연번 파일을 하나로 합성하여 불러오기",
+  "preferArchives": "같은 이름의 폴더보다 아카이브 우선",
   "enableMouseTracking": "[Live2D] 마우스 트래킹 활성화",
   "enablePhysics": "[Live2D] 물리 연산 활성화",
   "clearThumbnailCache": "썸네일 캐시 삭제",

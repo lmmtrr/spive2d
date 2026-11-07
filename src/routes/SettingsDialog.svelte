@@ -30,6 +30,7 @@
   const CHECKBOX_SETTINGS = [
     { key: 'skipUnity', storageKey: 'spive2d_skip_unity', labelKey: 'skipUnity' },
     { key: 'mergeSequential', storageKey: 'spive2d_merge_sequential', labelKey: 'mergeSequential' },
+    { key: 'preferArchives', storageKey: 'spive2d_prefer_archives', labelKey: 'preferArchives' },
     { key: 'enableIdle', storageKey: 'spive2d_enable_idle', labelKey: 'enableIdle' },
     { key: 'enableBreathing', storageKey: 'spive2d_enable_breathing', labelKey: 'enableBreathing' },
     { key: 'enableBlinking', storageKey: 'spive2d_enable_blinking', labelKey: 'enableBlinking' },

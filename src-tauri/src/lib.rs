@@ -134,6 +134,8 @@ struct SceneData {
     motion_files: Vec<String>,
     #[serde(rename = "settingsFile", skip_serializing_if = "Option::is_none")]
     settings_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    root: Option<String>,
 }
 
 async fn run_blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
@@ -851,6 +853,7 @@ fn handle_dropped_path_blocking(
     path: String,
     merge_sequential: bool,
     skip_unity: bool,
+    prefer_archives: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
@@ -861,6 +864,7 @@ fn handle_dropped_path_blocking(
         if bundles.is_empty() {
             return match get_subdir_files(path.clone(), merge_sequential, app_handle.clone()) {
                 Err(e) if e.starts_with(NO_MODELS_MESSAGE) => nested_archives(path_obj, &files, merge_sequential, &app_handle).unwrap_or(Err(e)),
+                Ok(map) => Ok(with_nested_archives(path_obj, &files, map, merge_sequential, prefer_archives, &app_handle)),
                 result => result,
             };
         }
@@ -905,7 +909,7 @@ fn handle_dropped_path_blocking(
             None => {
                 if let Some(parent) = path_obj.parent().filter(|_| is_model_entry_file(path_obj)) {
                     let parent = parent.to_string_lossy().into_owned();
-                    return handle_dropped_path_blocking(parent, merge_sequential, skip_unity, app_handle);
+                    return handle_dropped_path_blocking(parent, merge_sequential, skip_unity, prefer_archives, app_handle);
                 }
                 app_handle.emit("progress", false).unwrap();
                 Err("Unsupported file type".to_string())
@@ -917,13 +921,149 @@ fn handle_dropped_path_blocking(
     }
 }
 
+fn archives_in(files: &[PathBuf]) -> Vec<(&PathBuf, String)> {
+    files.iter().filter_map(|f| archive_ext(f).map(|ext| (f, ext))).collect()
+}
+
+fn extract_one(dir: &Path, archive: &Path, ext: &str, dest_root: &Path) -> bool {
+    let rel = archive.strip_prefix(dir).unwrap_or(archive).with_extension("");
+    let dest = dest_root.join(rel);
+    if fs::create_dir_all(&dest).is_err() {
+        return false;
+    }
+    match extract_archive(&archive.to_string_lossy(), &dest, ext) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("Failed to extract archive {:?}: {}", archive, e);
+            false
+        }
+    }
+}
+
+fn extract_nested(dir: &Path, archives: &[(&PathBuf, String)], dest_root: &Path) -> bool {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(archives.len()).max(1);
+    let next = AtomicUsize::new(0);
+    let extracted = AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some((archive, ext)) = archives.get(i) else { break };
+                if extract_one(dir, archive, ext, dest_root) {
+                    extracted.store(true, Ordering::Relaxed);
+                }
+            });
+        }
+    });
+    extracted.into_inner()
+}
+
+fn may_contain_model(path: &Path, ext: &str) -> bool {
+    const HINTS: &[&str] = &[".moc3", ".moc", ".atlas", ".skel"];
+    if ext != "zip" {
+        return true;
+    }
+    let Ok(archive) = fs::File::open(path).map_err(|_| ()).and_then(|f| zip::ZipArchive::new(f).map_err(|_| ())) else {
+        return true;
+    };
+    archive.file_names().filter_map(Result::ok).any(|name| {
+        let name = name.to_lowercase();
+        HINTS.iter().any(|hint| name.contains(hint))
+    })
+}
+
+fn path_key(path: &Path) -> String {
+    path.to_string_lossy().to_lowercase()
+}
+
+fn with_nested_archives(
+    dir: &Path,
+    files: &[PathBuf],
+    mut map: HashMap<String, Vec<SceneData>>,
+    merge_sequential: bool,
+    prefer_archives: bool,
+    app_handle: &AppHandle,
+) -> HashMap<String, Vec<SceneData>> {
+    let archives = archives_in(files);
+    if archives.is_empty() {
+        return map;
+    }
+    let Some(scenes) = map.values_mut().next() else {
+        return map;
+    };
+    let folder_of = |archive: &Path| Some(archive.with_extension("")).filter(|f| f.is_dir());
+    let mut shadowed = HashSet::new();
+    let mut pending = Vec::new();
+    for (archive, ext) in archives {
+        match folder_of(archive) {
+            Some(folder) if prefer_archives => {
+                shadowed.insert(path_key(&folder));
+                pending.push((archive, ext));
+            }
+            Some(_) => {}
+            None => pending.push((archive, ext)),
+        }
+    }
+    if !shadowed.is_empty() {
+        scenes.retain(|scene| {
+            let mut path = PathBuf::from(dir);
+            for part in scene.name.split('/') {
+                path.push(part);
+                if shadowed.contains(&path_key(&path)) {
+                    return false;
+                }
+            }
+            true
+        });
+    }
+    pending.retain(|(archive, ext)| may_contain_model(archive, ext));
+    if pending.is_empty() {
+        return map;
+    }
+    let temp_dir = match create_model_temp_dir(app_handle) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Failed to create temp dir for archives: {}", e);
+            return map;
+        }
+    };
+    let _ = app_handle.emit("progress", true);
+    let found = if extract_nested(dir, &pending, temp_dir.path()) {
+        process_directory(temp_dir.path(), temp_dir.path(), merge_sequential)
+    } else {
+        Ok(Vec::new())
+    };
+    let _ = app_handle.emit("progress", false);
+    let found = match found {
+        Ok(found) if !found.is_empty() => found,
+        Ok(_) => return map,
+        Err(e) => {
+            eprintln!("Failed to scan extracted archives: {}", e);
+            return map;
+        }
+    };
+    let mut root = temp_dir.path().to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    if !root.ends_with('/') {
+        root.push('/');
+    }
+    let scenes = map.values_mut().next().expect("checked above");
+    for mut scene in found {
+        scene.root = Some(root.clone());
+        scenes.push(scene);
+    }
+    scenes.sort_by(|a, b| compare_natural(&a.name, &b.name));
+    keep_temp_dir(app_handle, temp_dir);
+    map
+}
+
 fn nested_archives(
     dir: &Path,
     files: &[PathBuf],
     merge_sequential: bool,
     app_handle: &AppHandle,
 ) -> Option<Result<HashMap<String, Vec<SceneData>>, String>> {
-    let archives: Vec<(&PathBuf, String)> = files.iter().filter_map(|f| archive_ext(f).map(|ext| (f, ext))).collect();
+    let archives = archives_in(files);
     if archives.is_empty() {
         return None;
     }
@@ -932,19 +1072,7 @@ fn nested_archives(
         Err(e) => return Some(Err(e)),
     };
     let _ = app_handle.emit("progress", true);
-    let mut extracted = false;
-    for (archive, ext) in archives {
-        let rel = archive.strip_prefix(dir).unwrap_or(archive).with_extension("");
-        let dest = temp_dir.path().join(rel);
-        if fs::create_dir_all(&dest).is_err() {
-            continue;
-        }
-        match extract_archive(&archive.to_string_lossy(), &dest, &ext) {
-            Ok(()) => extracted = true,
-            Err(e) => eprintln!("Failed to extract archive {:?}: {}", archive, e),
-        }
-    }
-    if !extracted {
+    if !extract_nested(dir, &archives, temp_dir.path()) {
         let _ = app_handle.emit("progress", false);
         return None;
     }
@@ -968,9 +1096,10 @@ async fn handle_dropped_path(
     path: String,
     merge_sequential: bool,
     skip_unity: bool,
+    prefer_archives: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
-    run_blocking(move || handle_dropped_path_blocking(path, merge_sequential, skip_unity, app_handle)).await
+    run_blocking(move || handle_dropped_path_blocking(path, merge_sequential, skip_unity, prefer_archives, app_handle)).await
 }
 
 fn handle_urls_blocking(
@@ -1054,14 +1183,32 @@ fn handle_dropped_paths_blocking(
     paths: Vec<String>,
     merge_sequential: bool,
     skip_unity: bool,
+    prefer_archives: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
     app_handle.emit("progress", true).unwrap();
     if paths.len() == 1 {
-        let result = handle_dropped_path_blocking(paths[0].clone(), merge_sequential, skip_unity, app_handle.clone());
+        let result = handle_dropped_path_blocking(paths[0].clone(), merge_sequential, skip_unity, prefer_archives, app_handle.clone());
         let _ = app_handle.emit("progress", false);
         return result;
     }
+    let dropped_dirs: HashSet<String> = paths.iter().map(Path::new).filter(|p| p.is_dir()).map(path_key).collect();
+    let dropped_archives: HashSet<String> = paths
+        .iter()
+        .map(Path::new)
+        .filter(|p| p.is_file() && archive_ext(p).is_some())
+        .map(|p| path_key(&p.with_extension("")))
+        .collect();
+    let paths: Vec<String> = paths
+        .into_iter()
+        .filter(|path| {
+            let path_obj = Path::new(path);
+            if path_obj.is_dir() {
+                return !(prefer_archives && dropped_archives.contains(&path_key(path_obj)));
+            }
+            prefer_archives || archive_ext(path_obj).is_none() || !dropped_dirs.contains(&path_key(&path_obj.with_extension("")))
+        })
+        .collect();
     let temp_dir = create_model_temp_dir(&app_handle).map_err(|e| {
         let _ = app_handle.emit("progress", false);
         e
@@ -1124,9 +1271,10 @@ async fn handle_dropped_paths(
     paths: Vec<String>,
     merge_sequential: bool,
     skip_unity: bool,
+    prefer_archives: bool,
     app_handle: AppHandle,
 ) -> Result<HashMap<String, Vec<SceneData>>, String> {
-    run_blocking(move || handle_dropped_paths_blocking(paths, merge_sequential, skip_unity, app_handle)).await
+    run_blocking(move || handle_dropped_paths_blocking(paths, merge_sequential, skip_unity, prefer_archives, app_handle)).await
 }
 
 fn list_files_recursive(dir: &Path) -> Vec<String> {
@@ -1973,6 +2121,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 is_merged: false,
                 motion_files: Vec::new(),
                 settings_file: None,
+                root: None,
             });
         }
     }
@@ -2021,6 +2170,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 is_merged: false,
                 motion_files,
                 settings_file,
+                root: None,
             });
         }
     }
@@ -2033,6 +2183,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             is_merged: false,
             motion_files: Vec::new(),
             settings_file: None,
+            root: None,
         });
     }
     for meta_filename in meta_json_files {
@@ -2047,6 +2198,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
             is_merged: false,
             motion_files: Vec::new(),
             settings_file: None,
+            root: None,
         });
     }
     let mut potential_extra_atlases = HashSet::new();
@@ -2140,6 +2292,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 is_merged: false,
                 motion_files: Vec::new(),
                 settings_file: None,
+                root: None,
             });
         }
     }
@@ -2184,6 +2337,7 @@ fn process_files(dir_path: &Path, base_path: &Path, merge_sequential: bool) -> R
                 is_merged: true,
                 motion_files: Vec::new(),
                 settings_file: None,
+                root: None,
             }]);
         }
     }

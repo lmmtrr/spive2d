@@ -27,6 +27,7 @@
   "removeBackground": "Remove Background",
   "skipUnity": "Do not load Unity files",
   "mergeSequential": "[Spine] Merge sequential files into one model",
+  "preferArchives": "Prefer archives over same-name folders",
   "enableMouseTracking": "[Live2D] Enable mouse tracking",
   "enablePhysics": "[Live2D] Enable physics",
   "clearThumbnailCache": "Clear Thumbnail Cache",

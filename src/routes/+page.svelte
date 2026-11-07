@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { appState } from '#lib/appState.svelte.js';
+  import { appState, sceneDir } from '#lib/appState.svelte.js';
   import { getRenderer, setRenderer } from '#lib/rendererStore.svelte.js';
   import { createRenderer } from '#lib/renderer/createRenderer.js';
   import { preloadManager } from '#lib/renderer/preloadManager.js';
@@ -221,7 +221,7 @@
           dirFiles = { [rootDir]: scenes };
         }
       } else {
-        dirFiles = await invoke('handle_dropped_paths', { paths, mergeSequential: appState.mergeSequential, skipUnity: appState.skipUnity });
+        dirFiles = await invoke('handle_dropped_paths', { paths, mergeSequential: appState.mergeSequential, skipUnity: appState.skipUnity, preferArchives: appState.preferArchives });
       }
       const rootDir = Object.keys(dirFiles)[0];
       if (!rootDir) {
@@ -310,7 +310,7 @@
         renderer.setTextureFilter(appState.textureFilter);
       }
       try {
-        await renderer.load(selectedDir, fileNames, { detectAlpha });
+        await renderer.load(sceneDir(selectedDir, fileNames), fileNames, { detectAlpha });
       } catch (e) {
         console.error(e);
         loadingRenderers = loadingRenderers.filter(r => r !== renderer);

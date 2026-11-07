@@ -27,6 +27,7 @@
   "removeBackground": "删除背景",
   "skipUnity": "不读取 Unity 文件",
   "mergeSequential": "[Spine] 将连番文件合并为一个模型",
+  "preferArchives": "同名时优先读取压缩包",
   "enableMouseTracking": "[Live2D] 启用鼠标追随",
   "enablePhysics": "[Live2D] 启用物理模拟",
   "clearThumbnailCache": "清除缩略图缓存",

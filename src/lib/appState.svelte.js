@@ -45,6 +45,7 @@ let alphaMode = $state(loadSetting('spive2d_alpha_mode', 'pma'));
 let textureFilter = $state(loadSetting('spive2d_texture_filter', 'linear'));
 let skipUnity = $state(loadSetting('spive2d_skip_unity', 'false') === 'true');
 let mergeSequential = $state(loadSetting('spive2d_merge_sequential', 'false') === 'true');
+let preferArchives = $state(loadSetting('spive2d_prefer_archives', 'false') === 'true');
 const legacyAutomatic = loadSetting('spive2d_enable_idle_and_breathing', 'false');
 let enableIdle = $state(loadSetting('spive2d_enable_idle', legacyAutomatic) === 'true');
 let enableBreathing = $state(loadSetting('spive2d_enable_breathing', legacyAutomatic) === 'true');
@@ -54,6 +55,10 @@ let enablePhysics = $state(loadSetting('spive2d_enable_physics', 'true') === 'tr
 let enableMouseTracking = $state(loadSetting('spive2d_enable_mouse_tracking', 'false') === 'true');
 const SCALE_MAX = 16;
 const SCALE_MIN = 0.125;
+export function sceneDir(dir, scene) {
+  return scene?.root ?? dir;
+}
+
 export const appState = {
   get initialized() { return initialized; },
   set initialized(v) { initialized = v; },
@@ -87,6 +92,8 @@ export const appState = {
   set textureFilter(v) { textureFilter = v; },
   get mergeSequential() { return mergeSequential; },
   set mergeSequential(v) { mergeSequential = v; },
+  get preferArchives() { return preferArchives; },
+  set preferArchives(v) { preferArchives = v; },
   get enableIdle() { return enableIdle; },
   set enableIdle(v) { enableIdle = v; },
   get enableBreathing() { return enableBreathing; },
