@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.63] - 2026-11-07
+
+### Added
+
+- Load archives alongside model folders in the same directory
+- Add setting to prefer archives over same-name folders
+
 ## [0.1.62] - 2026-11-06
 
 ### Added
