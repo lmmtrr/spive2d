@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.64] - 2026-11-17
+
+### Fixed
+
+- Support Spine 4.3 draw order in the hover picker
+- Stop URL-parsing local paths so models open on Linux
+
 ## [0.1.63] - 2026-11-07
 
 ### Added
