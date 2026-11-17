@@ -4,7 +4,7 @@ import { SpineRenderer } from './renderer/SpineRenderer.js';
 import { SpineVersionManager } from './renderer/SpineVersionManager.js';
 import { extraModelName } from './renderer/SpineRendererBase.js';
 import { normalizeAtlasText, toSpineAssetUrl } from './renderer/SpineCommon.js';
-import { prefetchTextures, clearTexturePrefetch } from './renderer/workerTextureLoader.js';
+import { prefetchTextures, clearTexturePrefetch, configurePixiTextureDecode } from './renderer/workerTextureLoader.js';
 import { Live2DRenderer } from './renderer/Live2DRenderer.js';
 import { prefetchLive2DTextures, releaseLive2DTexturePrefetch } from './renderer/Live2DCommon.js';
 import { appState, sceneDir } from './appState.svelte.js';
@@ -206,6 +206,7 @@ async function prefetchNextLive2DScene() {
   try {
     const cacheKey = await getCacheKey(item.dirName, item.scene);
     if (cacheKey && await thumbnailCache.get(cacheKey)) return;
+    await configurePixiTextureDecode(PIXI);
     await prefetchLive2DTextures(PIXI, item.dirName, item.scene);
   } catch (err) {
     return;

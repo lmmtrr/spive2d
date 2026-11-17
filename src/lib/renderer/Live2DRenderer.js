@@ -1,4 +1,5 @@
 import { BaseRenderer } from './BaseRenderer.js';
+import { configurePixiTextureDecode } from './workerTextureLoader.js';
 import {
   getLive2DFrameBox,
   fitLive2DBox,
@@ -59,7 +60,7 @@ class PixiAppManager {
       cvs.style.opacity = '0';
       this.#sharedCanvas = cvs;
       const app = new PIXI.Application();
-      this.#readyPromise = app.init({
+      this.#readyPromise = configurePixiTextureDecode(PIXI).then(() => app.init({
         canvas: cvs,
         preference: 'webgl',
         preserveDrawingBuffer: true,
@@ -69,7 +70,7 @@ class PixiAppManager {
         autoDensity: true,
         resizeTo: window,
         hello: false,
-      }).then(() => {
+      })).then(() => {
         this.#sharedApp = app;
         return app;
       });
