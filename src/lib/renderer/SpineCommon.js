@@ -569,6 +569,12 @@ export function setToSetupPose(skeleton) {
   }
 }
 
+export function getDrawOrder(skeleton) {
+  const order = skeleton.drawOrder;
+  if (Array.isArray(order)) return order;
+  return order?.appliedPose ?? order?.pose ?? skeleton.slots;
+}
+
 export function getSlotAttachment(slot) {
   if (!slot) return null;
   return slot.appliedPose?.attachment ?? slot.pose?.attachment ?? slot.attachment ?? null;

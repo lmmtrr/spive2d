@@ -4,6 +4,7 @@ import {
   setupSpineAssetManager,
   initializeSkeleton,
   setToSetupPose,
+  getDrawOrder,
   getSlotAttachment,
   setSlotAttachment,
   getTargetProperty,
@@ -1491,7 +1492,7 @@ export class SpineRendererBase extends BaseRenderer {
     for (const key of this._getSortedSkeletonKeys()) {
       const { skeleton } = this._skeletons[key];
       const suppressed = this._suppressedAttachments[key];
-      for (const slot of skeleton.drawOrder || skeleton.slots) {
+      for (const slot of getDrawOrder(skeleton)) {
         const visible = getSlotAttachment(slot);
         const attachment = visible || suppressed?.get(slot);
         const indices = this._pickableTriangles(attachment);
