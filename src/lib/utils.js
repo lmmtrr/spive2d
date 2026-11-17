@@ -70,6 +70,7 @@ export function sanitizeFilename(name) {
 }
 
 export function sanitizeInputUrl(urlStr) {
+  if (!/^https?:\/\//i.test(urlStr)) return urlStr;
   const url = new URL(urlStr);
   if (url.hostname === 'github.com') {
     const parts = url.pathname.split('/').filter(Boolean);
