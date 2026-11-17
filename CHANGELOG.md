@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.65] - 2026-11-17
+
+### Fixed
+
+- Decode textures on the main thread when worker bitmaps render blank
+
 ## [0.1.64] - 2026-11-17
 
 ### Fixed
